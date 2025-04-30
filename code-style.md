@@ -1,0 +1,1 @@
+Always use English for code comments and logs and error messages.

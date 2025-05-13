@@ -294,7 +294,7 @@ func installArgoCD() tea.Msg {
 // Command to wait for ArgoCD applications to be ready
 func waitForArgoCDAppsReady() tea.Msg {
 	logger.Info("Waiting for ArgoCD applications to be ready")
-	apps := []string{"kubeasy-cli-setup", "kyverno", "argocd"}
+	apps := []string{"kubeasy-cli-setup", "kyverno", "argocd", "kubeasy-challenge-operator"}
 	err := argocd.WaitForArgoCDAppsReadyCore(apps, 8*time.Minute)
 	if err != nil {
 		logger.Error("Error waiting for ArgoCD apps: %v", err)

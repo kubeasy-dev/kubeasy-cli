@@ -1,8 +1,0 @@
-{
-  "github.copilot.chat.codeGeneration.instructions": [
-    {
-      "file": "code-style.md",
-      "language": "markdown",
-    }
-  ],
-}

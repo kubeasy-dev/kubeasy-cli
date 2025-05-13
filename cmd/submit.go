@@ -17,14 +17,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-// Structure pour stocker les détails de validation enrichis
-type detailedValidationInfo struct {
-	Name    string                      `json:"name"`
-	Phase   string                      `json:"phase"`
-	Message string                      `json:"message,omitempty"`
-	Results []operator.ValidationResult `json:"results,omitempty"`
-}
-
 var submitCmd = &cobra.Command{
 	Use:   "submit [challenge-slug]",
 	Short: "Submit a challenge solution",
@@ -52,80 +44,48 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 			log.Fatalf("Error creating dynamic client: %v", err)
 		}
 
-		// --- Define ValidationRequest GVR ---
 		vrGVR := schema.GroupVersionResource{
-			Group:    "challenge.kubeasy.dev", // Correspond à l'API importée
-			Version:  "v1alpha1",              // Correspond à l'API importée
-			Resource: "validationrequests",    // Correspond à l'API importée
+			Group:    "challenge.kubeasy.dev",
+			Version:  "v1alpha1",
+			Resource: "staticvalidations",
 		}
 
-		// --- Determine Namespace ---
 		namespace := challengeSlug
 
-		// --- List ValidationRequests ---
-		vrListUnstructured, err := dynamicClient.Resource(vrGVR).Namespace(namespace).List(context.TODO(), metav1.ListOptions{})
+		svListUnstructured, err := dynamicClient.Resource(vrGVR).Namespace(namespace).List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
-			log.Fatalf("Error listing ValidationRequests in namespace %s: %v", namespace, err)
+			log.Fatalf("Error listing StaticValidations in namespace %s: %v", namespace, err)
 		}
 
-		if len(vrListUnstructured.Items) == 0 {
-			fmt.Printf("No ValidationRequests found in namespace %s. Cannot verify submission.\n", namespace)
+		if len(svListUnstructured.Items) == 0 {
+			fmt.Printf("No StaticValidations found in namespace %s. Cannot verify submission.\n", namespace)
 			return // Ou peut-être que c'est une réussite ? À définir.
 		}
 
-		// --- Check Status ---
 		allSucceeded := true
-		// Utiliser la nouvelle structure pour stocker les détails
-		detailedStatuses := []detailedValidationInfo{}
+		detailedStatuses := map[string][]operator.StaticValidationResourceResult{}
 
-		for _, vrUnstructured := range vrListUnstructured.Items {
-			var vr operator.ValidationRequest
-			err := runtime.DefaultUnstructuredConverter.FromUnstructured(vrUnstructured.Object, &vr)
-			// Convertir phase en string pour l'affichage et le stockage
-			phaseStr := string(vr.Status.Phase)
-
+		for _, svUnstructured := range svListUnstructured.Items {
+			var sv operator.StaticValidation
+			err = runtime.DefaultUnstructuredConverter.FromUnstructured(svUnstructured.Object, &sv)
 			if err != nil {
-				log.Printf("Error converting unstructured ValidationRequest %s/%s: %v", vrUnstructured.GetNamespace(), vrUnstructured.GetName(), err)
-				allSucceeded = false
-				// Ajouter un statut d'erreur si nécessaire, avec des infos limitées
-				detailedStatuses = append(detailedStatuses, detailedValidationInfo{
-					Name:  vrUnstructured.GetName(),
-					Phase: "ConversionError", // Indiquer l'erreur de conversion
-				})
-				continue
+				log.Fatalf("Error converting StaticValidation to StaticValidation: %v", err)
 			}
 
-			fmt.Printf("  - ValidationRequest %s: Phase = %s\n", vr.GetName(), phaseStr)
-			// Ajouter les informations détaillées à la slice
-			detailedStatuses = append(detailedStatuses, detailedValidationInfo{
-				Name:    vr.GetName(),
-				Phase:   phaseStr,
-				Message: vr.Status.Message,
-				Results: vr.Status.Results, // Inclure les résultats
-			})
+			detailedStatuses[svUnstructured.GetName()] = sv.Status.Resources
 
-			// Convertir phase en string pour les comparaisons
-			if phaseStr == "" {
-				log.Printf("status.phase is empty for %s/%s", vr.GetNamespace(), vr.GetName())
-				allSucceeded = false
-			} else if phaseStr != string(operator.ValidationSucceeded) { // Comparer avec la constante définie
+			if !sv.Status.AllPassed {
 				allSucceeded = false
 			}
 		}
-
-		// --- Prepare Payload Map (pas de marshaling ici) ---
-		payloadMap := map[string][]detailedValidationInfo{
-			"validationRequests": detailedStatuses,
-		}
-		// NOTE: Le marshaling JSON est retiré d'ici.
 
 		// --- Report Result & Call API ---
 		if allSucceeded {
-			fmt.Println("\n✅ All ValidationRequests succeeded!")
-			err = api.SendSubmit(challenge.Id, true, true, payloadMap) // Envoyer la map Go
+			fmt.Println("\n✅ All StaticValidations succeeded!")
+			err = api.SendSubmit(challenge.Id, true, true, detailedStatuses)
 		} else {
-			fmt.Println("\n❌ Some ValidationRequests did not succeed or encountered errors.")
-			err = api.SendSubmit(challenge.Id, false, false, payloadMap) // Envoyer la map Go
+			fmt.Println("\n❌ Some StaticValidations did not succeed or encountered errors.")
+			err = api.SendSubmit(challenge.Id, false, false, detailedStatuses)
 		}
 
 		if err != nil {

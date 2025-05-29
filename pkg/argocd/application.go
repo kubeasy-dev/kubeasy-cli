@@ -39,6 +39,10 @@ func CreateOrUpdateChallengeApplication(ctx context.Context, dynamicClient dynam
 					"repoURL":        constants.ExercisesRepoUrl,
 					"path":           challengeSlug,
 					"targetRevision": "HEAD",
+					"directory": map[string]interface{}{
+						"recurse": true,
+						"include": "{manifests/**.yaml,dynamic/**.yaml,static/**.yaml,policies/**.yaml}",
+					},
 				},
 				"destination": map[string]interface{}{
 					"server":    "https://kubernetes.default.svc",

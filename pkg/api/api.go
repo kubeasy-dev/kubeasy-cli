@@ -127,7 +127,7 @@ func StartChallenge(challengeSlug string) error {
 	return nil
 }
 
-func SendSubmit(challengeId string, staticValidation bool, runtimeValidation bool, payload interface{}) error {
+func SendSubmit(challengeId string, staticValidation bool, dynamicValidation bool, payload interface{}) error {
 	client, err := createSupabaseClient()
 	if err != nil {
 		return fmt.Errorf("failed to create Supabase client: %w", err)
@@ -139,10 +139,10 @@ func SendSubmit(challengeId string, staticValidation bool, runtimeValidation boo
 	}
 
 	submitData := map[string]interface{}{
-		"user_progress": fmt.Sprintf("%s+%s", userId, challengeId),
-		"validated":     staticValidation,
-		"working":       runtimeValidation,
-		"payload":       payload,
+		"user_progress":      fmt.Sprintf("%s+%s", userId, challengeId),
+		"static_validation":  staticValidation,
+		"dynamic_validation": dynamicValidation,
+		"payload":            payload,
 	}
 
 	_, _, err = client.From("user_submissions").Insert(submitData, false, "", "id", "exact").Execute()

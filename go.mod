@@ -11,7 +11,7 @@ require (
 	github.com/charmbracelet/huh v0.7.0
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
 	github.com/golang-jwt/jwt/v5 v5.2.2
-	github.com/kubeasy-dev/challenge-operator v1.0.1
+	github.com/kubeasy-dev/challenge-operator v1.2.0
 	github.com/spf13/cobra v1.9.1
 	github.com/supabase-community/supabase-go v0.0.4
 	github.com/zalando/go-keyring v0.2.6

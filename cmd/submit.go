@@ -44,15 +44,21 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 			log.Fatalf("Error creating dynamic client: %v", err)
 		}
 
-		vrGVR := schema.GroupVersionResource{
+		svGVR := schema.GroupVersionResource{
 			Group:    "challenge.kubeasy.dev",
 			Version:  "v1alpha1",
 			Resource: "staticvalidations",
 		}
 
+		dvGVR := schema.GroupVersionResource{
+			Group:    "challenge.kubeasy.dev",
+			Version:  "v1alpha1",
+			Resource: "dynamicvalidations",
+		}
+
 		namespace := challengeSlug
 
-		svListUnstructured, err := dynamicClient.Resource(vrGVR).Namespace(namespace).List(context.TODO(), metav1.ListOptions{})
+		svListUnstructured, err := dynamicClient.Resource(svGVR).Namespace(namespace).List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
 			log.Fatalf("Error listing StaticValidations in namespace %s: %v", namespace, err)
 		}
@@ -62,8 +68,12 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 			return // Ou peut-être que c'est une réussite ? À définir.
 		}
 
-		allSucceeded := true
-		detailedStatuses := map[string][]operator.StaticValidationResourceResult{}
+		allStaticSucceeded := true
+		allDynamicSucceeded := true
+		detailedStatuses := map[string]interface{}{
+			"staticValidations":  map[string][]operator.StaticValidationResourceResult{},
+			"dynamicValidations": map[string][]operator.DynamicValidationResourceResult{},
+		}
 
 		for _, svUnstructured := range svListUnstructured.Items {
 			var sv operator.StaticValidation
@@ -72,17 +82,50 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 				log.Fatalf("Error converting StaticValidation to StaticValidation: %v", err)
 			}
 
-			detailedStatuses[svUnstructured.GetName()] = sv.Status.Resources
+			staticStatuses := detailedStatuses["staticValidations"].(map[string][]operator.StaticValidationResourceResult)
+			staticStatuses[svUnstructured.GetName()] = sv.Status.Resources
 
 			if !sv.Status.AllPassed {
-				allSucceeded = false
+				allStaticSucceeded = false
+			}
+		}
+
+		// --- Check DynamicValidations ---
+		dvListUnstructured, err := dynamicClient.Resource(dvGVR).Namespace(namespace).List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			log.Printf("Error listing DynamicValidations in namespace %s: %v", namespace, err)
+			// Continue with the submission process even if there's an error with DynamicValidations
+			allDynamicSucceeded = false
+		} else {
+			// Process DynamicValidations if any exist
+			if len(dvListUnstructured.Items) > 0 {
+				for _, dvUnstructured := range dvListUnstructured.Items {
+					var dv operator.DynamicValidation
+					err = runtime.DefaultUnstructuredConverter.FromUnstructured(dvUnstructured.Object, &dv)
+					if err != nil {
+						log.Printf("Error converting DynamicValidation to DynamicValidation: %v", err)
+						allDynamicSucceeded = false
+						continue
+					}
+
+					dynamicStatuses := detailedStatuses["dynamicValidations"].(map[string][]operator.DynamicValidationResourceResult)
+					dynamicStatuses[dvUnstructured.GetName()] = dv.Status.Resources
+
+					if !dv.Status.AllPassed {
+						allDynamicSucceeded = false
+					}
+				}
 			}
 		}
 
 		// --- Report Result & Call API ---
-		if allSucceeded {
-			fmt.Println("\n✅ All StaticValidations succeeded!")
+		if allStaticSucceeded && allDynamicSucceeded {
+			fmt.Println("\n✅ All validations succeeded!")
 			err = api.SendSubmit(challenge.Id, true, true, detailedStatuses)
+		} else if allStaticSucceeded {
+			fmt.Println("\n✅ All StaticValidations succeeded!")
+			fmt.Println("❌ Some DynamicValidations did not succeed or encountered errors.")
+			err = api.SendSubmit(challenge.Id, true, false, detailedStatuses)
 		} else {
 			fmt.Println("\n❌ Some StaticValidations did not succeed or encountered errors.")
 			err = api.SendSubmit(challenge.Id, false, false, detailedStatuses)
@@ -90,11 +133,7 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 
 		if err != nil {
 			log.Printf("Error sending submission: %v", err)
-			// os.Exit(1) // Envisager de sortir avec une erreur
-		}
-
-		if !allSucceeded {
-			os.Exit(1)
+			os.Exit(1) // Envisager de sortir avec une erreur
 		}
 	},
 }

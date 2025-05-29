@@ -197,14 +197,14 @@ func WaitForDeploymentsReady(ctx context.Context, clientset *kubernetes.Clientse
 					select {
 					case <-ctx.Done():
 						errMsg := fmt.Sprintf("timeout waiting for Deployment %s/%s to appear", namespace, deploymentName)
-						logger.Error(errMsg)
-						return fmt.Errorf(errMsg)
+						logger.Error("%s", errMsg)
+						return fmt.Errorf("%s", errMsg)
 					case <-time.After(2 * time.Second):
 						continue // Retry Get
 					}
 				}
 				errMsg := fmt.Sprintf("error getting Deployment %s/%s: %w", namespace, deploymentName, err)
-				logger.Error(errMsg)
+				logger.Error("%s", errMsg)
 				return fmt.Errorf(errMsg)
 			}
 
@@ -243,7 +243,7 @@ func WaitForDeploymentsReady(ctx context.Context, clientset *kubernetes.Clientse
 						finalDep.Status.AvailableReplicas, finalDep.Generation, finalDep.Status.ObservedGeneration)
 				}
 				errMsg := fmt.Sprintf("timeout waiting for Deployment %s/%s to be ready. Final status: %s", namespace, deploymentName, finalStatus)
-				logger.Error(errMsg)
+				logger.Error("%s", errMsg)
 				return fmt.Errorf(errMsg)
 			case <-time.After(2 * time.Second):
 				logger.Debug("Retrying status check for Deployment %s/%s...", namespace, deploymentName)
@@ -272,14 +272,14 @@ func WaitForStatefulSetsReady(ctx context.Context, clientset *kubernetes.Clients
 					select {
 					case <-ctx.Done():
 						errMsg := fmt.Sprintf("timeout waiting for StatefulSet %s/%s to appear", namespace, stsName)
-						logger.Error(errMsg)
+						logger.Error("%s", errMsg)
 						return fmt.Errorf(errMsg)
 					case <-time.After(2 * time.Second):
 						continue // Retry Get
 					}
 				}
 				errMsg := fmt.Sprintf("error getting StatefulSet %s/%s: %w", namespace, stsName, err)
-				logger.Error(errMsg)
+				logger.Error("%s", errMsg)
 				return fmt.Errorf(errMsg)
 			}
 
@@ -319,7 +319,7 @@ func WaitForStatefulSetsReady(ctx context.Context, clientset *kubernetes.Clients
 						finalSts.Generation, finalSts.Status.ObservedGeneration, finalSts.Status.CurrentRevision, finalSts.Status.UpdateRevision)
 				}
 				errMsg := fmt.Sprintf("timeout waiting for StatefulSet %s/%s to be ready. Final status: %s", namespace, stsName, finalStatus)
-				logger.Error(errMsg)
+				logger.Error("%s", errMsg)
 				return fmt.Errorf(errMsg)
 			case <-time.After(2 * time.Second):
 				logger.Debug("Retrying status check for StatefulSet %s/%s...", namespace, stsName)

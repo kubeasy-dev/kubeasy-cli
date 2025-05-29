@@ -24,6 +24,22 @@ type ChallengeEntity struct {
 	Objective        string `json:"objective"`
 }
 
+type ProgressStatus string
+
+const (
+	ProgressStatusInProgress ProgressStatus = "in_progress"
+	ProgressStatusCompleted  ProgressStatus = "completed"
+)
+
+type UserProgress struct {
+	Id          string         `json:"id"`
+	UserId      string         `json:"user_id"`
+	ChallengeId string         `json:"challenge_id"`
+	Status      ProgressStatus `json:"status"`
+	CompletedAt string         `json:"completed_at"`
+	StartedAt   string         `json:"started_at"`
+}
+
 // createSupabaseClient initializes and returns a Supabase client.
 // It retrieves the API key from the system keyring.
 func createSupabaseClient() (*supabase.Client, error) {
@@ -70,7 +86,7 @@ func getUserIdFromKeyring() (string, error) {
 }
 
 // GetChallenge retrieves a specific challenge by its slug name from the API.
-func GetChallenge(name string) (*ChallengeEntity, error) {
+func GetChallenge(challengeSlug string) (*ChallengeEntity, error) {
 	client, err := createSupabaseClient()
 	if err != nil {
 		// Propagate error from client creation (e.g., missing API key)
@@ -78,10 +94,10 @@ func GetChallenge(name string) (*ChallengeEntity, error) {
 	}
 
 	// Fetch the challenge data
-	data, _, err := client.From("challenges").Select("*", "exact", false).Eq("slug", name).Single().Execute()
+	data, _, err := client.From("challenges").Select("*", "exact", false).Eq("slug", challengeSlug).Single().Execute()
 	if err != nil {
 		// Return error if the API call fails (e.g., challenge not found, network issue)
-		return nil, fmt.Errorf("failed to fetch challenge '%s': %w", name, err)
+		return nil, fmt.Errorf("failed to fetch challenge '%s': %w", challengeSlug, err)
 	}
 
 	// Unmarshal the JSON response into ExerciseEntity struct
@@ -89,10 +105,44 @@ func GetChallenge(name string) (*ChallengeEntity, error) {
 	err = json.Unmarshal(data, &exercise)
 	if err != nil {
 		// Return error if JSON parsing fails
-		return nil, fmt.Errorf("failed to parse challenge data for '%s': %w", name, err)
+		return nil, fmt.Errorf("failed to parse challenge data for '%s': %w", challengeSlug, err)
 	}
 
 	return &exercise, nil
+}
+
+func GetChallengeProgress(challengeSlug string) (*UserProgress, error) {
+	client, err := createSupabaseClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Supabase client: %w", err)
+	}
+
+	challenge, err := GetChallenge(challengeSlug)
+	if err != nil {
+		return nil, err
+	}
+
+	userId, err := getUserIdFromKeyring()
+	if err != nil {
+		return nil, err
+	}
+
+	data, _, err := client.From("user_progress").Select("*", "exact", false).Eq("user_id", userId).Eq("challenge_id", challenge.Id).Execute()
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch user progress for challenge '%s': %w", challengeSlug, err)
+	}
+
+	var progresses []UserProgress
+	err = json.Unmarshal(data, &progresses)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse user progress for challenge '%s': %w", challengeSlug, err)
+	}
+
+	if len(progresses) == 0 {
+		return nil, nil
+	}
+
+	return &progresses[0], nil
 }
 
 func StartChallenge(challengeSlug string) error {
@@ -105,6 +155,7 @@ func StartChallenge(challengeSlug string) error {
 	if err != nil {
 		return err
 	}
+
 	userId, err := getUserIdFromKeyring()
 	if err != nil {
 		return err
@@ -149,6 +200,26 @@ func SendSubmit(challengeId string, staticValidation bool, dynamicValidation boo
 
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func ResetChallengeProgress(challengeId string) error {
+	client, err := createSupabaseClient()
+	if err != nil {
+		return fmt.Errorf("failed to create Supabase client: %w", err)
+	}
+
+	userId, err := getUserIdFromKeyring()
+	if err != nil {
+		return err
+	}
+
+	_, _, err = client.From("user_progress").Delete("", "exact").Filter("user_id", "eq", userId).Filter("challenge_id", "eq", challengeId).Execute()
+
+	if err != nil {
+		return fmt.Errorf("failed to delete user progress for challenge '%s': %w", challengeId, err)
 	}
 
 	return nil

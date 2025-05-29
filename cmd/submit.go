@@ -5,16 +5,14 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 
 	operator "github.com/kubeasy-dev/challenge-operator/api/v1alpha1"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/api"
+	"github.com/kubeasy-dev/kubeasy-cli/pkg/kube"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 var submitCmd = &cobra.Command{
@@ -32,16 +30,9 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 			log.Fatalf("Error fetching challenge: %v", err)
 		}
 
-		// --- Kubernetes Client Initialization ---
-		kubeconfigPath := filepath.Join(os.Getenv("HOME"), ".kube", "config") // Adjust if needed
-		config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+		dynamicClient, err := kube.GetDynamicClient()
 		if err != nil {
-			log.Fatalf("Error building kubeconfig: %v", err)
-		}
-
-		dynamicClient, err := dynamic.NewForConfig(config)
-		if err != nil {
-			log.Fatalf("Error creating dynamic client: %v", err)
+			log.Fatalf("Error getting dynamic client: %v", err)
 		}
 
 		svGVR := schema.GroupVersionResource{
@@ -65,7 +56,7 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 
 		if len(svListUnstructured.Items) == 0 {
 			fmt.Printf("No StaticValidations found in namespace %s. Cannot verify submission.\n", namespace)
-			return // Ou peut-être que c'est une réussite ? À définir.
+			return
 		}
 
 		allStaticSucceeded := true

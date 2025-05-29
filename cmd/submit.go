@@ -62,8 +62,8 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 		allStaticSucceeded := true
 		allDynamicSucceeded := true
 		detailedStatuses := map[string]interface{}{
-			"staticValidations":  map[string][]operator.StaticValidationResourceResult{},
-			"dynamicValidations": map[string][]operator.DynamicValidationResourceResult{},
+			"staticValidations":  map[string][]operator.StaticValidationStatus{},
+			"dynamicValidations": map[string][]operator.DynamicValidationStatus{},
 		}
 
 		for _, svUnstructured := range svListUnstructured.Items {
@@ -73,8 +73,8 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 				log.Fatalf("Error converting StaticValidation to StaticValidation: %v", err)
 			}
 
-			staticStatuses := detailedStatuses["staticValidations"].(map[string][]operator.StaticValidationResourceResult)
-			staticStatuses[svUnstructured.GetName()] = sv.Status.Resources
+			staticStatuses := detailedStatuses["staticValidations"].(map[string][]operator.StaticValidationStatus)
+			staticStatuses[svUnstructured.GetName()] = []operator.StaticValidationStatus{sv.Status}
 
 			if !sv.Status.AllPassed {
 				allStaticSucceeded = false
@@ -99,8 +99,8 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 						continue
 					}
 
-					dynamicStatuses := detailedStatuses["dynamicValidations"].(map[string][]operator.DynamicValidationResourceResult)
-					dynamicStatuses[dvUnstructured.GetName()] = dv.Status.Resources
+					dynamicStatuses := detailedStatuses["dynamicValidations"].(map[string][]operator.DynamicValidationStatus)
+					dynamicStatuses[dvUnstructured.GetName()] = []operator.DynamicValidationStatus{dv.Status}
 
 					if !dv.Status.AllPassed {
 						allDynamicSucceeded = false

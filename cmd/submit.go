@@ -113,12 +113,17 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 		if allStaticSucceeded && allDynamicSucceeded {
 			fmt.Println("\n✅ All validations succeeded!")
 			err = api.SendSubmit(challenge.Id, true, true, detailedStatuses)
-		} else if allStaticSucceeded {
+		} else if allStaticSucceeded && !allDynamicSucceeded {
 			fmt.Println("\n✅ All StaticValidations succeeded!")
 			fmt.Println("❌ Some DynamicValidations did not succeed or encountered errors.")
 			err = api.SendSubmit(challenge.Id, true, false, detailedStatuses)
+		} else if !allStaticSucceeded && allDynamicSucceeded {
+			fmt.Println("\n❌ Some StaticValidations did not succeed or encountered errors.")
+			fmt.Println("✅ All DynamicValidations succeeded!")
+			err = api.SendSubmit(challenge.Id, false, true, detailedStatuses)
 		} else {
 			fmt.Println("\n❌ Some StaticValidations did not succeed or encountered errors.")
+			fmt.Println("❌ Some DynamicValidations did not succeed or encountered errors.")
 			err = api.SendSubmit(challenge.Id, false, false, detailedStatuses)
 		}
 

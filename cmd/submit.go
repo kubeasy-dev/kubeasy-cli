@@ -30,6 +30,19 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 			log.Fatalf("Error fetching challenge: %v", err)
 		}
 
+		progress, err := api.GetChallengeProgress(challengeSlug)
+		if err != nil {
+			log.Fatalf("Error fetching user progress: %v", err)
+		}
+		if progress == nil {
+			fmt.Println("❌ No user_progress found for this challenge. Please start the challenge first.")
+			return
+		}
+		if progress.Status == "completed" {
+			fmt.Printf("❌ This challenge is already completed for this user. Submission is not allowed. You can reset the challenge with 'kubeasy challenge reset %s'.\n", challengeSlug)
+			return
+		}
+
 		dynamicClient, err := kube.GetDynamicClient()
 		if err != nil {
 			log.Fatalf("Error getting dynamic client: %v", err)

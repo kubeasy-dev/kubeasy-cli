@@ -2,7 +2,11 @@ package argocd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"time"
+
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/logger"
@@ -87,4 +91,88 @@ func CreateOrUpdateChallengeApplication(ctx context.Context, dynamicClient dynam
 		logger.Info("Argo CD Application '%s' created successfully in namespace '%s'.", challengeSlug, ArgoCDNamespace)
 	}
 	return nil
+}
+
+func DeleteChallengeApplication(ctx context.Context, dynamicClient dynamic.Interface, appName, namespace string) error {
+	logger.Info("Ensuring ArgoCD Application '%s' in namespace '%s' has the resources-finalizer before deletion...", appName, namespace)
+
+	// Step 1: Get the current Application
+	app, err := dynamicClient.Resource(argoAppGVR).Namespace(namespace).Get(ctx, appName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get ArgoCD Application '%s' before patching finalizer: %w", appName, err)
+	}
+
+	// Step 2: Merge the finalizer if not already present
+	finalizers, found, _ := unstructured.NestedStringSlice(app.Object, "metadata", "finalizers")
+	needPatch := true
+	for _, f := range finalizers {
+		if f == "resources-finalizer.argocd.argoproj.io" {
+			needPatch = false
+			break
+		}
+	}
+
+	if !found {
+		finalizers = []string{"resources-finalizer.argocd.argoproj.io"}
+		needPatch = true
+	} else if needPatch {
+		finalizers = append(finalizers, "resources-finalizer.argocd.argoproj.io")
+	}
+
+	if needPatch {
+		patchObj := map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"finalizers": finalizers,
+			},
+		}
+		patchBytes, _ := json.Marshal(patchObj)
+		logger.Debug("Patching finalizers for '%s': %s", appName, string(patchBytes))
+		_, err = dynamicClient.Resource(argoAppGVR).Namespace(namespace).Patch(
+			ctx,
+			appName,
+			types.MergePatchType,
+			patchBytes,
+			metav1.PatchOptions{},
+		)
+		if err != nil {
+			logger.Warning("Failed to patch ArgoCD Application '%s' with finalizer: %v (continuing anyway)", appName, err)
+		} else {
+			logger.Info("Patched ArgoCD Application '%s' with resources-finalizer.", appName)
+		}
+		// Wait for patch to be visible
+		for i := 0; i < 10; i++ {
+			appCheck, _ := dynamicClient.Resource(argoAppGVR).Namespace(namespace).Get(ctx, appName, metav1.GetOptions{})
+			fList, _, _ := unstructured.NestedStringSlice(appCheck.Object, "metadata", "finalizers")
+			for _, f := range fList {
+				if f == "resources-finalizer.argocd.argoproj.io" {
+					goto PATCH_DONE
+				}
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+	PATCH_DONE:
+	}
+
+	logger.Info("Deleting ArgoCD Application '%s' in namespace '%s'...", appName, namespace)
+	deletePolicy := metav1.DeletePropagationForeground
+	deleteOptions := metav1.DeleteOptions{
+		PropagationPolicy: &deletePolicy,
+	}
+
+	err = dynamicClient.Resource(argoAppGVR).Namespace(namespace).Delete(ctx, appName, deleteOptions)
+	if err != nil {
+		return fmt.Errorf("failed to delete ArgoCD Application '%s': %w", appName, err)
+	}
+
+	// Wait for the Application to be fully deleted
+	for i := 0; i < 30; i++ {
+		_, err := dynamicClient.Resource(argoAppGVR).Namespace(namespace).Get(ctx, appName, metav1.GetOptions{})
+		if err != nil {
+			logger.Info("ArgoCD Application '%s' deleted.", appName)
+			return nil
+		}
+		logger.Debug("Waiting for ArgoCD Application '%s' to be deleted...", appName)
+		time.Sleep(2 * time.Second)
+	}
+	return fmt.Errorf("timed out waiting for ArgoCD Application '%s' deletion", appName)
 }

@@ -53,10 +53,6 @@ func CreateOrUpdateChallengeApplication(ctx context.Context, dynamicClient dynam
 					"namespace": challengeSlug,
 				},
 				"syncPolicy": map[string]interface{}{
-					"automated": map[string]interface{}{
-						"prune":    false,
-						"selfHeal": false,
-					},
 					"syncOptions": []string{
 						"CreateNamespace=true",
 					},

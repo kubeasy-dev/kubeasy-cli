@@ -86,6 +86,55 @@ func CreateOrUpdateChallengeApplication(ctx context.Context, dynamicClient dynam
 	} else {
 		logger.Info("Argo CD Application '%s' created successfully in namespace '%s'.", challengeSlug, ArgoCDNamespace)
 	}
+
+	// Patch to trigger a manual sync (patch 'operation' at root, not in spec)
+	syncPatch := map[string]interface{}{
+		"operation": map[string]interface{}{
+			"sync": map[string]interface{}{
+				"syncStrategy": map[string]interface{}{
+					"hook": map[string]interface{}{},
+				},
+			},
+			"initiatedBy": map[string]interface{}{
+				"username": "kubeasy-cli",
+			},
+		},
+	}
+	patchBytes, err := json.Marshal(syncPatch)
+	if err != nil {
+		logger.Warning("Failed to marshal sync patch for Argo CD Application '%s': %v", challengeSlug, err)
+		return nil // Not fatal
+	}
+	_, err = dynamicClient.Resource(argoAppGVR).Namespace(ArgoCDNamespace).Patch(
+		ctx,
+		challengeSlug,
+		types.MergePatchType,
+		patchBytes,
+		metav1.PatchOptions{},
+	)
+	if err != nil {
+		logger.Warning("Failed to patch Argo CD Application '%s' to trigger sync: %v", challengeSlug, err)
+	} else {
+		logger.Info("Triggered manual sync for Argo CD Application '%s' (ArgoCD operation field)", challengeSlug)
+		// Wait for sync to complete (Synced + Succeeded)
+		for i := 0; i < 30; i++ {
+			appStatus, err := dynamicClient.Resource(argoAppGVR).Namespace(ArgoCDNamespace).Get(ctx, challengeSlug, metav1.GetOptions{})
+			if err != nil {
+				logger.Warning("Failed to get Argo CD Application '%s' status: %v", challengeSlug, err)
+				time.Sleep(2 * time.Second)
+				continue
+			}
+			syncStatus, _, _ := unstructured.NestedString(appStatus.Object, "status", "sync", "status")
+			phase, _, _ := unstructured.NestedString(appStatus.Object, "status", "operationState", "phase")
+			if syncStatus == "Synced" && phase == "Succeeded" {
+				logger.Info("Argo CD Application '%s' is now synced and succeeded.", challengeSlug)
+				return nil
+			}
+			logger.Debug("Waiting for Argo CD Application '%s' to be synced... (syncStatus=%s, phase=%s)", challengeSlug, syncStatus, phase)
+			time.Sleep(2 * time.Second)
+		}
+		return fmt.Errorf("timed out waiting for Argo CD Application '%s' to be synced", challengeSlug)
+	}
 	return nil
 }
 

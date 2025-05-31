@@ -125,6 +125,8 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 		// --- Report Result & Call API ---
 		if allStaticSucceeded && allDynamicSucceeded {
 			fmt.Println("\n✅ All validations succeeded!")
+			fmt.Printf("Congratulations! You have successfully completed the '%s' challenge.\n", challengeSlug)
+			fmt.Printf("You can use the 'kubeasy challenge clean %s' command to remove the challenge namespace if you want to.\n", challengeSlug)
 			err = api.SendSubmit(challenge.Id, true, true, detailedStatuses)
 		} else if allStaticSucceeded && !allDynamicSucceeded {
 			fmt.Println("\n✅ All StaticValidations succeeded!")

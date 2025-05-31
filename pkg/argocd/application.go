@@ -144,6 +144,10 @@ func DeleteChallengeApplication(ctx context.Context, dynamicClient dynamic.Inter
 	// Step 1: Get the current Application
 	app, err := dynamicClient.Resource(argoAppGVR).Namespace(namespace).Get(ctx, appName, metav1.GetOptions{})
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.Info("ArgoCD Application '%s' not found in namespace '%s'.", appName, namespace)
+			return nil
+		}
 		return fmt.Errorf("failed to get ArgoCD Application '%s' before patching finalizer: %w", appName, err)
 	}
 

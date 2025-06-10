@@ -1,3 +1,4 @@
+version: 2
 # GoReleaser config for kubeasy-cli
 # Docs: https://goreleaser.com/customization/build/
 

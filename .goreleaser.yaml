@@ -1,0 +1,39 @@
+# GoReleaser config for kubeasy-cli
+# Docs: https://goreleaser.com/customization/build/
+
+project_name: kubeasy-cli
+release:
+  github:
+    owner: kubeasy-dev
+    name: kubeasy-cli
+builds:
+  - id: kubeasy-cli
+    main: ./cmd/main.go
+    binary: kubeasy
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - "-s -w -X 'github.com/kubeasy-dev/kubeasy-cli/pkg/constants.Version={{.Tag}}' -X 'github.com/kubeasy-dev/kubeasy-cli/pkg/constants.LogFilePath=/tmp/kubeasy-cli.log'"
+    env:
+      - GOPRIVATE=github.com/kubeasy-dev/challenge-operator
+archives:
+  - id: default
+    builds:
+      - kubeasy
+    format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+      - "build/**"
+checksum:
+  name_template: "checksums.txt"
+snapshot:
+  name_template: "{{ .Tag }}-next"
+changelog:
+  sort: asc

@@ -44,37 +44,36 @@ jobs:
           GH_ACCESS_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
           git config --global url."https://${GH_ACCESS_TOKEN}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
-      - name: Build with xgo
-        uses: crazy-max/ghaction-xgo@v3
-        env:
-          GOPRIVATE: github.com/kubeasy-dev/challenge-operator
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
         with:
-          xgo_version: latest
-          go_version: ${{ matrix.go_version }}
-          dest: build
-          prefix: kubeasy-cli
-          targets: windows/amd64,windows/arm64,linux/amd64,linux/arm64,darwin/amd64,darwin/arm64
-          v: true
-          x: false
-          ldflags: -s -w -X 'github.com/kubeasy-dev/kubeasy-cli/pkg/constants.Version=${{ needs.semver.outputs.tag }}' -X 'github.com/kubeasy-dev/kubeasy-cli/pkg/constants.LogFilePath=/tmp/kubeasy-cli.log'
-      - name: Upload artifact
+          version: latest
+          args: release --clean --timeout=60m
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GOPRIVATE: github.com/kubeasy-dev/challenge-operator
+          GORELEASER_CURRENT_TAG: ${{ needs.semver.outputs.tag }}
+
+      - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: build
-          path: ./build
+          name: kubeasy-artifacts
+          path: |
+            dist/kubeasy_*.tar.gz
+            dist/checksums.txt
   release:
     needs: [semver, build]
     runs-on: ubuntu-latest
     steps:
-      - name: Download artifact
+      - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: build
-          path: ./build
+          name: kubeasy-artifacts
+          path: ./dist
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
           name: Release ${{ needs.semver.outputs.version }}
           tag: ${{ needs.semver.outputs.tag }}
-          artifacts: ./build/*
+          artifacts: ./dist/kubeasy_*.tar.gz,./dist/checksums.txt
           generateReleaseNotes: true

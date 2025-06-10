@@ -5,6 +5,9 @@ on:
     branches:
       - main
 
+permissions:
+  packages: read
+
 jobs:
   semver:
     runs-on: ubuntu-latest
@@ -34,6 +37,8 @@ jobs:
           go-version: ${{ matrix.go_version }}
       - name: Build with xgo
         uses: crazy-max/ghaction-xgo@v1
+        env:
+          GOPRIVATE: github.com/kubeasy-dev/challenge-operator
         with:
           xgo_version: v0.23.0
           go_version: ${{ matrix.go_version }}

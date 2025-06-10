@@ -9,7 +9,7 @@ release:
     name: kubeasy-cli
 builds:
   - id: kubeasy-cli
-    main: ./cmd/main.go
+    main: ./main.go
     binary: kubeasy
     goos:
       - linux

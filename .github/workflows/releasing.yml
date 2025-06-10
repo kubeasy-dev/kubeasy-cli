@@ -2,25 +2,11 @@ name: "Releasing process"
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - "*"
 
 jobs:
-  semver:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Bump version and push tag
-        id: tag_version
-        uses: mathieudutour/github-tag-action@v6.1
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-    outputs:
-      tag: ${{ steps.tag_version.outputs.new_tag }}
-      version: ${{ steps.tag_version.outputs.new_version }}
   build:
-    needs: [semver]
     strategy:
       matrix:
         go_version: ["1.24"]
@@ -28,6 +14,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
@@ -53,7 +41,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GOPRIVATE: github.com/kubeasy-dev/challenge-operator
-          GORELEASER_CURRENT_TAG: ${{ needs.semver.outputs.tag }}
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
@@ -63,7 +50,7 @@ jobs:
             dist/kubeasy_*.tar.gz
             dist/checksums.txt
   release:
-    needs: [semver, build]
+    needs: [build]
     runs-on: ubuntu-latest
     steps:
       - name: Download artifacts
@@ -74,7 +61,7 @@ jobs:
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
-          name: Release ${{ needs.semver.outputs.version }}
-          tag: ${{ needs.semver.outputs.tag }}
+          name: Release ${{ github.ref }}
+          tag: ${{ github.ref }}
           artifacts: ./dist/kubeasy_*.tar.gz,./dist/checksums.txt
           generateReleaseNotes: true

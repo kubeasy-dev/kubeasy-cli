@@ -32,12 +32,24 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: ${{ matrix.go_version }}
+      - name: Generate a token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+      - name: Configure private token
+        env:
+          GH_ACCESS_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          git config --global url."https://${GH_ACCESS_TOKEN}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
       - name: Build with xgo
-        uses: crazy-max/ghaction-xgo@v1
+        uses: crazy-max/ghaction-xgo@v3
         env:
           GOPRIVATE: github.com/kubeasy-dev/challenge-operator
         with:
-          xgo_version: v0.23.0
+          xgo_version: latest
           go_version: ${{ matrix.go_version }}
           dest: build
           prefix: kubeasy-cli

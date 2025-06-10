@@ -1,0 +1,66 @@
+name: "Releasing process"
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  semver:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Bump version and push tag
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+    outputs:
+      tag: ${{ steps.tag_version.outputs.new_tag }}
+      version: ${{ steps.tag_version.outputs.new_version }}
+  build:
+    needs: [semver]
+    strategy:
+      matrix:
+        go_version: ["1.24"]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go_version }}
+      - name: Build with xgo
+        uses: crazy-max/ghaction-xgo@v1
+        with:
+          xgo_version: v0.23.0
+          go_version: ${{ matrix.go_version }}
+          dest: build
+          prefix: kubeasy-cli
+          targets: windows/amd64,windows/arm64,linux/amd64,linux/arm64,darwin/amd64,darwin/arm64
+          v: true
+          x: false
+          ldflags: -s -w -X 'github.com/kubeasy-dev/kubeasy-cli/pkg/constants.Version=${{ needs.semver.outputs.tag }}' -X 'github.com/kubeasy-dev/kubeasy-cli/pkg/constants.LogFilePath=/tmp/kubeasy-cli.log'
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: build
+          path: ./build
+  release:
+    needs: [semver, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: build
+          path: ./build
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          name: Release ${{ needs.semver.outputs.version }}
+          tag: ${{ needs.semver.outputs.tag }}
+          artifacts: ./build/*
+          generateReleaseNotes: true

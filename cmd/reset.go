@@ -1,13 +1,10 @@
 package cmd
 
 import (
-
 	"fmt"
 	"os"
 
-
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/api"
-
 
 	"github.com/spf13/cobra"
 )
@@ -23,9 +20,8 @@ var resetChallengeCmd = &cobra.Command{
 		deleteChallengeResources(challengeSlug)
 		challenge := getChallengeOrExit(challengeSlug)
 
-
 		// Reset challenge progress
-		if err := api.ResetChallengeProgress(challenge.Id); err != nil {
+		if err := api.ResetChallengeProgress(challenge.ID); err != nil {
 			fmt.Fprintf(os.Stderr, "Error resetting challenge '%s': %v\n", challengeSlug, err)
 			os.Exit(1)
 		}

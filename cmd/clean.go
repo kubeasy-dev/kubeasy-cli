@@ -1,13 +1,7 @@
 package cmd
 
 import (
-
 	"fmt"
-
-
-
-
-
 
 	"github.com/spf13/cobra"
 )
@@ -21,7 +15,6 @@ var cleanChallengeCmd = &cobra.Command{
 		challengeSlug := args[0]
 
 		deleteChallengeResources(challengeSlug)
-
 
 		fmt.Printf("Challenge '%s' cleaned successfully.\n", challengeSlug)
 	},

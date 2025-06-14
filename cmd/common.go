@@ -11,7 +11,6 @@ import (
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/kube"
 )
 
-
 // getChallengeOrExit tries to get a challenge and exits with an error if it fails
 func getChallengeOrExit(slug string) *api.ChallengeEntity {
 	challenge, err := api.GetChallenge(slug)
@@ -29,15 +28,17 @@ func getChallengeOrExit(slug string) *api.ChallengeEntity {
 // deleteChallengeResources deletes ArgoCD Application and all subresources for a challenge
 func deleteChallengeResources(challengeSlug string) {
 	challenge := getChallengeOrExit(challengeSlug)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	dynamicClient, err := kube.GetDynamicClient()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error getting Kubernetes dynamic client: %v\n", err)
+		cancel()
 		os.Exit(1)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
 	if err := argocd.DeleteChallengeApplication(ctx, dynamicClient, challenge.Slug, argocd.ArgoCDNamespace); err != nil {
 		fmt.Fprintf(os.Stderr, "Error deleting ArgoCD Application for challenge '%s': %v\n", challengeSlug, err)
+		cancel()
 		os.Exit(1)
 	}
+	cancel()
 }

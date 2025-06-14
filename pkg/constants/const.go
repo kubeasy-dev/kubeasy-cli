@@ -4,11 +4,11 @@ var RestAPIUrl = "https://api.kubeasy.dev"
 
 var KeyringServiceName = "kubeasy-cli"
 
-var GithubRootUrl = "https://github.com/kubeasy-dev"
+var GithubRootURL = "https://github.com/kubeasy-dev"
 
-var ExercisesRepoUrl = GithubRootUrl + "/challenges"
+var ExercisesRepoURL = GithubRootURL + "/challenges"
 
-var CliSetupAppsUrl = GithubRootUrl + "/cli-setup"
+var CliSetupAppsURL = GithubRootURL + "/cli-setup"
 
 var Version = "dev"
 

@@ -14,7 +14,7 @@ import (
 
 // ChallengeEntity defines the structure for challenge data
 type ChallengeEntity struct {
-	Id               string `json:"id"`
+	ID               string `json:"id"`
 	Title            string `json:"title"`
 	Slug             string `json:"slug"`
 	Description      string `json:"description"`
@@ -32,9 +32,9 @@ const (
 )
 
 type UserProgress struct {
-	Id          string         `json:"id"`
-	UserId      string         `json:"user_id"`
-	ChallengeId string         `json:"challenge_id"`
+	ID          string         `json:"id"`
+	UserID      string         `json:"user_id"`
+	ChallengeID string         `json:"challenge_id"`
 	Status      ProgressStatus `json:"status"`
 	CompletedAt string         `json:"completed_at"`
 	StartedAt   string         `json:"started_at"`
@@ -59,7 +59,7 @@ func createSupabaseClient() (*supabase.Client, error) {
 	return client, nil
 }
 
-func getUserIdFromKeyring() (string, error) {
+func getUserIDFromKeyring() (string, error) {
 	apiKey, err := keyring.Get(constants.KeyringServiceName, "api_key")
 	if err != nil {
 		// Return an error instead of panicking if the key is not found or keyring fails
@@ -122,12 +122,12 @@ func GetChallengeProgress(challengeSlug string) (*UserProgress, error) {
 		return nil, err
 	}
 
-	userId, err := getUserIdFromKeyring()
+	userID, err := getUserIDFromKeyring()
 	if err != nil {
 		return nil, err
 	}
 
-	data, _, err := client.From("user_progress").Select("*", "exact", false).Eq("user_id", userId).Eq("challenge_id", challenge.Id).Execute()
+	data, _, err := client.From("user_progress").Select("*", "exact", false).Eq("user_id", userID).Eq("challenge_id", challenge.ID).Execute()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch user progress for challenge '%s': %w", challengeSlug, err)
 	}
@@ -156,14 +156,14 @@ func StartChallenge(challengeSlug string) error {
 		return err
 	}
 
-	userId, err := getUserIdFromKeyring()
+	userID, err := getUserIDFromKeyring()
 	if err != nil {
 		return err
 	}
 
 	progressData := map[string]interface{}{
-		"user_id":      userId,
-		"challenge_id": challenge.Id,
+		"user_id":      userID,
+		"challenge_id": challenge.ID,
 		"status":       "in_progress",
 		"completed_at": nil,
 		"started_at":   time.Now(),
@@ -178,19 +178,19 @@ func StartChallenge(challengeSlug string) error {
 	return nil
 }
 
-func SendSubmit(challengeId string, staticValidation bool, dynamicValidation bool, payload interface{}) error {
+func SendSubmit(challengeID string, staticValidation bool, dynamicValidation bool, payload interface{}) error {
 	client, err := createSupabaseClient()
 	if err != nil {
 		return fmt.Errorf("failed to create Supabase client: %w", err)
 	}
 
-	userId, err := getUserIdFromKeyring()
+	userID, err := getUserIDFromKeyring()
 	if err != nil {
 		return err
 	}
 
 	submitData := map[string]interface{}{
-		"user_progress":      fmt.Sprintf("%s+%s", userId, challengeId),
+		"user_progress":      fmt.Sprintf("%s+%s", userID, challengeID),
 		"static_validation":  staticValidation,
 		"dynamic_validation": dynamicValidation,
 		"payload":            payload,
@@ -205,21 +205,21 @@ func SendSubmit(challengeId string, staticValidation bool, dynamicValidation boo
 	return nil
 }
 
-func ResetChallengeProgress(challengeId string) error {
+func ResetChallengeProgress(challengeID string) error {
 	client, err := createSupabaseClient()
 	if err != nil {
 		return fmt.Errorf("failed to create Supabase client: %w", err)
 	}
 
-	userId, err := getUserIdFromKeyring()
+	userID, err := getUserIDFromKeyring()
 	if err != nil {
 		return err
 	}
 
-	_, _, err = client.From("user_progress").Delete("", "exact").Filter("user_id", "eq", userId).Filter("challenge_id", "eq", challengeId).Execute()
+	_, _, err = client.From("user_progress").Delete("", "exact").Filter("user_id", "eq", userID).Filter("challenge_id", "eq", challengeID).Execute()
 
 	if err != nil {
-		return fmt.Errorf("failed to delete user progress for challenge '%s': %w", challengeId, err)
+		return fmt.Errorf("failed to delete user progress for challenge '%s': %w", challengeID, err)
 	}
 
 	return nil

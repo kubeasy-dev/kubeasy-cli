@@ -23,18 +23,13 @@ builds:
     env:
       - GOPRIVATE=github.com/kubeasy-dev/challenge-operator
 archives:
-  - id: default
-    builds:
-      - kubeasy
-    format: tar.gz
-    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+  - name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
     files:
       - LICENSE
       - README.md
       - "build/**"
 checksum:
   name_template: "checksums.txt"
-snapshot:
-  name_template: "{{ .Tag }}-next"
+snapshot: {}
 changelog:
   sort: asc

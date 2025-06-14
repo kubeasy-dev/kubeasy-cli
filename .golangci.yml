@@ -1,0 +1,29 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - goconst
+    - gocritic
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - nolintlint
+    - staticcheck
+    - unconvert
+    - unused
+  exclusions:
+    presets:
+      - common-false-positives
+      - legacy
+      - std-error-handling

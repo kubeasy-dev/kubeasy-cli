@@ -48,6 +48,9 @@ jobs:
         run: | 
           git config --global url."https://x-access-token:${GH_ACCESS_TOKEN}@github.com/".insteadOf "https://github.com/"
 
+      - name: Run go mod vendor to ensure all dependencies are available
+        run: go mod vendor
+
       - name: Super-linter
         uses: super-linter/super-linter@v7.4.0 
         env:

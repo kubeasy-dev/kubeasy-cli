@@ -31,7 +31,7 @@ var getChallengeCmd = &cobra.Command{
 		fmt.Println(challenge.Objective)
 		fmt.Println()
 		fmt.Println("Press Enter to quit.")
-		bufio.NewReader(os.Stdin).ReadBytes('\n')
+		_, _ = bufio.NewReader(os.Stdin).ReadBytes('\n')
 	},
 }
 

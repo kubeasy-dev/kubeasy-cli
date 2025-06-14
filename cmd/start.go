@@ -47,7 +47,7 @@ var startChallengeCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Error installing ArgoCD app: %v\n", err)
 			os.Exit(1)
 		}
-		kube.SetNamespaceForContext("kind-kubeasy", challengeSlug)
+		_ = kube.SetNamespaceForContext("kind-kubeasy", challengeSlug)
 		fmt.Printf("Kubernetes context set to 'kind-kubeasy' and namespace to '%s' \n", challengeSlug)
 		if err := api.StartChallenge(challengeSlug); err != nil {
 			fmt.Fprintf(os.Stderr, "Error starting challenge: %v\n", err)

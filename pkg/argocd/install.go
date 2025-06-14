@@ -236,8 +236,8 @@ func WaitForArgoCDAppsReadyCore(appNames []string, timeout time.Duration) error 
 					}
 				}
 				errMsg := fmt.Sprintf("timeout waiting for remaining ArgoCD applications (%s) to be ready. Final statuses: [%s]", strings.Join(remainingApps, ", "), strings.Join(finalStatuses, "; "))
-				logger.Error(errMsg)
-				return fmt.Errorf(errMsg)
+				logger.Error("%s", errMsg)
+				return fmt.Errorf("%s", errMsg)
 			case <-ticker.C:
 				logger.Debug("Retrying status check for remaining apps...")
 				// Continue loop
@@ -270,15 +270,16 @@ func waitForSpecificApp(ctx context.Context, dynamicClient dynamic.Interface, gv
 		case <-ctx.Done():
 			// Get final status on timeout
 			h, s, e := getAppStatus(context.Background(), dynamicClient, gvr, appName, namespace) // Use fresh context
-			finalStatus := "Unknown"
+			// finalStatus := "Unknown" // Removed ineffectual assignment
+			var finalStatus string
 			if e != nil {
 				finalStatus = fmt.Sprintf("Error (%v)", e)
 			} else {
 				finalStatus = fmt.Sprintf("Health=%s Sync=%s", h, s)
 			}
 			errMsg := fmt.Sprintf("timeout waiting for application %s to be ready. Final status: %s", appName, finalStatus)
-			logger.Error(errMsg)
-			return fmt.Errorf(errMsg)
+			logger.Error("%s", errMsg)
+			return fmt.Errorf("%s", errMsg)
 		case <-ticker.C:
 			logger.Debug("Retrying status check for app '%s'...", appName)
 			// Continue loop

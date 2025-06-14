@@ -197,9 +197,9 @@ func WaitForDeploymentsReady(ctx context.Context, clientset *kubernetes.Clientse
 						continue // Retry Get
 					}
 				}
-				errMsg := fmt.Sprintf("error getting Deployment %s/%s: %w", namespace, deploymentName, err)
+				errMsg := fmt.Sprintf("error getting Deployment %s/%s: %v", namespace, deploymentName, err)
 				logger.Error("%s", errMsg)
-				return fmt.Errorf(errMsg)
+				return fmt.Errorf("%s", errMsg)
 			}
 
 			// Check if desired replicas is set (it might not be immediately)
@@ -238,7 +238,7 @@ func WaitForDeploymentsReady(ctx context.Context, clientset *kubernetes.Clientse
 				}
 				errMsg := fmt.Sprintf("timeout waiting for Deployment %s/%s to be ready. Final status: %s", namespace, deploymentName, finalStatus)
 				logger.Error("%s", errMsg)
-				return fmt.Errorf(errMsg)
+				return fmt.Errorf("%s", errMsg)
 			case <-time.After(2 * time.Second):
 				logger.Debug("Retrying status check for Deployment %s/%s...", namespace, deploymentName)
 				// Continue loop
@@ -267,14 +267,14 @@ func WaitForStatefulSetsReady(ctx context.Context, clientset *kubernetes.Clients
 					case <-ctx.Done():
 						errMsg := fmt.Sprintf("timeout waiting for StatefulSet %s/%s to appear", namespace, stsName)
 						logger.Error("%s", errMsg)
-						return fmt.Errorf(errMsg)
+						return fmt.Errorf("%s", errMsg)
 					case <-time.After(2 * time.Second):
 						continue // Retry Get
 					}
 				}
-				errMsg := fmt.Sprintf("error getting StatefulSet %s/%s: %w", namespace, stsName, err)
+				errMsg := fmt.Sprintf("error getting StatefulSet %s/%s: %v", namespace, stsName, err)
 				logger.Error("%s", errMsg)
-				return fmt.Errorf(errMsg)
+				return fmt.Errorf("%s", errMsg)
 			}
 
 			// Check if desired replicas is set (it might not be immediately)
@@ -314,7 +314,7 @@ func WaitForStatefulSetsReady(ctx context.Context, clientset *kubernetes.Clients
 				}
 				errMsg := fmt.Sprintf("timeout waiting for StatefulSet %s/%s to be ready. Final status: %s", namespace, stsName, finalStatus)
 				logger.Error("%s", errMsg)
-				return fmt.Errorf(errMsg)
+				return fmt.Errorf("%s", errMsg)
 			case <-time.After(2 * time.Second):
 				logger.Debug("Retrying status check for StatefulSet %s/%s...", namespace, stsName)
 				// Continue loop

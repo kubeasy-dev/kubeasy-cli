@@ -2,8 +2,12 @@
 name: Lint
 
 on:
-  push: null
-  pull_request: null
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 permissions: {}
 
@@ -38,12 +42,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Commit and push linting fixes
-        # Run only on:
-        # - Pull requests
-        # - Not on the default branch
+        # Run only on pull requests
         if: >
-          github.event_name == 'pull_request' &&
-          github.ref_name != github.event.repository.default_branch
+          github.event_name == 'pull_request'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           branch: ${{ github.event.pull_request.head.ref || github.head_ref || github.ref }}

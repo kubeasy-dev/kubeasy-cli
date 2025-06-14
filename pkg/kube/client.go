@@ -3,6 +3,7 @@ package kube
 import (
 	"context"
 	"fmt"
+	"k8s.io/client-go/rest"
 	"path/filepath"
 	"strings"
 	"time"
@@ -27,21 +28,7 @@ const (
 func GetKubernetesClient() (*kubernetes.Clientset, error) {
 	logger.Debug("Attempting to get Kubernetes clientset...")
 	// Use the default kubeconfig location
-	kubeConfigPath := filepath.Join(homedir.HomeDir(), ".kube", "config")
-	logger.Debug("Using kubeconfig path: %s", kubeConfigPath)
-
-	// Load the kubeconfig file
-	configLoadingRules := &clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeConfigPath}
-	configOverrides := &clientcmd.ConfigOverrides{
-		CurrentContext: KubeasyClusterContext, // Force using kind-kubeasy context
-	}
-	logger.Debug("Forcing Kubernetes context: %s", KubeasyClusterContext)
-
-	// Create the client configuration
-	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		configLoadingRules,
-		configOverrides,
-	).ClientConfig()
+	config, err := getRestConfig()
 	if err != nil {
 		logger.Error("Error building kubeconfig with context %s: %v", KubeasyClusterContext, err)
 		return nil, fmt.Errorf("error building kubeconfig with context %s: %w", KubeasyClusterContext, err)
@@ -59,25 +46,32 @@ func GetKubernetesClient() (*kubernetes.Clientset, error) {
 	return clientset, nil
 }
 
-// GetDynamicClient returns the Kubernetes dynamic client using the Kubeasy context
-func GetDynamicClient() (dynamic.Interface, error) {
-	logger.Debug("Attempting to get Kubernetes dynamic client...")
-	// Use the default kubeconfig location
+// getRestConfig loads kubeconfig and returns a rest.Config with Kubeasy context
+func getRestConfig() (*rest.Config, error) {
 	kubeConfigPath := filepath.Join(homedir.HomeDir(), ".kube", "config")
 	logger.Debug("Using kubeconfig path: %s", kubeConfigPath)
 
-	// Load the kubeconfig file with context override
 	configLoadingRules := &clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeConfigPath}
 	configOverrides := &clientcmd.ConfigOverrides{
 		CurrentContext: KubeasyClusterContext, // Force using kind-kubeasy context
 	}
 	logger.Debug("Forcing Kubernetes context: %s", KubeasyClusterContext)
 
-	// Create the client configuration
 	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		configLoadingRules,
 		configOverrides,
 	).ClientConfig()
+	if err != nil {
+		return nil, err
+	}
+	return config, nil
+}
+
+// GetDynamicClient returns the Kubernetes dynamic client using the Kubeasy context
+func GetDynamicClient() (dynamic.Interface, error) {
+	logger.Debug("Attempting to get Kubernetes dynamic client...")
+	// Use the default kubeconfig location
+	config, err := getRestConfig()
 	if err != nil {
 		logger.Error("Error building kubeconfig with context %s: %v", KubeasyClusterContext, err)
 		return nil, fmt.Errorf("error building kubeconfig with context %s: %w", KubeasyClusterContext, err)

@@ -1,16 +1,23 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:best-practices", ":pinAllExceptPeerDependencies", "helpers:pinGitHubActionDigestsToSemver", "schedule:daily", ":assignAndReview(pbrissaud)", ":automergeLinters"],
+  "extends": [
+    "config:best-practices",
+    ":pinAllExceptPeerDependencies",
+    "helpers:pinGitHubActionDigestsToSemver",
+    "schedule:daily",
+    ":assignAndReview(pbrissaud)",
+    ":automergeLinters"
+  ],
   "packageRules": [
     {
       "groupName": "{{manager}} non-major dependencies",
       "groupSlug": "{{manager}}-minor-patch",
-      "matchPackagePatterns": [
-        "*"
-      ],
       "matchUpdateTypes": [
         "minor",
         "patch"
+      ],
+      "matchPackageNames": [
+        "*"
       ]
     }
   ],

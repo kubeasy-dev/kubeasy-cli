@@ -1,6 +1,6 @@
 {
   "threshold": 0,
   "reporters": ["html", "console"],
-  "ignore": ["**/vendor/**"],
+  "ignore": ["**/vendor/**", "**/.github/**"],
   "absolute": true
 }

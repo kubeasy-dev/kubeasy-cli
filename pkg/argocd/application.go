@@ -40,7 +40,7 @@ func CreateOrUpdateChallengeApplication(ctx context.Context, dynamicClient dynam
 			"spec": map[string]interface{}{
 				"project": "default",
 				"source": map[string]interface{}{
-					"repoURL":        constants.ExercisesRepoUrl,
+					"repoURL":        constants.ExercisesRepoURL,
 					"path":           challengeSlug,
 					"targetRevision": "HEAD",
 					"directory": map[string]interface{}{
@@ -124,8 +124,18 @@ func CreateOrUpdateChallengeApplication(ctx context.Context, dynamicClient dynam
 				time.Sleep(2 * time.Second)
 				continue
 			}
-			syncStatus, _, _ := unstructured.NestedString(appStatus.Object, "status", "sync", "status")
-			phase, _, _ := unstructured.NestedString(appStatus.Object, "status", "operationState", "phase")
+			syncStatus, _, err := unstructured.NestedString(appStatus.Object, "status", "sync", "status")
+			if err != nil {
+				// Ignore error, will be retried
+				logger.Warning("Error extracting sync status: %v", err)
+				continue
+			}
+			phase, _, err := unstructured.NestedString(appStatus.Object, "status", "operationState", "phase")
+			if err != nil {
+				// Ignore error, will be retried
+				logger.Warning("Error extracting operation phase: %v", err)
+				continue
+			}
 			if syncStatus == "Synced" && phase == "Succeeded" {
 				logger.Info("Argo CD Application '%s' is now synced and succeeded.", challengeSlug)
 				return nil
@@ -152,7 +162,10 @@ func DeleteChallengeApplication(ctx context.Context, dynamicClient dynamic.Inter
 	}
 
 	// Step 2: Merge the finalizer if not already present
-	finalizers, found, _ := unstructured.NestedStringSlice(app.Object, "metadata", "finalizers")
+	finalizers, found, err := unstructured.NestedStringSlice(app.Object, "metadata", "finalizers")
+	if err != nil {
+		logger.Warning("Error extracting finalizers: %v", err)
+	}
 	needPatch := true
 	for _, f := range finalizers {
 		if f == "resources-finalizer.argocd.argoproj.io" {
@@ -174,7 +187,11 @@ func DeleteChallengeApplication(ctx context.Context, dynamicClient dynamic.Inter
 				"finalizers": finalizers,
 			},
 		}
-		patchBytes, _ := json.Marshal(patchObj)
+		patchBytes, err := json.Marshal(patchObj)
+		if err != nil {
+			logger.Warning("Error marshaling patch object: %v", err)
+			return err
+		}
 		logger.Debug("Patching finalizers for '%s': %s", appName, string(patchBytes))
 		_, err = dynamicClient.Resource(argoAppGVR).Namespace(namespace).Patch(
 			ctx,
@@ -190,8 +207,16 @@ func DeleteChallengeApplication(ctx context.Context, dynamicClient dynamic.Inter
 		}
 		// Wait for patch to be visible
 		for i := 0; i < 10; i++ {
-			appCheck, _ := dynamicClient.Resource(argoAppGVR).Namespace(namespace).Get(ctx, appName, metav1.GetOptions{})
-			fList, _, _ := unstructured.NestedStringSlice(appCheck.Object, "metadata", "finalizers")
+			appCheck, err := dynamicClient.Resource(argoAppGVR).Namespace(namespace).Get(ctx, appName, metav1.GetOptions{})
+			if err != nil {
+				logger.Warning("Error getting ArgoCD Application '%s': %v", appName, err)
+				continue
+			}
+			fList, _, err := unstructured.NestedStringSlice(appCheck.Object, "metadata", "finalizers")
+			if err != nil {
+				logger.Warning("Error extracting finalizers from appCheck: %v", err)
+				continue
+			}
 			for _, f := range fList {
 				if f == "resources-finalizer.argocd.argoproj.io" {
 					goto PATCH_DONE

@@ -126,9 +126,9 @@ func InstallArgoCD(options *InstallOptions) error {
 
 	// Install ArgoCD application (App of Apps) AFTER core components are ready
 	logger.Info("Applying App-of-Apps manifest (kubeasy-cli-setup)...")
-	appManifestUrl := "https://raw.githubusercontent.com/kubeasy-dev/cli-setup/refs/heads/main/app-of-apps.yaml"
-	logger.Debug("Fetching App-of-Apps manifest from %s...", appManifestUrl)
-	appManifestBytes, err := kube.FetchManifest(appManifestUrl)
+	appManifestURL := "https://raw.githubusercontent.com/kubeasy-dev/cli-setup/refs/heads/main/app-of-apps.yaml"
+	logger.Debug("Fetching App-of-Apps manifest from %s...", appManifestURL)
+	appManifestBytes, err := kube.FetchManifest(appManifestURL)
 	if err != nil {
 		logger.Error("Failed to fetch App-of-Apps manifest: %v", err)
 		return err
@@ -211,7 +211,7 @@ func WaitForArgoCDAppsReadyCore(appNames []string, timeout time.Duration) error 
 				statusStr := fmt.Sprintf("%s: Health=%s Sync=%s", app, healthStatus, syncStatus)
 				appsStatus = append(appsStatus, statusStr)
 
-				if healthStatus != "Healthy" || syncStatus != "Synced" {
+				if healthStatus != "Healthy" || syncStatus != syncedStatus {
 					allReady = false
 				}
 			}
@@ -236,8 +236,8 @@ func WaitForArgoCDAppsReadyCore(appNames []string, timeout time.Duration) error 
 					}
 				}
 				errMsg := fmt.Sprintf("timeout waiting for remaining ArgoCD applications (%s) to be ready. Final statuses: [%s]", strings.Join(remainingApps, ", "), strings.Join(finalStatuses, "; "))
-				logger.Error(errMsg)
-				return fmt.Errorf(errMsg)
+				logger.Error("%s", errMsg)
+				return fmt.Errorf("%s", errMsg)
 			case <-ticker.C:
 				logger.Debug("Retrying status check for remaining apps...")
 				// Continue loop
@@ -270,15 +270,16 @@ func waitForSpecificApp(ctx context.Context, dynamicClient dynamic.Interface, gv
 		case <-ctx.Done():
 			// Get final status on timeout
 			h, s, e := getAppStatus(context.Background(), dynamicClient, gvr, appName, namespace) // Use fresh context
-			finalStatus := "Unknown"
+			// finalStatus := "Unknown" // Removed ineffectual assignment
+			var finalStatus string
 			if e != nil {
 				finalStatus = fmt.Sprintf("Error (%v)", e)
 			} else {
 				finalStatus = fmt.Sprintf("Health=%s Sync=%s", h, s)
 			}
 			errMsg := fmt.Sprintf("timeout waiting for application %s to be ready. Final status: %s", appName, finalStatus)
-			logger.Error(errMsg)
-			return fmt.Errorf(errMsg)
+			logger.Error("%s", errMsg)
+			return fmt.Errorf("%s", errMsg)
 		case <-ticker.C:
 			logger.Debug("Retrying status check for app '%s'...", appName)
 			// Continue loop
@@ -293,34 +294,36 @@ func getAppStatus(ctx context.Context, dynamicClient dynamic.Interface, gvr sche
 
 	logger.Debug("Getting status for Application '%s/%s'...", namespace, appName)
 	res, err := dynamicClient.Resource(gvr).Namespace(namespace).Get(ctx, appName, metav1.GetOptions{})
-	if err != nil {
-		// Check if the error is just that the resource doesn't exist yet
-		// Use apierrors alias here
-		if apierrors.IsNotFound(err) {
-			logger.Debug("Application '%s/%s' not found yet.", namespace, appName)
-			return "NotFound", "NotFound", nil // Return specific statuses instead of error
-		}
+	switch {
+	case err == nil:
+		// continue
+	case apierrors.IsNotFound(err):
+		logger.Debug("Application '%s/%s' not found yet.", namespace, appName)
+		return "NotFound", "NotFound", nil // Return specific statuses instead of error
+	default:
 		logger.Warning("Error getting Application '%s/%s': %v", namespace, appName, err)
 		return health, sync, err // Return the actual error for other issues
 	}
 
 	// Extract health status
 	healthStatus, found, err := unstructured.NestedString(res.Object, "status", "health", "status")
-	if err != nil {
+	switch {
+	case err != nil:
 		logger.Warning("Error extracting health status for '%s/%s': %v", namespace, appName, err)
-	} else if found {
+	case found:
 		health = healthStatus
-	} else {
+	default:
 		logger.Debug("Health status field not found or not a string for '%s/%s'.", namespace, appName)
 	}
 
 	// Extract sync status
 	syncStatus, found, err := unstructured.NestedString(res.Object, "status", "sync", "status")
-	if err != nil {
+	switch {
+	case err != nil:
 		logger.Warning("Error extracting sync status for '%s/%s': %v", namespace, appName, err)
-	} else if found {
+	case found:
 		sync = syncStatus
-	} else {
+	default:
 		logger.Debug("Sync status field not found or not a string for '%s/%s'.", namespace, appName)
 	}
 

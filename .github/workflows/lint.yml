@@ -2,10 +2,12 @@
 name: Lint
 
 on:
-  push: null
-  pull_request: null
-
-permissions: {}
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   lint:
@@ -13,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: write
+      contents: read
       packages: read
       statuses: write
 
@@ -32,21 +34,25 @@ jobs:
         # Ref: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions#setting-an-environment-variable
         run: grep -v '^#' .github/super-linter.env >> "$GITHUB_ENV"
 
+      - name: Generate a token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Configure private token
+        env:
+          GH_ACCESS_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: | 
+          git config --global url."https://x-access-token:${GH_ACCESS_TOKEN}@github.com/".insteadOf "https://github.com/"
+
+      - name: Run go mod vendor to ensure all dependencies are available
+        run: go mod vendor
+
       - name: Super-linter
         uses: super-linter/super-linter@v7.4.0 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Commit and push linting fixes
-        # Run only on:
-        # - Pull requests
-        # - Not on the default branch
-        if: >
-          github.event_name == 'pull_request' &&
-          github.ref_name != github.event.repository.default_branch
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          branch: ${{ github.event.pull_request.head.ref || github.head_ref || github.ref }}
-          commit_message: "chore: fix linting issues"
-          commit_user_name: super-linter
-          commit_user_email: super-linter@super-linter.dev
+          GOPRIVATE: github.com/kubeasy-dev/challenge-operator

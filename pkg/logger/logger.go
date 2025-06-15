@@ -41,17 +41,17 @@ var (
 	once          sync.Once
 )
 
-// LoggerOptions defines options for initializing the logger
-type LoggerOptions struct {
+// Options defines options for initializing the logger
+type Options struct {
 	Level    LogLevel
 	FilePath string
 	Verbose  bool
 	UIActive bool // Indicates if an interactive UI is active
 }
 
-// DefaultLoggerOptions returns the default options
-func DefaultLoggerOptions() *LoggerOptions {
-	return &LoggerOptions{
+// DefaultOptions returns the default options
+func DefaultOptions() *Options {
+	return &Options{
 		Level:    INFO,
 		FilePath: "",    // Default path is now set by the caller (rootCmd)
 		UIActive: false, // Default to false, commands enabling UI should set it
@@ -59,9 +59,9 @@ func DefaultLoggerOptions() *LoggerOptions {
 }
 
 // Initialize initializes the default logger with the given options
-func Initialize(opts *LoggerOptions) {
+func Initialize(opts *Options) {
 	if opts == nil {
-		opts = DefaultLoggerOptions()
+		opts = DefaultOptions()
 	}
 
 	once.Do(func() {
@@ -114,7 +114,7 @@ func GetLogger() *Logger {
 	if defaultLogger == nil {
 		// Initialize with defaults if not already initialized.
 		// This might happen if a log function is called before cmd.Execute() initializes it.
-		Initialize(DefaultLoggerOptions())
+		Initialize(DefaultOptions())
 	}
 	return defaultLogger
 }

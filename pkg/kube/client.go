@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/client-go/rest"
+
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/logger"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -27,21 +29,7 @@ const (
 func GetKubernetesClient() (*kubernetes.Clientset, error) {
 	logger.Debug("Attempting to get Kubernetes clientset...")
 	// Use the default kubeconfig location
-	kubeConfigPath := filepath.Join(homedir.HomeDir(), ".kube", "config")
-	logger.Debug("Using kubeconfig path: %s", kubeConfigPath)
-
-	// Load the kubeconfig file
-	configLoadingRules := &clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeConfigPath}
-	configOverrides := &clientcmd.ConfigOverrides{
-		CurrentContext: KubeasyClusterContext, // Force using kind-kubeasy context
-	}
-	logger.Debug("Forcing Kubernetes context: %s", KubeasyClusterContext)
-
-	// Create the client configuration
-	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		configLoadingRules,
-		configOverrides,
-	).ClientConfig()
+	config, err := getRestConfig()
 	if err != nil {
 		logger.Error("Error building kubeconfig with context %s: %v", KubeasyClusterContext, err)
 		return nil, fmt.Errorf("error building kubeconfig with context %s: %w", KubeasyClusterContext, err)
@@ -59,25 +47,32 @@ func GetKubernetesClient() (*kubernetes.Clientset, error) {
 	return clientset, nil
 }
 
-// GetDynamicClient returns the Kubernetes dynamic client using the Kubeasy context
-func GetDynamicClient() (dynamic.Interface, error) {
-	logger.Debug("Attempting to get Kubernetes dynamic client...")
-	// Use the default kubeconfig location
+// getRestConfig loads kubeconfig and returns a rest.Config with Kubeasy context
+func getRestConfig() (*rest.Config, error) {
 	kubeConfigPath := filepath.Join(homedir.HomeDir(), ".kube", "config")
 	logger.Debug("Using kubeconfig path: %s", kubeConfigPath)
 
-	// Load the kubeconfig file with context override
 	configLoadingRules := &clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeConfigPath}
 	configOverrides := &clientcmd.ConfigOverrides{
 		CurrentContext: KubeasyClusterContext, // Force using kind-kubeasy context
 	}
 	logger.Debug("Forcing Kubernetes context: %s", KubeasyClusterContext)
 
-	// Create the client configuration
 	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		configLoadingRules,
 		configOverrides,
 	).ClientConfig()
+	if err != nil {
+		return nil, err
+	}
+	return config, nil
+}
+
+// GetDynamicClient returns the Kubernetes dynamic client using the Kubeasy context
+func GetDynamicClient() (dynamic.Interface, error) {
+	logger.Debug("Attempting to get Kubernetes dynamic client...")
+	// Use the default kubeconfig location
+	config, err := getRestConfig()
 	if err != nil {
 		logger.Error("Error building kubeconfig with context %s: %v", KubeasyClusterContext, err)
 		return nil, fmt.Errorf("error building kubeconfig with context %s: %w", KubeasyClusterContext, err)
@@ -203,9 +198,9 @@ func WaitForDeploymentsReady(ctx context.Context, clientset *kubernetes.Clientse
 						continue // Retry Get
 					}
 				}
-				errMsg := fmt.Sprintf("error getting Deployment %s/%s: %w", namespace, deploymentName, err)
+				errMsg := fmt.Sprintf("error getting Deployment %s/%s: %v", namespace, deploymentName, err)
 				logger.Error("%s", errMsg)
-				return fmt.Errorf(errMsg)
+				return fmt.Errorf("%s", errMsg)
 			}
 
 			// Check if desired replicas is set (it might not be immediately)
@@ -244,7 +239,7 @@ func WaitForDeploymentsReady(ctx context.Context, clientset *kubernetes.Clientse
 				}
 				errMsg := fmt.Sprintf("timeout waiting for Deployment %s/%s to be ready. Final status: %s", namespace, deploymentName, finalStatus)
 				logger.Error("%s", errMsg)
-				return fmt.Errorf(errMsg)
+				return fmt.Errorf("%s", errMsg)
 			case <-time.After(2 * time.Second):
 				logger.Debug("Retrying status check for Deployment %s/%s...", namespace, deploymentName)
 				// Continue loop
@@ -273,14 +268,14 @@ func WaitForStatefulSetsReady(ctx context.Context, clientset *kubernetes.Clients
 					case <-ctx.Done():
 						errMsg := fmt.Sprintf("timeout waiting for StatefulSet %s/%s to appear", namespace, stsName)
 						logger.Error("%s", errMsg)
-						return fmt.Errorf(errMsg)
+						return fmt.Errorf("%s", errMsg)
 					case <-time.After(2 * time.Second):
 						continue // Retry Get
 					}
 				}
-				errMsg := fmt.Sprintf("error getting StatefulSet %s/%s: %w", namespace, stsName, err)
+				errMsg := fmt.Sprintf("error getting StatefulSet %s/%s: %v", namespace, stsName, err)
 				logger.Error("%s", errMsg)
-				return fmt.Errorf(errMsg)
+				return fmt.Errorf("%s", errMsg)
 			}
 
 			// Check if desired replicas is set (it might not be immediately)
@@ -320,7 +315,7 @@ func WaitForStatefulSetsReady(ctx context.Context, clientset *kubernetes.Clients
 				}
 				errMsg := fmt.Sprintf("timeout waiting for StatefulSet %s/%s to be ready. Final status: %s", namespace, stsName, finalStatus)
 				logger.Error("%s", errMsg)
-				return fmt.Errorf(errMsg)
+				return fmt.Errorf("%s", errMsg)
 			case <-time.After(2 * time.Second):
 				logger.Debug("Retrying status check for StatefulSet %s/%s...", namespace, stsName)
 				// Continue loop

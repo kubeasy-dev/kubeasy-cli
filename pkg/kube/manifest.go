@@ -19,11 +19,11 @@ import (
 
 // FetchManifest downloads a manifest from the given URL
 func FetchManifest(url string) ([]byte, error) {
-	resp, err := http.Get(url)
+	resp, err := http.Get(url) // #nosec G107 -- URL is controlled by trusted sources in this context
 	if err != nil {
 		return nil, fmt.Errorf("error downloading manifest from %s: %w", url, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	manifestBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -34,7 +34,7 @@ func FetchManifest(url string) ([]byte, error) {
 }
 
 // ApplyManifest applies a Kubernetes manifest to the cluster
-func ApplyManifest(ctx context.Context, manifestBytes []byte, namespace string, clientset *kubernetes.Clientset, dynamicClient dynamic.Interface) error {
+func ApplyManifest(ctx context.Context, manifestBytes []byte, namespace string, _ *kubernetes.Clientset, dynamicClient dynamic.Interface) error {
 	logger.Debug("ApplyManifest: Starting application of manifest in namespace '%s'", namespace)
 	// Create decoder for YAML content
 	decoder := yamlserializer.NewDecodingSerializer(unstructured.UnstructuredJSONScheme)

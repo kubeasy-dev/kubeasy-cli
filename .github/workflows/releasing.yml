@@ -45,6 +45,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
           GOPRIVATE: github.com/kubeasy-dev/challenge-operator
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -53,25 +55,8 @@ jobs:
           path: |
             dist/kubeasy_*.tar.gz
             dist/checksums.txt
-  upload-cloudflare:
-    needs: [build]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4.3.0
-        with:
-          name: kubeasy-artifacts
-          path: ./build
-      - name: Publish
-        uses: cloudflare/pages-action@v1
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: kubeasy-cli-download
-          directory: ./build
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
   publish-npm:
-    needs: [upload-cloudflare]
+    needs: [build]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

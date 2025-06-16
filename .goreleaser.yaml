@@ -35,9 +35,7 @@ blobs:
     bucket: kubeasy-cli-binaries
     region: weur
     ids:
-      - kubeasy-cli
-      - archive
-      - checksums
+      - "*"
     endpoint: https://57e2edb42742bf00d9a2526736f3ea36.r2.cloudflarestorage.com
     acl: public-read
 snapshot: {}

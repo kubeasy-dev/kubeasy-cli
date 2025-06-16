@@ -69,9 +69,6 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
       - name: Publish to NPM
         run: |
-          git config --global user.email "${{ github.actor }}@users.noreply.github.com"
-          git config --global user.name "${{ github.actor }}"
-          npm version ${{ github.ref_name }} -m "Release ${{ github.ref_name }}"
           npm install
           npm publish --provenance --access public
         env:

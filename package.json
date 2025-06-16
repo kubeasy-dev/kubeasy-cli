@@ -1,11 +1,11 @@
 {
   "name": "@kubeasy-dev/kubeasy-cli",
-  "version": "1.0.0",
+  "version": "v1.0.0",
   "description": "Command Line to interact with kubeasy.dev and challenges ",
   "main": "index.js",
   "scripts": {
-    "postinstall": "go-npm install",
-    "preuninstall": "go-npm uninstall"
+    "postinstall": "golang-npm install",
+    "preuninstall": "golang-npm uninstall"
   },
   "repository": {
     "type": "git",
@@ -17,17 +17,17 @@
     "challenges"
   ],
   "author": "Paul Brissaud",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/kubeasy-dev/kubeasy-cli/issues"
   },
   "homepage": "https://github.com/kubeasy-dev/kubeasy-cli#readme",
-  "dependencies": {
-    "go-npm": "^0.1.9"
-  },
   "goBinary": {
     "name": "kubeasy",
-    "path": "./bin", 
-    "url": "https://github.com/kubeasy-dev/kubeasy-cli/releases/download/v{{version}}/kubeasy-cli_{{platform}}_{{arch}}.tar.gz"
+    "path": "./bin",
+    "url": "https://download.kubeasy.dev/v{{version}}/kubeasy-cli_{{platform}}_{{arch}}.tar.gz"
+  },
+  "dependencies": {
+    "golang-npm": "^0.0.6"
   }
 }

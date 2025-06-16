@@ -53,8 +53,25 @@ jobs:
           path: |
             dist/kubeasy_*.tar.gz
             dist/checksums.txt
-  publish:
+  upload-cloudflare:
     needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4.3.0
+        with:
+          name: kubeasy-artifacts
+          path: ./build
+      - name: Publish
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: kubeasy-cli-download
+          directory: ./build
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+  publish-npm:
+    needs: [upload-cloudflare]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -65,15 +82,11 @@ jobs:
         with:
           node-version: '24.x'
           registry-url: 'https://registry.npmjs.org'
-      - name: Download artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: kubeasy-artifacts
-          path: ./dist
+      - name: Bump version
+        run: |
+          npm version ${{github.ref_name}} -m "Release ${{github.ref_name}}"
       - name: Install dependencies
         run: npm install
-      - name: Bump version
-        run: npm version ${{github.ref_name}} -m "Release %s"
       - name: Publish to NPM
         run: npm publish --provenance --access public
         env:

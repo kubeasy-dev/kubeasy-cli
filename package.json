@@ -1,6 +1,6 @@
 {
   "name": "@kubeasy-dev/kubeasy-cli",
-  "version": "1.0.2",
+  "version": "1.0.0",
   "description": "Command Line to interact with kubeasy.dev and challenges ",
   "main": "index.js",
   "scripts": {
@@ -27,6 +27,7 @@
   },
   "goBinary": {
     "name": "kubeasy",
-    "path": "./dist"
+    "path": "./bin", 
+    "url": "https://github.com/kubeasy-dev/kubeasy-cli/releases/download/v{{version}}/kubeasy-cli_{{platform}}_{{arch}}.tar.gz"
   }
 }

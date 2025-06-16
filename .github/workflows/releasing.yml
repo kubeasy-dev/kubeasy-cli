@@ -70,8 +70,12 @@ jobs:
         with:
           name: kubeasy-artifacts
           path: ./dist
-      - run: npm ci
-      - run: npm publish --provenance --access public
+      - name: Install dependencies
+        run: npm install
+      - name: Bump version
+        run: npm version ${{github.ref_name}} -m "Release %s"
+      - name: Publish to NPM
+        run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     

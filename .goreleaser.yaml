@@ -25,7 +25,7 @@ builds:
 blobs:
   - provider: s3
     bucket: kubeasy-cli-binaries
-    region: eu
+    region: weur
     ids:
       - kubeasy-cli
     endpoint: https://57e2edb42742bf00d9a2526736f3ea36.r2.cloudflarestorage.com

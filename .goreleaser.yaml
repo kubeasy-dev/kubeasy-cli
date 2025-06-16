@@ -22,14 +22,6 @@ builds:
       - "-s -w -X 'github.com/kubeasy-dev/kubeasy-cli/pkg/constants.Version={{.Tag}}' -X 'github.com/kubeasy-dev/kubeasy-cli/pkg/constants.LogFilePath=/tmp/kubeasy-cli.log'"
     env:
       - GOPRIVATE=github.com/kubeasy-dev/challenge-operator
-blobs:
-  - provider: s3
-    bucket: kubeasy-cli-binaries
-    region: weur
-    ids:
-      - kubeasy-cli
-    endpoint: https://57e2edb42742bf00d9a2526736f3ea36.r2.cloudflarestorage.com
-    acl: public-read
 archives:
   - name_template: "{{ .ProjectName }}_{{ .Tag }}_{{ .Os }}_{{ .Arch }}"
     files:
@@ -38,6 +30,16 @@ archives:
       - "build/**"
 checksum:
   name_template: "checksums.txt"
+blobs:
+  - provider: s3
+    bucket: kubeasy-cli-binaries
+    region: weur
+    ids:
+      - kubeasy-cli
+      - archive
+      - checksums
+    endpoint: https://57e2edb42742bf00d9a2526736f3ea36.r2.cloudflarestorage.com
+    acl: public-read
 snapshot: {}
 changelog:
   sort: asc

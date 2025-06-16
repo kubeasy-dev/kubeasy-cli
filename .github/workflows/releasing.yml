@@ -67,13 +67,13 @@ jobs:
         with:
           node-version: '24.x'
           registry-url: 'https://registry.npmjs.org'
-      - name: Bump version
-        run: |
-          npm version ${{github.ref_name}} -m "Release ${{github.ref_name}}"
-      - name: Install dependencies
-        run: npm install
       - name: Publish to NPM
-        run: npm publish --provenance --access public
+        run: |
+          git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+          git config --global user.name "${{ github.actor }}"
+          npm version ${{ github.ref_name }} -m "Release ${{ github.ref_name }}"
+          npm install
+          npm publish --provenance --access public
         env:
+          NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-    

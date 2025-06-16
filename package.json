@@ -25,7 +25,7 @@
   "goBinary": {
     "name": "kubeasy",
     "path": "./bin",
-    "downloadUrl": "https://download.kubeasy.dev/kubeasy-cli/${version}/kubeasy-cli_${version}_${os}_${arch}.tar.gz"
+    "url": "https://download.kubeasy.dev/kubeasy-cli/${version}/kubeasy-cli_${version}_${os}_${arch}.tar.gz"
   },
   "dependencies": {
     "golang-npm": "^0.0.6"

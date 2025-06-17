@@ -1,6 +1,6 @@
 {
   "name": "@kubeasy-dev/kubeasy-cli",
-  "version": "1.0.14",
+  "version": "1.1.0",
   "description": "Command Line to interact with kubeasy.dev and challenges ",
   "main": "index.js",
   "scripts": {

@@ -4,7 +4,7 @@
   "description": "Command Line to interact with kubeasy.dev and challenges ",
   "main": "index.js",
   "scripts": {
-    "postinstall": "golang-npm install",
+    "postinstall": "mkdir -p ./bin && golang-npm install",
     "preuninstall": "golang-npm uninstall"
   },
   "repository": {

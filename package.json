@@ -1,10 +1,10 @@
 {
   "name": "@kubeasy-dev/kubeasy-cli",
-  "version": "1.0.13",
+  "version": "1.0.12",
   "description": "Command Line to interact with kubeasy.dev and challenges ",
   "main": "index.js",
   "scripts": {
-    "postinstall": "mkdir -p ./bin && golang-npm install",
+    "postinstall": "golang-npm install",
     "preuninstall": "golang-npm uninstall"
   },
   "repository": {

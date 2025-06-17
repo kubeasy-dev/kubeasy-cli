@@ -5,10 +5,23 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'README.md'
+      - '.github/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'package-lock.json'
+      - 'package.json'
   pull_request:
     branches:
       - main
-
+    paths-ignore:
+      - 'README.md'
+      - '.github/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'package-lock.json'
+      - 'package.json'
 jobs:
   lint:
     name: Lint  

@@ -74,4 +74,4 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Publish to NPM
         run: |
-          npm publish --provenance --access public
+          npm publish --access public

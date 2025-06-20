@@ -10,9 +10,9 @@ require (
 	github.com/spf13/cobra v1.9.1
 	github.com/supabase-community/supabase-go v0.0.4
 	github.com/zalando/go-keyring v0.2.6
-	k8s.io/api v0.33.1
-	k8s.io/apimachinery v0.33.1
-	k8s.io/client-go v0.33.1
+	k8s.io/api v0.33.2
+	k8s.io/apimachinery v0.33.2
+	k8s.io/client-go v0.33.2
 	sigs.k8s.io/kind v0.29.0
 )
 

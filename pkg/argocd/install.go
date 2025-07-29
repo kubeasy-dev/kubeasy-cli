@@ -22,7 +22,7 @@ const (
 	ArgoCDNamespace = "argocd"
 
 	// Default ArgoCD installation manifest URL
-	DefaultManifestURL = "https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml"
+	DefaultManifestURL = "https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/core-install.yaml"
 
 	// Default timeout for installation
 	DefaultInstallTimeout = 5 * time.Minute

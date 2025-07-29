@@ -42,7 +42,7 @@ func CreateOrUpdateChallengeApplication(ctx context.Context, dynamicClient dynam
 				"source": map[string]interface{}{
 					"repoURL":        constants.ExercisesRepoURL,
 					"path":           challengeSlug,
-					"targetRevision": "HEAD",
+					"targetRevision": constants.ExercicesRepoBranch,
 					"directory": map[string]interface{}{
 						"recurse": true,
 						"include": "{manifests/**.yaml,dynamic/**.yaml,static/**.yaml,policies/**.yaml}",

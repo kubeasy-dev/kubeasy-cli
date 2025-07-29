@@ -44,13 +44,24 @@ var setupCmd = &cobra.Command{
 			fmt.Println("Kind cluster 'kubeasy' created successfully.")
 		}
 
-		fmt.Println("Installing ArgoCD...")
-		options := argocd.DefaultInstallOptions()
-		if err := argocd.InstallArgoCD(options); err != nil {
-			fmt.Fprintf(os.Stderr, "Error installing ArgoCD: %v\n", err)
+		fmt.Println("Checking if ArgoCD is already installed...")
+		isInstalled, err := argocd.IsArgoCDInstalled()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error checking ArgoCD installation status: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Println("ArgoCD installed successfully.")
+		
+		if isInstalled {
+			fmt.Println("ArgoCD is already installed and ready.")
+		} else {
+			fmt.Println("Installing ArgoCD...")
+			options := argocd.DefaultInstallOptions()
+			if err := argocd.InstallArgoCD(options); err != nil {
+				fmt.Fprintf(os.Stderr, "Error installing ArgoCD: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Println("ArgoCD installed successfully.")
+		}
 
 		fmt.Println("Waiting for ArgoCD applications to be ready...")
 		apps := []string{"kubeasy-cli-setup", "kyverno", "argocd", "kubeasy-challenge-operator"}

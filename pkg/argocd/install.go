@@ -99,11 +99,9 @@ func InstallArgoCD(options *InstallOptions) error {
 	if options.WaitForReady {
 		logger.Info("Waiting for ArgoCD core components to be ready...")
 		deployments := []string{
-			"argocd-server",
-			"argocd-repo-server",
-			// "argocd-application-controller", // This is a StatefulSet
+			"argocd-applicationset-controller",
 			"argocd-redis",
-			"argocd-dex-server",
+			"argocd-repo-server",
 		}
 		logger.Debug("Waiting for Deployments: %s", strings.Join(deployments, ", "))
 		if err = kube.WaitForDeploymentsReady(ctx, clientset, ArgoCDNamespace, deployments); err != nil {
@@ -329,4 +327,82 @@ func getAppStatus(ctx context.Context, dynamicClient dynamic.Interface, gvr sche
 
 	logger.Debug("Status for '%s/%s': Health='%s', Sync='%s'", namespace, appName, health, sync)
 	return health, sync, nil
+}
+
+// IsArgoCDInstalled checks if ArgoCD is already installed in the cluster
+func IsArgoCDInstalled() (bool, error) {
+	logger.Debug("Checking if ArgoCD is already installed...")
+	
+	// Get Kubernetes clients
+	clientset, err := kube.GetKubernetesClient()
+	if err != nil {
+		logger.Error("Failed to get Kubernetes clientset: %v", err)
+		return false, err
+	}
+
+	ctx := context.Background()
+	
+	// Check if ArgoCD namespace exists
+	_, err = clientset.CoreV1().Namespaces().Get(ctx, ArgoCDNamespace, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.Debug("ArgoCD namespace '%s' does not exist", ArgoCDNamespace)
+			return false, nil
+		}
+		logger.Error("Error checking for ArgoCD namespace: %v", err)
+		return false, err
+	}
+	
+	// Check if core ArgoCD deployments exist and are ready
+	deployments := []string{
+		"argocd-applicationset-controller",
+		"argocd-redis", 
+		"argocd-repo-server",
+	}
+	
+	for _, deployment := range deployments {
+		dep, err := clientset.AppsV1().Deployments(ArgoCDNamespace).Get(ctx, deployment, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				logger.Debug("ArgoCD deployment '%s' not found", deployment)
+				return false, nil
+			}
+			logger.Error("Error checking deployment '%s': %v", deployment, err)
+			return false, err
+		}
+		
+		// Check if deployment is ready
+		if dep.Status.ReadyReplicas == 0 || dep.Status.ReadyReplicas != dep.Status.Replicas {
+			logger.Debug("ArgoCD deployment '%s' is not ready (ReadyReplicas: %d, TotalReplicas: %d)", 
+				deployment, dep.Status.ReadyReplicas, dep.Status.Replicas)
+			return false, nil
+		}
+	}
+	
+	// Check if ArgoCD StatefulSet exists and is ready
+	statefulsets := []string{
+		"argocd-application-controller",
+	}
+	
+	for _, statefulset := range statefulsets {
+		sts, err := clientset.AppsV1().StatefulSets(ArgoCDNamespace).Get(ctx, statefulset, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				logger.Debug("ArgoCD StatefulSet '%s' not found", statefulset)
+				return false, nil
+			}
+			logger.Error("Error checking StatefulSet '%s': %v", statefulset, err)
+			return false, err
+		}
+		
+		// Check if StatefulSet is ready
+		if sts.Status.ReadyReplicas == 0 || sts.Status.ReadyReplicas != sts.Status.Replicas {
+			logger.Debug("ArgoCD StatefulSet '%s' is not ready (ReadyReplicas: %d, TotalReplicas: %d)", 
+				statefulset, sts.Status.ReadyReplicas, sts.Status.Replicas)
+			return false, nil
+		}
+	}
+	
+	logger.Info("ArgoCD is already installed and ready")
+	return true, nil
 }

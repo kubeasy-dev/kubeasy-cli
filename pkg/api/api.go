@@ -87,6 +87,20 @@ func getUserIDFromKeyring() (string, error) {
 
 // GetChallenge retrieves a specific challenge by its slug name from the API.
 func GetChallenge(challengeSlug string) (*ChallengeEntity, error) {
+	// Return mock data if mock mode is enabled
+	if constants.MockEnabled {
+		return &ChallengeEntity{
+			ID:               "mock-challenge-id",
+			Title:            "Mock Challenge",
+			Slug:             challengeSlug,
+			Description:      "This is a mock challenge for testing purposes",
+			Difficulty:       "intermediate",
+			Theme:            "kubernetes",
+			InitialSituation: "You have a Kubernetes cluster with some pods running",
+			Objective:        "Complete the challenge objectives in mock mode",
+		}, nil
+	}
+
 	client, err := createSupabaseClient()
 	if err != nil {
 		// Propagate error from client creation (e.g., missing API key)
@@ -112,6 +126,12 @@ func GetChallenge(challengeSlug string) (*ChallengeEntity, error) {
 }
 
 func GetChallengeProgress(challengeSlug string) (*UserProgress, error) {
+	// Return mock data if mock mode is enabled
+	if constants.MockEnabled {
+		// Return nil to simulate no existing progress (user hasn't started challenge yet)
+		return nil, nil
+	}
+
 	client, err := createSupabaseClient()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Supabase client: %w", err)
@@ -146,6 +166,11 @@ func GetChallengeProgress(challengeSlug string) (*UserProgress, error) {
 }
 
 func StartChallenge(challengeSlug string) error {
+	// Skip API call if mock mode is enabled
+	if constants.MockEnabled {
+		return nil
+	}
+
 	client, err := createSupabaseClient()
 	if err != nil {
 		return fmt.Errorf("failed to create Supabase client: %w", err)
@@ -179,6 +204,11 @@ func StartChallenge(challengeSlug string) error {
 }
 
 func SendSubmit(challengeID string, staticValidation bool, dynamicValidation bool, payload interface{}) error {
+	// Skip API call if mock mode is enabled
+	if constants.MockEnabled {
+		return nil
+	}
+
 	client, err := createSupabaseClient()
 	if err != nil {
 		return fmt.Errorf("failed to create Supabase client: %w", err)
@@ -206,6 +236,11 @@ func SendSubmit(challengeID string, staticValidation bool, dynamicValidation boo
 }
 
 func ResetChallengeProgress(challengeID string) error {
+	// Skip API call if mock mode is enabled
+	if constants.MockEnabled {
+		return nil
+	}
+
 	client, err := createSupabaseClient()
 	if err != nil {
 		return fmt.Errorf("failed to create Supabase client: %w", err)

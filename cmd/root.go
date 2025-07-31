@@ -14,6 +14,7 @@ import (
 
 var (
 	debugLogging bool // Variable to store the debug flag value
+	mockMode     bool // Variable to store the mock mode flag value
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -33,6 +34,16 @@ to quickly create a Cobra application.`,
 		loggerOpts.UIActive = true
 		// Always set the file path
 		loggerOpts.FilePath = constants.LogFilePath
+
+		// Override MockEnabled if CLI flag is provided
+		if mockMode {
+			constants.MockEnabled = true
+		}
+
+		// Log mock mode status if enabled
+		if constants.MockEnabled {
+			fmt.Printf("⚠️  Running in mock mode: API calls are disabled\n")
+		}
 
 		if debugLogging {
 			// Attempt to truncate the log file at the start
@@ -68,6 +79,8 @@ func Execute() {
 func init() {
 	// Add the persistent debug flag
 	rootCmd.PersistentFlags().BoolVar(&debugLogging, "debug", false, "Enable debug logging to kubeasy-cli.log")
+	// Add the persistent mock flag
+	rootCmd.PersistentFlags().BoolVar(&mockMode, "mock", false, "Enable mock mode to bypass API calls")
 
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,

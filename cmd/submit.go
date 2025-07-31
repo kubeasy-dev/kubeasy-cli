@@ -8,6 +8,7 @@ import (
 
 	operator "github.com/kubeasy-dev/challenge-operator/api/v1alpha1"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/api"
+	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/kube"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,6 +41,24 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 		}
 		if progress.Status == "completed" {
 			fmt.Printf("❌ This challenge is already completed for this user. Submission is not allowed. You can reset the challenge with 'kubeasy challenge reset %s'.\n", challengeSlug)
+			return
+		}
+
+		// Handle mock mode
+		if constants.MockEnabled {
+			fmt.Println("\n✅ Mock mode: Simulating successful validation!")
+			fmt.Printf("Congratulations! You have successfully completed the '%s' challenge (mock mode).\n", challengeSlug)
+			fmt.Printf("You can use the 'kubeasy challenge clean %s' command to remove the challenge namespace if you want to.\n", challengeSlug)
+
+			// Send mock submission
+			err = api.SendSubmit(challenge.ID, true, true, map[string]interface{}{
+				"staticValidations":  map[string]interface{}{"mock": "success"},
+				"dynamicValidations": map[string]interface{}{"mock": "success"},
+			})
+			if err != nil {
+				log.Printf("Error sending submission: %v", err)
+				os.Exit(1)
+			}
 			return
 		}
 

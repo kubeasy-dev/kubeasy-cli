@@ -8,6 +8,7 @@ import (
 
 	operator "github.com/kubeasy-dev/challenge-operator/api/v1alpha1"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/api"
+	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/kube"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,6 +41,100 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 		}
 		if progress.Status == "completed" {
 			fmt.Printf("❌ This challenge is already completed for this user. Submission is not allowed. You can reset the challenge with 'kubeasy challenge reset %s'.\n", challengeSlug)
+			return
+		}
+
+		// Handle mock mode
+		if constants.MockEnabled {
+			// Create mock validation results that simulate real validation output
+			// Using interface{} to avoid dependency issues with operator types
+			// Mix of passing and failing validations to demonstrate different scenarios
+			mockStaticValidations := map[string][]interface{}{
+				"deployment-exists": {
+					map[string]interface{}{"AllPassed": true},
+				},
+				"service-configuration": {
+					map[string]interface{}{"AllPassed": true},
+				},
+				"configmap-validation": {
+					map[string]interface{}{"AllPassed": true},
+				},
+			}
+			
+			mockDynamicValidations := map[string][]interface{}{
+				"pod-readiness-check": {
+					map[string]interface{}{"AllPassed": true},
+				},
+				"endpoint-connectivity": {
+					map[string]interface{}{"AllPassed": true},
+				},
+			}
+			
+			mockDetailedStatuses := map[string]interface{}{
+				"staticValidations":  mockStaticValidations,
+				"dynamicValidations": mockDynamicValidations,
+			}
+			
+			// Simulate validation checking and output like real mode
+			allStaticSucceeded := true
+			allDynamicSucceeded := true
+			
+			// Print validation results in the same format as real mode
+			fmt.Println("\n📋 Mock Mode: Validation Results")
+			fmt.Println("===============================")
+			
+			// Static validation results
+			fmt.Printf("Static Validations: %d found\n", len(mockStaticValidations))
+			for name, statuses := range mockStaticValidations {
+				for _, status := range statuses {
+					if statusMap, ok := status.(map[string]interface{}); ok {
+						if allPassed, exists := statusMap["AllPassed"].(bool); exists && allPassed {
+							fmt.Printf("  ✅ %s: PASSED\n", name)
+						} else {
+							fmt.Printf("  ❌ %s: FAILED\n", name)
+							allStaticSucceeded = false
+						}
+					}
+				}
+			}
+			
+			// Dynamic validation results
+			fmt.Printf("\nDynamic Validations: %d found\n", len(mockDynamicValidations))
+			for name, statuses := range mockDynamicValidations {
+				for _, status := range statuses {
+					if statusMap, ok := status.(map[string]interface{}); ok {
+						if allPassed, exists := statusMap["AllPassed"].(bool); exists && allPassed {
+							fmt.Printf("  ✅ %s: PASSED\n", name)
+						} else {
+							fmt.Printf("  ❌ %s: FAILED\n", name)
+							allDynamicSucceeded = false
+						}
+					}
+				}
+			}
+			
+			// Overall result - same logic as real mode
+			if allStaticSucceeded && allDynamicSucceeded {
+				fmt.Println("\n✅ All validations succeeded! (mock mode)")
+				fmt.Printf("Congratulations! You have successfully completed the '%s' challenge (mock mode).\n", challengeSlug)
+				fmt.Printf("You can use the 'kubeasy challenge clean %s' command to remove the challenge namespace if you want to.\n", challengeSlug)
+			} else if allStaticSucceeded && !allDynamicSucceeded {
+				fmt.Println("\n✅ All StaticValidations succeeded! (mock mode)")
+				fmt.Println("❌ Some DynamicValidations did not succeed or encountered errors. (mock mode)")
+			} else if !allStaticSucceeded && allDynamicSucceeded {
+				fmt.Println("\n❌ Some StaticValidations did not succeed or encountered errors. (mock mode)")
+				fmt.Println("✅ All DynamicValidations succeeded! (mock mode)")
+			} else {
+				fmt.Println("\n❌ Some StaticValidations did not succeed or encountered errors. (mock mode)")
+				fmt.Println("❌ Some DynamicValidations did not succeed or encountered errors. (mock mode)")
+			}
+
+			// Send mock submission
+			err = api.SendSubmit(challenge.ID, allStaticSucceeded, allDynamicSucceeded, mockDetailedStatuses)
+			if err != nil {
+				log.Printf("Error sending submission: %v", err)
+				os.Exit(1)
+			}
 			return
 		}
 

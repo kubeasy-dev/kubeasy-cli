@@ -56,6 +56,13 @@ func CreateOrUpdateChallengeApplication(ctx context.Context, dynamicClient dynam
 					"syncOptions": []string{
 						"CreateNamespace=true",
 					},
+					"retry": map[string]interface{}{
+						"limit": 5,
+						"backoff": map[string]interface{}{
+							"duration":    "5s",
+							"maxDuration": "30s",
+						},
+					},
 				},
 			},
 		},

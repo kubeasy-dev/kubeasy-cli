@@ -2,7 +2,7 @@ module github.com/kubeasy-dev/kubeasy-cli
 
 go 1.24.0
 
-toolchain go1.24.5
+toolchain go1.24.6
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.0

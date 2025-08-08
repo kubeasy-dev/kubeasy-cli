@@ -50,7 +50,7 @@ var setupCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Error checking ArgoCD installation status: %v\n", err)
 			os.Exit(1)
 		}
-		
+
 		if isInstalled {
 			fmt.Println("ArgoCD is already installed and ready.")
 		} else {

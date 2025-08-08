@@ -9,6 +9,7 @@ import (
 
 	"k8s.io/client-go/rest"
 
+	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/logger"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -20,19 +21,14 @@ import (
 	"k8s.io/client-go/util/homedir"
 )
 
-const (
-	// KubeasyClusterContext is the Kubernetes context name to use
-	KubeasyClusterContext = "kind-kubeasy"
-)
-
 // GetKubernetesClient returns the Kubernetes clientset using the Kubeasy context
 func GetKubernetesClient() (*kubernetes.Clientset, error) {
 	logger.Debug("Attempting to get Kubernetes clientset...")
 	// Use the default kubeconfig location
 	config, err := getRestConfig()
 	if err != nil {
-		logger.Error("Error building kubeconfig with context %s: %v", KubeasyClusterContext, err)
-		return nil, fmt.Errorf("error building kubeconfig with context %s: %w", KubeasyClusterContext, err)
+		logger.Error("Error building kubeconfig with context %s: %v", constants.KubeasyClusterContext, err)
+		return nil, fmt.Errorf("error building kubeconfig with context %s: %w", constants.KubeasyClusterContext, err)
 	}
 
 	// Create the clientset
@@ -43,7 +39,7 @@ func GetKubernetesClient() (*kubernetes.Clientset, error) {
 		return nil, fmt.Errorf("error creating Kubernetes client: %w", err)
 	}
 
-	logger.Info("Kubernetes clientset obtained successfully for context %s.", KubeasyClusterContext)
+	logger.Info("Kubernetes clientset obtained successfully for context %s.", constants.KubeasyClusterContext)
 	return clientset, nil
 }
 
@@ -54,9 +50,9 @@ func getRestConfig() (*rest.Config, error) {
 
 	configLoadingRules := &clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeConfigPath}
 	configOverrides := &clientcmd.ConfigOverrides{
-		CurrentContext: KubeasyClusterContext, // Force using kind-kubeasy context
+		CurrentContext: constants.KubeasyClusterContext,
 	}
-	logger.Debug("Forcing Kubernetes context: %s", KubeasyClusterContext)
+	logger.Debug("Forcing Kubernetes context: %s", constants.KubeasyClusterContext)
 
 	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		configLoadingRules,
@@ -74,8 +70,8 @@ func GetDynamicClient() (dynamic.Interface, error) {
 	// Use the default kubeconfig location
 	config, err := getRestConfig()
 	if err != nil {
-		logger.Error("Error building kubeconfig with context %s: %v", KubeasyClusterContext, err)
-		return nil, fmt.Errorf("error building kubeconfig with context %s: %w", KubeasyClusterContext, err)
+		logger.Error("Error building kubeconfig with context %s: %v", constants.KubeasyClusterContext, err)
+		return nil, fmt.Errorf("error building kubeconfig with context %s: %w", constants.KubeasyClusterContext, err)
 	}
 
 	// Create the dynamic client
@@ -86,7 +82,7 @@ func GetDynamicClient() (dynamic.Interface, error) {
 		return nil, fmt.Errorf("error creating dynamic client: %w", err)
 	}
 
-	logger.Info("Kubernetes dynamic client obtained successfully for context %s.", KubeasyClusterContext)
+	logger.Info("Kubernetes dynamic client obtained successfully for context %s.", constants.KubeasyClusterContext)
 	return dynamicClient, nil
 }
 
@@ -126,6 +122,38 @@ func CreateNamespace(ctx context.Context, clientset *kubernetes.Clientset, names
 	}
 
 	logger.Info("Namespace '%s' created successfully.", namespace)
+	return nil
+}
+
+// DeleteNamespace deletes a namespace if it exists
+func DeleteNamespace(ctx context.Context, clientset *kubernetes.Clientset, namespace string) error {
+	logger.Debug("Checking if namespace '%s' exists for deletion...", namespace)
+
+	// Check if namespace exists
+	_, err := clientset.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.Info("Namespace '%s' does not exist, nothing to delete.", namespace)
+			return nil
+		}
+		logger.Error("Error checking namespace %s: %v", namespace, err)
+		return fmt.Errorf("error checking namespace %s: %w", namespace, err)
+	}
+
+	// Delete the namespace
+	logger.Info("Deleting namespace '%s'...", namespace)
+	err = clientset.CoreV1().Namespaces().Delete(ctx, namespace, metav1.DeleteOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			// Race condition: namespace was deleted between Get and Delete
+			logger.Info("Namespace '%s' was already deleted.", namespace)
+			return nil
+		}
+		logger.Error("Error deleting namespace %s: %v", namespace, err)
+		return fmt.Errorf("error deleting namespace %s: %w", namespace, err)
+	}
+
+	logger.Info("Namespace '%s' deletion initiated successfully.", namespace)
 	return nil
 }
 

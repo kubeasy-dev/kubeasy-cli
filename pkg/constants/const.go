@@ -14,5 +14,7 @@ var CliSetupAppsURL = GithubRootURL + "/cli-setup"
 
 var Version = "dev"
 
+var KubeasyClusterContext = "kind-kubeasy"
+
 // LogFilePath defines the default path for the log file when debug is enabled
 var LogFilePath = "kubeasy-cli.log"

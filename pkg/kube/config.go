@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/logger"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -27,7 +28,7 @@ func GetRestConfig() (*rest.Config, error) {
 	// Load the kubeconfig file with context override
 	configLoadingRules := &clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeConfigPath}
 	configOverrides := &clientcmd.ConfigOverrides{
-		CurrentContext: KubeasyClusterContext, // Force using kind-kubeasy context
+		CurrentContext: constants.KubeasyClusterContext,
 	}
 
 	// Create the client configuration
@@ -36,7 +37,7 @@ func GetRestConfig() (*rest.Config, error) {
 		configOverrides,
 	).ClientConfig()
 	if err != nil {
-		return nil, fmt.Errorf("error building kubeconfig with context %s: %w", KubeasyClusterContext, err)
+		return nil, fmt.Errorf("error building kubeconfig with context %s: %w", constants.KubeasyClusterContext, err)
 	}
 
 	return config, nil

@@ -44,6 +44,17 @@ var startChallengeCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Error getting Kubernetes dynamic client: %v\n", err)
 			os.Exit(1)
 		}
+
+		staticClient, err := kube.GetKubernetesClient()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting Kubernetes static client: %v\n", err)
+			os.Exit(1)
+		}
+
+		if err := kube.CreateNamespace(ctx, staticClient, challengeSlug); err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating namespace: %v\n", err)
+			os.Exit(1)
+		}
 		if err := argocd.CreateOrUpdateChallengeApplication(ctx, dynamicClient, challengeSlug); err != nil {
 			fmt.Fprintf(os.Stderr, "Error installing ArgoCD app: %v\n", err)
 			os.Exit(1)

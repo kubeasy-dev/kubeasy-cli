@@ -28,7 +28,6 @@ func getChallengeOrExit(slug string) *api.ChallengeEntity {
 
 // deleteChallengeResources deletes ArgoCD Application and all subresources for a challenge
 func deleteChallengeResources(challengeSlug string) {
-	challenge := getChallengeOrExit(challengeSlug)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	dynamicClient, err := kube.GetDynamicClient()
 	if err != nil {
@@ -38,7 +37,7 @@ func deleteChallengeResources(challengeSlug string) {
 	}
 
 	// Delete ArgoCD Application
-	if err := argocd.DeleteChallengeApplication(ctx, dynamicClient, challenge.Slug, argocd.ArgoCDNamespace); err != nil {
+	if err := argocd.DeleteChallengeApplication(ctx, dynamicClient, challengeSlug, argocd.ArgoCDNamespace); err != nil {
 		fmt.Fprintf(os.Stderr, "Error deleting ArgoCD Application for challenge '%s': %v\n", challengeSlug, err)
 		cancel()
 		os.Exit(1)
@@ -53,7 +52,7 @@ func deleteChallengeResources(challengeSlug string) {
 	}
 
 	// Delete Kubernetes namespace manually because ArgoCD does not delete namespaces even if it was created by ArgoCD
-	if err := kube.DeleteNamespace(ctx, clientset, challenge.Slug); err != nil {
+	if err := kube.DeleteNamespace(ctx, clientset, challengeSlug); err != nil {
 		fmt.Fprintf(os.Stderr, "Error deleting Kubernetes namespace for challenge '%s': %v\n", challengeSlug, err)
 		cancel()
 		os.Exit(1)

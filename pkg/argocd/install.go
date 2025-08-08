@@ -8,9 +8,6 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors" // Add alias
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
 
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/logger"
 
@@ -163,176 +160,31 @@ func WaitForArgoCDAppsReadyCore(appNames []string, timeout time.Duration) error 
 	logger.Debug("Waiting 5s for potential API server stabilization...")
 	time.Sleep(5 * time.Second)
 
-	gvr := schema.GroupVersionResource{
-		Group:    "argoproj.io",
-		Version:  "v1alpha1",
-		Resource: "applications",
+	// Use the new unified approach for all apps
+	options := WaitOptions{
+		CheckHealth:    true,
+		CheckSync:      true,
+		CheckOperation: false,
+		Timeout:        timeout,
 	}
 
-	// --- Wait for kubeasy-cli-setup first ---
-	cliSetupAppName := "kubeasy-cli-setup"
-	logger.Info("Waiting specifically for %s to be Healthy and Synced...", cliSetupAppName)
-	if err := waitForSpecificApp(ctx, dynamicClient, gvr, cliSetupAppName, ArgoCDNamespace); err != nil {
-		// Error already logged in waitForSpecificApp
-		return fmt.Errorf("error waiting for %s: %w", cliSetupAppName, err)
-	}
-	logger.Info("%s is Healthy and Synced.", cliSetupAppName)
-
-	// --- Wait for the remaining apps ---
-	remainingApps := []string{}
-	for _, app := range appNames {
-		if app != cliSetupAppName {
-			remainingApps = append(remainingApps, app)
+	for _, appName := range appNames {
+		logger.Info("Waiting for ArgoCD Application '%s'...", appName)
+		if err := WaitForApplicationStatus(ctx, dynamicClient, appName, ArgoCDNamespace, options); err != nil {
+			logger.Error("Failed waiting for ArgoCD Application '%s': %v", appName, err)
+			return fmt.Errorf("error waiting for %s: %w", appName, err)
 		}
-	}
-
-	if len(remainingApps) > 0 {
-		logger.Info("Waiting for remaining applications (%s) via Kubernetes API...", strings.Join(remainingApps, ", "))
-		ticker := time.NewTicker(5 * time.Second) // Increased ticker interval slightly
-		defer ticker.Stop()
-
-		for {
-			allReady := true
-			appsStatus := []string{}
-
-			for _, app := range remainingApps {
-				healthStatus, syncStatus, err := getAppStatus(ctx, dynamicClient, gvr, app, ArgoCDNamespace)
-				if err != nil {
-					// Log the specific error for this app
-					statusStr := fmt.Sprintf("%s: Error getting status (%v)", app, err)
-					appsStatus = append(appsStatus, statusStr)
-					logger.Warning("Status check failed for app '%s': %v", app, err)
-					allReady = false
-					continue // Try next app
-				}
-
-				statusStr := fmt.Sprintf("%s: Health=%s Sync=%s", app, healthStatus, syncStatus)
-				appsStatus = append(appsStatus, statusStr)
-
-				if healthStatus != "Healthy" || syncStatus != syncedStatus {
-					allReady = false
-				}
-			}
-
-			logger.Info("Current remaining app statuses: [%s]", strings.Join(appsStatus, "; "))
-
-			if allReady {
-				logger.Info("All remaining ArgoCD applications are ready.")
-				break // Exit the loop for remaining apps
-			}
-
-			select {
-			case <-ctx.Done():
-				finalStatuses := []string{}
-				// Get final statuses on timeout for better error reporting
-				for _, app := range remainingApps {
-					h, s, e := getAppStatus(context.Background(), dynamicClient, gvr, app, ArgoCDNamespace) // Use fresh context
-					if e != nil {
-						finalStatuses = append(finalStatuses, fmt.Sprintf("%s: Error (%v)", app, e))
-					} else {
-						finalStatuses = append(finalStatuses, fmt.Sprintf("%s: Health=%s Sync=%s", app, h, s))
-					}
-				}
-				errMsg := fmt.Sprintf("timeout waiting for remaining ArgoCD applications (%s) to be ready. Final statuses: [%s]", strings.Join(remainingApps, ", "), strings.Join(finalStatuses, "; "))
-				logger.Error("%s", errMsg)
-				return fmt.Errorf("%s", errMsg)
-			case <-ticker.C:
-				logger.Debug("Retrying status check for remaining apps...")
-				// Continue loop
-			}
-		}
+		logger.Info("ArgoCD Application '%s' is ready.", appName)
 	}
 
 	logger.Info("All specified ArgoCD applications are ready!")
 	return nil
 }
 
-// Helper function to wait for a specific app
-func waitForSpecificApp(ctx context.Context, dynamicClient dynamic.Interface, gvr schema.GroupVersionResource, appName, namespace string) error {
-	ticker := time.NewTicker(5 * time.Second) // Increased ticker interval slightly
-	defer ticker.Stop()
-
-	for {
-		healthStatus, syncStatus, err := getAppStatus(ctx, dynamicClient, gvr, appName, namespace)
-		if err != nil {
-			// Log error but continue retrying, check context cancellation
-			logger.Warning("Error getting status for %s: %v. Retrying...", appName, err)
-		} else {
-			logger.Info("Current status for %s: Health=%s Sync=%s", appName, healthStatus, syncStatus)
-			if healthStatus == "Healthy" && syncStatus == "Synced" {
-				return nil // App is ready
-			}
-		}
-
-		select {
-		case <-ctx.Done():
-			// Get final status on timeout
-			h, s, e := getAppStatus(context.Background(), dynamicClient, gvr, appName, namespace) // Use fresh context
-			// finalStatus := "Unknown" // Removed ineffectual assignment
-			var finalStatus string
-			if e != nil {
-				finalStatus = fmt.Sprintf("Error (%v)", e)
-			} else {
-				finalStatus = fmt.Sprintf("Health=%s Sync=%s", h, s)
-			}
-			errMsg := fmt.Sprintf("timeout waiting for application %s to be ready. Final status: %s", appName, finalStatus)
-			logger.Error("%s", errMsg)
-			return fmt.Errorf("%s", errMsg)
-		case <-ticker.C:
-			logger.Debug("Retrying status check for app '%s'...", appName)
-			// Continue loop
-		}
-	}
-}
-
-// Helper function to get app status
-func getAppStatus(ctx context.Context, dynamicClient dynamic.Interface, gvr schema.GroupVersionResource, appName, namespace string) (health string, sync string, err error) {
-	health = "Unknown"
-	sync = "Unknown"
-
-	logger.Debug("Getting status for Application '%s/%s'...", namespace, appName)
-	res, err := dynamicClient.Resource(gvr).Namespace(namespace).Get(ctx, appName, metav1.GetOptions{})
-	switch {
-	case err == nil:
-		// continue
-	case apierrors.IsNotFound(err):
-		logger.Debug("Application '%s/%s' not found yet.", namespace, appName)
-		return "NotFound", "NotFound", nil // Return specific statuses instead of error
-	default:
-		logger.Warning("Error getting Application '%s/%s': %v", namespace, appName, err)
-		return health, sync, err // Return the actual error for other issues
-	}
-
-	// Extract health status
-	healthStatus, found, err := unstructured.NestedString(res.Object, "status", "health", "status")
-	switch {
-	case err != nil:
-		logger.Warning("Error extracting health status for '%s/%s': %v", namespace, appName, err)
-	case found:
-		health = healthStatus
-	default:
-		logger.Debug("Health status field not found or not a string for '%s/%s'.", namespace, appName)
-	}
-
-	// Extract sync status
-	syncStatus, found, err := unstructured.NestedString(res.Object, "status", "sync", "status")
-	switch {
-	case err != nil:
-		logger.Warning("Error extracting sync status for '%s/%s': %v", namespace, appName, err)
-	case found:
-		sync = syncStatus
-	default:
-		logger.Debug("Sync status field not found or not a string for '%s/%s'.", namespace, appName)
-	}
-
-	logger.Debug("Status for '%s/%s': Health='%s', Sync='%s'", namespace, appName, health, sync)
-	return health, sync, nil
-}
-
 // IsArgoCDInstalled checks if ArgoCD is already installed in the cluster
 func IsArgoCDInstalled() (bool, error) {
 	logger.Debug("Checking if ArgoCD is already installed...")
-	
+
 	// Get Kubernetes clients
 	clientset, err := kube.GetKubernetesClient()
 	if err != nil {
@@ -341,7 +193,7 @@ func IsArgoCDInstalled() (bool, error) {
 	}
 
 	ctx := context.Background()
-	
+
 	// Check if ArgoCD namespace exists
 	_, err = clientset.CoreV1().Namespaces().Get(ctx, ArgoCDNamespace, metav1.GetOptions{})
 	if err != nil {
@@ -352,14 +204,14 @@ func IsArgoCDInstalled() (bool, error) {
 		logger.Error("Error checking for ArgoCD namespace: %v", err)
 		return false, err
 	}
-	
+
 	// Check if core ArgoCD deployments exist and are ready
 	deployments := []string{
 		"argocd-applicationset-controller",
-		"argocd-redis", 
+		"argocd-redis",
 		"argocd-repo-server",
 	}
-	
+
 	for _, deployment := range deployments {
 		dep, err := clientset.AppsV1().Deployments(ArgoCDNamespace).Get(ctx, deployment, metav1.GetOptions{})
 		if err != nil {
@@ -370,20 +222,20 @@ func IsArgoCDInstalled() (bool, error) {
 			logger.Error("Error checking deployment '%s': %v", deployment, err)
 			return false, err
 		}
-		
+
 		// Check if deployment is ready
 		if dep.Status.ReadyReplicas == 0 || dep.Status.ReadyReplicas != dep.Status.Replicas {
-			logger.Debug("ArgoCD deployment '%s' is not ready (ReadyReplicas: %d, TotalReplicas: %d)", 
+			logger.Debug("ArgoCD deployment '%s' is not ready (ReadyReplicas: %d, TotalReplicas: %d)",
 				deployment, dep.Status.ReadyReplicas, dep.Status.Replicas)
 			return false, nil
 		}
 	}
-	
+
 	// Check if ArgoCD StatefulSet exists and is ready
 	statefulsets := []string{
 		"argocd-application-controller",
 	}
-	
+
 	for _, statefulset := range statefulsets {
 		sts, err := clientset.AppsV1().StatefulSets(ArgoCDNamespace).Get(ctx, statefulset, metav1.GetOptions{})
 		if err != nil {
@@ -394,15 +246,15 @@ func IsArgoCDInstalled() (bool, error) {
 			logger.Error("Error checking StatefulSet '%s': %v", statefulset, err)
 			return false, err
 		}
-		
+
 		// Check if StatefulSet is ready
 		if sts.Status.ReadyReplicas == 0 || sts.Status.ReadyReplicas != sts.Status.Replicas {
-			logger.Debug("ArgoCD StatefulSet '%s' is not ready (ReadyReplicas: %d, TotalReplicas: %d)", 
+			logger.Debug("ArgoCD StatefulSet '%s' is not ready (ReadyReplicas: %d, TotalReplicas: %d)",
 				statefulset, sts.Status.ReadyReplicas, sts.Status.Replicas)
 			return false, nil
 		}
 	}
-	
+
 	logger.Info("ArgoCD is already installed and ready")
 	return true, nil
 }

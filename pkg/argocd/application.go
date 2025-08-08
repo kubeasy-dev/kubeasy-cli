@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/types"
@@ -120,34 +121,13 @@ func CreateOrUpdateChallengeApplication(ctx context.Context, dynamicClient dynam
 		logger.Warning("Failed to patch Argo CD Application '%s' to trigger sync: %v", challengeSlug, err)
 	} else {
 		logger.Info("Triggered manual sync for Argo CD Application '%s' (ArgoCD operation field)", challengeSlug)
-		// Wait for sync to complete (Synced + Succeeded)
-		for i := 0; i < 30; i++ {
-			appStatus, err := dynamicClient.Resource(argoAppGVR).Namespace(ArgoCDNamespace).Get(ctx, challengeSlug, metav1.GetOptions{})
-			if err != nil {
-				logger.Warning("Failed to get Argo CD Application '%s' status: %v", challengeSlug, err)
-				time.Sleep(2 * time.Second)
-				continue
-			}
-			syncStatus, _, err := unstructured.NestedString(appStatus.Object, "status", "sync", "status")
-			if err != nil {
-				// Ignore error, will be retried
-				logger.Warning("Error extracting sync status: %v", err)
-				continue
-			}
-			phase, _, err := unstructured.NestedString(appStatus.Object, "status", "operationState", "phase")
-			if err != nil {
-				// Ignore error, will be retried
-				logger.Warning("Error extracting operation phase: %v", err)
-				continue
-			}
-			if syncStatus == "Synced" && phase == "Succeeded" {
-				logger.Info("Argo CD Application '%s' is now synced and succeeded.", challengeSlug)
-				return nil
-			}
-			logger.Debug("Waiting for Argo CD Application '%s' to be synced... (syncStatus=%s, phase=%s)", challengeSlug, syncStatus, phase)
-			time.Sleep(2 * time.Second)
-		}
-		return fmt.Errorf("timed out waiting for Argo CD Application '%s' to be synced", challengeSlug)
+		// Wait for sync to complete using the generalized method
+		// ArgoCD handles retry/backoff internally, so we just wait for completion
+		return WaitForApplicationStatus(ctx, dynamicClient, challengeSlug, ArgoCDNamespace, WaitOptions{
+			CheckSync:      true,
+			CheckHealth:    false,
+			CheckOperation: true,
+		})
 	}
 	return nil
 }
@@ -253,4 +233,145 @@ func DeleteChallengeApplication(ctx context.Context, dynamicClient dynamic.Inter
 		time.Sleep(2 * time.Second)
 	}
 	return fmt.Errorf("timed out waiting for ArgoCD Application '%s' deletion", appName)
+}
+
+// WaitOptions defines what conditions to wait for in an ArgoCD Application
+type WaitOptions struct {
+	CheckHealth    bool          // Wait for health status to be "Healthy"
+	CheckSync      bool          // Wait for sync status to be "Synced"
+	CheckOperation bool          // Wait for operation phase to be "Succeeded"
+	Timeout        time.Duration // Timeout for the wait operation (optional, no timeout if 0)
+}
+
+// DefaultWaitOptions returns sensible defaults for waiting
+func DefaultWaitOptions() WaitOptions {
+	return WaitOptions{
+		CheckHealth:    true,
+		CheckSync:      true,
+		CheckOperation: false,
+		Timeout:        0, // No timeout by default, let ArgoCD handle retry/backoff
+	}
+}
+
+// WaitForApplicationStatus waits for an ArgoCD Application to meet the specified conditions
+// This is a unified method that can handle different waiting scenarios
+func WaitForApplicationStatus(ctx context.Context, dynamicClient dynamic.Interface, appName, namespace string, options WaitOptions) error {
+	// Build description of what we're waiting for
+	conditions := []string{}
+	if options.CheckHealth {
+		conditions = append(conditions, "Healthy")
+	}
+	if options.CheckSync {
+		conditions = append(conditions, "Synced")
+	}
+	if options.CheckOperation {
+		conditions = append(conditions, "Operation Succeeded")
+	}
+
+	logger.Info("Waiting for ArgoCD Application '%s' to be: %s", appName, strings.Join(conditions, " + "))
+
+	// Setup context with timeout if specified
+	waitCtx := ctx
+	var cancel context.CancelFunc
+	if options.Timeout > 0 {
+		waitCtx, cancel = context.WithTimeout(ctx, options.Timeout)
+		defer cancel()
+		logger.Debug("Using timeout: %s", options.Timeout)
+	} else {
+		logger.Debug("No timeout specified - relying on ArgoCD retry/backoff")
+	}
+
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-waitCtx.Done():
+			// Get final status for better error reporting
+			health, sync, phase, err := getApplicationFullStatus(context.Background(), dynamicClient, appName, namespace)
+			if err != nil {
+				logger.Error("Timeout waiting for ArgoCD Application '%s'. Failed to get final status: %v", appName, err)
+				return fmt.Errorf("timeout waiting for ArgoCD Application '%s'", appName)
+			}
+			logger.Error("Timeout waiting for ArgoCD Application '%s'. Final status: health=%s, sync=%s, phase=%s", appName, health, sync, phase)
+			return fmt.Errorf("timeout waiting for ArgoCD Application '%s' (final status: health=%s, sync=%s, phase=%s)", appName, health, sync, phase)
+
+		case <-ticker.C:
+			health, sync, phase, err := getApplicationFullStatus(waitCtx, dynamicClient, appName, namespace)
+			if err != nil {
+				logger.Warning("Failed to get ArgoCD Application '%s' status: %v (retrying...)", appName, err)
+				continue
+			}
+
+			logger.Debug("ArgoCD Application '%s' status: health=%s, sync=%s, phase=%s", appName, health, sync, phase)
+
+			// Check all required conditions
+			ready := true
+			if options.CheckHealth && health != "Healthy" {
+				ready = false
+			}
+			if options.CheckSync && sync != syncedStatus {
+				ready = false
+			}
+			if options.CheckOperation && phase != "Succeeded" {
+				ready = false
+			}
+
+			if ready {
+				logger.Info("ArgoCD Application '%s' meets all required conditions: %s", appName, strings.Join(conditions, " + "))
+				return nil
+			}
+
+			// Log current status for visibility
+			logger.Debug("Waiting for ArgoCD Application '%s'... (health=%s, sync=%s, phase=%s)", appName, health, sync, phase)
+		}
+	}
+}
+
+// WaitForApplicationSync is a convenience wrapper for sync + operation completion
+// Deprecated: Use WaitForApplicationStatus with appropriate WaitOptions instead
+func WaitForApplicationSync(ctx context.Context, dynamicClient dynamic.Interface, appName, namespace string, timeout time.Duration) error {
+	return WaitForApplicationStatus(ctx, dynamicClient, appName, namespace, WaitOptions{
+		CheckHealth:    false,
+		CheckSync:      true,
+		CheckOperation: true,
+		Timeout:        timeout,
+	})
+}
+
+// WaitForApplicationReady is a convenience wrapper for health + sync readiness
+// Deprecated: Use WaitForApplicationStatus with appropriate WaitOptions instead
+func WaitForApplicationReady(ctx context.Context, dynamicClient dynamic.Interface, appName, namespace string, timeout time.Duration) error {
+	return WaitForApplicationStatus(ctx, dynamicClient, appName, namespace, WaitOptions{
+		CheckHealth:    true,
+		CheckSync:      true,
+		CheckOperation: false,
+		Timeout:        timeout,
+	})
+}
+
+// getApplicationFullStatus retrieves the health, sync status and operation phase of an ArgoCD Application
+func getApplicationFullStatus(ctx context.Context, dynamicClient dynamic.Interface, appName, namespace string) (health string, sync string, phase string, err error) {
+	app, err := dynamicClient.Resource(argoAppGVR).Namespace(namespace).Get(ctx, appName, metav1.GetOptions{})
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to get ArgoCD Application '%s': %w", appName, err)
+	}
+
+	// Extract health status
+	health, _, err = unstructured.NestedString(app.Object, "status", "health", "status")
+	if err != nil {
+		return "", "", "", fmt.Errorf("error extracting health status: %w", err)
+	}
+
+	// Extract sync status
+	sync, _, err = unstructured.NestedString(app.Object, "status", "sync", "status")
+	if err != nil {
+		return health, "", "", fmt.Errorf("error extracting sync status: %w", err)
+	}
+
+	// Extract operation phase (may not exist if no operation is running)
+	phase, _, _ = unstructured.NestedString(app.Object, "status", "operationState", "phase")
+	// Don't return error for phase as it may not exist
+
+	return health, sync, phase, nil
 }

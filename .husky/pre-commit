@@ -1,0 +1,15 @@
+# Format Go files
+echo "🔧 Formatting Go files..."
+gofmt -w $(find . -name "*.go" -not -path "./vendor/*")
+
+# Run golangci-lint
+echo "🔍 Running golangci-lint..."
+golangci-lint run --config .github/linters/.golangci.yml
+
+# Check if there are any linting errors
+if [ $? -ne 0 ]; then
+  echo "❌ Linting failed. Please fix the issues before committing."
+  exit 1
+fi
+
+echo "✅ All checks passed!"

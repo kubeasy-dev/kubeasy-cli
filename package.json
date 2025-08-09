@@ -5,7 +5,10 @@
   "main": "index.js",
   "scripts": {
     "postinstall": "golang-npm install",
-    "preuninstall": "golang-npm uninstall"
+    "preuninstall": "golang-npm uninstall",
+    "prepare": "husky",
+    "lint": "golangci-lint run --config .github/linters/.golangci.yml",
+    "lint:fix": "golangci-lint run --config .github/linters/.golangci.yml --fix"
   },
   "repository": {
     "type": "git",
@@ -29,5 +32,9 @@
   },
   "dependencies": {
     "golang-npm": "0.0.6"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.5"
   }
 }

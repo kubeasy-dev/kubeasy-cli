@@ -59,7 +59,7 @@ func deleteChallengeResources(challengeSlug string) {
 		os.Exit(1)
 	}
 
-	//switch to default namespace
+	// Switch to default namespace
 	if err := kube.SetNamespaceForContext(constants.KubeasyClusterContext, "default"); err != nil {
 		fmt.Fprintf(os.Stderr, "Error switching to default namespace: %v\n", err)
 		cancel()

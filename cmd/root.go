@@ -29,8 +29,6 @@ to quickly create a Cobra application.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		// Initialize logger globally here
 		loggerOpts := logger.DefaultOptions()
-		// Assume UI is active for all commands using BubbleTea
-		loggerOpts.UIActive = true
 		// Always set the file path
 		loggerOpts.FilePath = constants.LogFilePath
 
@@ -48,7 +46,8 @@ to quickly create a Cobra application.`,
 
 		// Log the file path only when debugging, after initialization
 		if debugLogging {
-			logger.Debug("Logging debug messages to: %s", constants.LogFilePath)
+			logger.Debug("Logging debug messages to: %s (max lines: %d)", 
+				constants.LogFilePath, constants.MaxLogLines)
 		}
 	},
 	// Uncomment the following line if your bare application

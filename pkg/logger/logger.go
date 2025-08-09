@@ -1,12 +1,16 @@
 package logger
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+	
+	"k8s.io/klog/v2"
+	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
 )
 
 // LogLevel represents the log level type
@@ -30,10 +34,12 @@ var levelNames = map[LogLevel]string{
 
 // Logger is our logging structure
 type Logger struct {
-	level    LogLevel
-	outputs  []io.Writer
-	uiActive bool // Indicates if an interactive UI is active
-	mu       sync.Mutex
+	level     LogLevel
+	outputs   []io.Writer
+	mu        sync.Mutex
+	filePath  string // Store the file path for line management
+	lineCount int    // Current number of lines in the log file
+	maxLines  int    // Maximum lines to keep in the file
 }
 
 var (
@@ -46,15 +52,13 @@ type Options struct {
 	Level    LogLevel
 	FilePath string
 	Verbose  bool
-	UIActive bool // Indicates if an interactive UI is active
 }
 
 // DefaultOptions returns the default options
 func DefaultOptions() *Options {
 	return &Options{
 		Level:    INFO,
-		FilePath: "",    // Default path is now set by the caller (rootCmd)
-		UIActive: false, // Default to false, commands enabling UI should set it
+		FilePath: "", // Default path is now set by the caller (rootCmd)
 	}
 }
 
@@ -67,15 +71,8 @@ func Initialize(opts *Options) {
 	once.Do(func() {
 		outputs := []io.Writer{}
 
-		// If verbosity is enabled AND UI is NOT active, add stdout
-		// Note: Verbose flag isn't explicitly used here currently,
-		// stdout logging depends only on UIActive state.
-		// Consider adding opts.Verbose check if needed.
-		if !opts.UIActive {
-			outputs = append(outputs, os.Stdout)
-		}
-
-		// ALWAYS add file output if FilePath is specified
+		// Only add file output if FilePath is specified
+		// No stdout output - logs go only to file
 		if opts.FilePath != "" {
 			// Create the directory if necessary
 			if err := os.MkdirAll(filepath.Dir(opts.FilePath), 0755); err != nil {
@@ -98,15 +95,71 @@ func Initialize(opts *Options) {
 		}
 
 		defaultLogger = &Logger{
-			level:    opts.Level,
-			outputs:  outputs,
-			uiActive: opts.UIActive, // Set uiActive state from options
+			level:     opts.Level,
+			outputs:   outputs,
+			filePath:  opts.FilePath,
+			lineCount: 0,
+			maxLines:  constants.MaxLogLines,
+		}
+
+		// Configure klog to use the same log file and disable stderr output
+		configureKubernetesLogging(opts)
+
+		// Count existing lines in the log file
+		if opts.FilePath != "" {
+			defaultLogger.lineCount = countLinesInFile(opts.FilePath)
 		}
 
 		// Log initialization parameters for debugging (will only appear in file if level is DEBUG)
-		defaultLogger.Debug("Logger initialized. Level: %s, FilePath: %s, UIActive: %t",
-			levelNames[opts.Level], opts.FilePath, opts.UIActive)
+		defaultLogger.Debug("Logger initialized. Level: %s, FilePath: %s, CurrentLines: %d",
+			levelNames[opts.Level], opts.FilePath, defaultLogger.lineCount)
 	})
+}
+
+// configureKubernetesLogging configures klog to use the same file as our logger
+func configureKubernetesLogging(opts *Options) {
+	// Disable klog output to stderr to avoid duplicates
+	klog.LogToStderr(false)
+	
+	// If we have a log file, configure klog to use it too
+	if opts.FilePath != "" {
+		// Configure klog to log to the same file
+		klog.SetOutput(getLogFileWriter(opts.FilePath))
+	}
+	
+	// Set klog verbosity based on our logger level
+	if opts.Level == DEBUG {
+		// Enable more verbose klog output in debug mode
+		klog.V(2).Info("Kubernetes client logging configured")
+	}
+}
+
+// getLogFileWriter returns a writer for the log file
+func getLogFileWriter(filePath string) io.Writer {
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		// Fallback to stderr if file can't be opened
+		fmt.Fprintf(os.Stderr, "[ERROR] Failed to open log file for klog: %v\n", err)
+		return os.Stderr
+	}
+	return file
+}
+
+// countLinesInFile counts the number of lines in a file
+func countLinesInFile(filePath string) int {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return 0 // File doesn't exist or can't be opened
+	}
+	defer file.Close()
+	
+	scanner := bufio.NewScanner(file)
+	lineCount := 0
+	for scanner.Scan() {
+		lineCount++
+	}
+	
+	return lineCount
 }
 
 // GetLogger returns the default logger instance
@@ -129,6 +182,9 @@ func (l *Logger) log(level LogLevel, format string, args ...interface{}) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	// Check if file rotation is needed
+	l.checkAndRotateFile()
+
 	// Format the message
 	now := time.Now().Format(time.RFC3339)
 	levelName := levelNames[level]
@@ -137,12 +193,13 @@ func (l *Logger) log(level LogLevel, format string, args ...interface{}) {
 
 	// Write to all configured outputs
 	for _, output := range l.outputs {
-		// Skip writing to stdout if UI is active
-		if output == os.Stdout && l.uiActive {
-			continue
-		}
 		// Ignore potential errors during logging to avoid complex error handling here
 		_, _ = fmt.Fprint(output, logLine)
+	}
+	
+	// Increment line count for file rotation
+	if l.filePath != "" {
+		l.lineCount++
 	}
 }
 
@@ -186,4 +243,85 @@ func Warning(format string, args ...interface{}) {
 // Error logs a message at the ERROR level using the default logger
 func Error(format string, args ...interface{}) {
 	GetLogger().Error(format, args...)
+}
+
+// checkAndRotateFile checks if the log file needs truncation and performs it
+func (l *Logger) checkAndRotateFile() {
+	if l.filePath == "" || l.maxLines <= 0 {
+		return // No line limit configured
+	}
+	
+	if l.lineCount >= l.maxLines {
+		l.truncateFile()
+	}
+}
+
+// truncateFile keeps only the most recent lines and removes older ones
+func (l *Logger) truncateFile() {
+	if l.filePath == "" {
+		return
+	}
+	
+	// Read all lines from the file
+	lines, err := l.readAllLines()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[WARN] Failed to read log file for truncation: %v\n", err)
+		return
+	}
+	
+	// Calculate how many lines to keep (keep newest 50% when max is reached)
+	keepLines := l.maxLines / 2
+	if len(lines) > keepLines {
+		lines = lines[len(lines)-keepLines:]
+	}
+	
+	// Rewrite the file with only the kept lines
+	err = l.rewriteFile(lines)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[WARN] Failed to truncate log file: %v\n", err)
+		return
+	}
+	
+	// Update line count
+	l.lineCount = len(lines)
+}
+
+// readAllLines reads all lines from the log file
+func (l *Logger) readAllLines() ([]string, error) {
+	file, err := os.Open(l.filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	
+	var lines []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	
+	return lines, scanner.Err()
+}
+
+// rewriteFile rewrites the log file with the given lines
+func (l *Logger) rewriteFile(lines []string) error {
+	// Create a temporary file
+	tempFile := l.filePath + ".tmp"
+	file, err := os.Create(tempFile)
+	if err != nil {
+		return err
+	}
+	
+	// Write the lines
+	for _, line := range lines {
+		if _, err := fmt.Fprintln(file, line); err != nil {
+			file.Close()
+			os.Remove(tempFile)
+			return err
+		}
+	}
+	file.Close()
+	
+	// Replace the original file with the temporary file
+	return os.Rename(tempFile, l.filePath)
 }

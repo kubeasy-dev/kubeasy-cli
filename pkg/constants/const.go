@@ -18,3 +18,5 @@ var KubeasyClusterContext = "kind-kubeasy"
 
 // LogFilePath defines the default path for the log file when debug is enabled
 var LogFilePath = "kubeasy-cli.log"
+
+var MaxLogLines = 1000 // Maximum number of lines to keep in the log file

@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
-	
-	"k8s.io/klog/v2"
+
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
+	"k8s.io/klog/v2"
 )
 
 // LogLevel represents the log level type
@@ -120,13 +120,13 @@ func Initialize(opts *Options) {
 func configureKubernetesLogging(opts *Options) {
 	// Disable klog output to stderr to avoid duplicates
 	klog.LogToStderr(false)
-	
+
 	// If we have a log file, configure klog to use it too
 	if opts.FilePath != "" {
 		// Configure klog to log to the same file
 		klog.SetOutput(getLogFileWriter(opts.FilePath))
 	}
-	
+
 	// Set klog verbosity based on our logger level
 	if opts.Level == DEBUG {
 		// Enable more verbose klog output in debug mode
@@ -152,13 +152,13 @@ func countLinesInFile(filePath string) int {
 		return 0 // File doesn't exist or can't be opened
 	}
 	defer file.Close()
-	
+
 	scanner := bufio.NewScanner(file)
 	lineCount := 0
 	for scanner.Scan() {
 		lineCount++
 	}
-	
+
 	return lineCount
 }
 
@@ -196,7 +196,7 @@ func (l *Logger) log(level LogLevel, format string, args ...interface{}) {
 		// Ignore potential errors during logging to avoid complex error handling here
 		_, _ = fmt.Fprint(output, logLine)
 	}
-	
+
 	// Increment line count for file rotation
 	if l.filePath != "" {
 		l.lineCount++
@@ -250,7 +250,7 @@ func (l *Logger) checkAndRotateFile() {
 	if l.filePath == "" || l.maxLines <= 0 {
 		return // No line limit configured
 	}
-	
+
 	if l.lineCount >= l.maxLines {
 		l.truncateFile()
 	}
@@ -261,27 +261,27 @@ func (l *Logger) truncateFile() {
 	if l.filePath == "" {
 		return
 	}
-	
+
 	// Read all lines from the file
 	lines, err := l.readAllLines()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[WARN] Failed to read log file for truncation: %v\n", err)
 		return
 	}
-	
+
 	// Calculate how many lines to keep (keep newest 50% when max is reached)
 	keepLines := l.maxLines / 2
 	if len(lines) > keepLines {
 		lines = lines[len(lines)-keepLines:]
 	}
-	
+
 	// Rewrite the file with only the kept lines
 	err = l.rewriteFile(lines)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[WARN] Failed to truncate log file: %v\n", err)
 		return
 	}
-	
+
 	// Update line count
 	l.lineCount = len(lines)
 }
@@ -293,13 +293,13 @@ func (l *Logger) readAllLines() ([]string, error) {
 		return nil, err
 	}
 	defer file.Close()
-	
+
 	var lines []string
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		lines = append(lines, scanner.Text())
 	}
-	
+
 	return lines, scanner.Err()
 }
 
@@ -311,7 +311,7 @@ func (l *Logger) rewriteFile(lines []string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	// Write the lines
 	for _, line := range lines {
 		if _, err := fmt.Fprintln(file, line); err != nil {
@@ -321,7 +321,7 @@ func (l *Logger) rewriteFile(lines []string) error {
 		}
 	}
 	file.Close()
-	
+
 	// Replace the original file with the temporary file
 	return os.Rename(tempFile, l.filePath)
 }

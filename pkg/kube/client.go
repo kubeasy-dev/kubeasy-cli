@@ -31,24 +31,24 @@ type LoggingRoundTripper struct {
 func (l *LoggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Log the request
 	logger.Debug("K8s HTTP: %s %s", req.Method, req.URL.String())
-	
+
 	// Execute the request
 	resp, err := l.rt.RoundTrip(req)
-	
+
 	// Log the response
 	if err != nil {
 		logger.Debug("K8s HTTP: Response error: %v", err)
 	} else {
 		logger.Debug("K8s HTTP: Response status: %s", resp.Status)
 	}
-	
+
 	return resp, err
 }
 
 // GetKubernetesClient returns the Kubernetes clientset using the Kubeasy context
 func GetKubernetesClient() (*kubernetes.Clientset, error) {
 	logger.Debug("Attempting to get Kubernetes clientset...")
-	
+
 	// Use the default kubeconfig location
 	config, err := getRestConfig()
 	if err != nil {
@@ -86,7 +86,7 @@ func getRestConfig() (*rest.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Enable HTTP request/response logging in debug mode
 	currentLogger := logger.GetLogger()
 	if currentLogger != nil {
@@ -95,14 +95,14 @@ func getRestConfig() (*rest.Config, error) {
 			return &LoggingRoundTripper{rt: rt}
 		}
 	}
-	
+
 	return config, nil
 }
 
 // GetDynamicClient returns the Kubernetes dynamic client using the Kubeasy context
 func GetDynamicClient() (dynamic.Interface, error) {
 	logger.Debug("Attempting to get Kubernetes dynamic client...")
-	
+
 	// Use the default kubeconfig location
 	config, err := getRestConfig()
 	if err != nil {

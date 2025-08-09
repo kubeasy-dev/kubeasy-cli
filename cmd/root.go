@@ -46,7 +46,7 @@ to quickly create a Cobra application.`,
 
 		// Log the file path only when debugging, after initialization
 		if debugLogging {
-			logger.Debug("Logging debug messages to: %s (max lines: %d)", 
+			logger.Debug("Logging debug messages to: %s (max lines: %d)",
 				constants.LogFilePath, constants.MaxLogLines)
 		}
 	},

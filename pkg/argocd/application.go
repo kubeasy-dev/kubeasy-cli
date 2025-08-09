@@ -152,17 +152,17 @@ func DeleteChallengeApplication(ctx context.Context, dynamicClient dynamic.Inter
 	}
 	needPatch := true
 	for _, f := range finalizers {
-		if f == "resources-finalizer.argocd.argoproj.io" {
+		if f == "resources-finalizer.argocd.argoproj.io/" {
 			needPatch = false
 			break
 		}
 	}
 
 	if !found {
-		finalizers = []string{"resources-finalizer.argocd.argoproj.io"}
+		finalizers = []string{"resources-finalizer.argocd.argoproj.io/"}
 		needPatch = true
 	} else if needPatch {
-		finalizers = append(finalizers, "resources-finalizer.argocd.argoproj.io")
+		finalizers = append(finalizers, "resources-finalizer.argocd.argoproj.io/")
 	}
 
 	if needPatch {

@@ -28,7 +28,8 @@ func getChallengeOrExit(slug string) *api.ChallengeEntity {
 
 // deleteChallengeResources deletes ArgoCD Application and all subresources for a challenge
 func deleteChallengeResources(challengeSlug string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// Increase timeout to 5 minutes to handle rate limiting and resource deletion
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	dynamicClient, err := kube.GetDynamicClient()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error getting Kubernetes dynamic client: %v\n", err)

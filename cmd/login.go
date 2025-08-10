@@ -24,21 +24,21 @@ After successful login, you will be able to use commands requiring authenticatio
 		fmt.Println("🔐 Login to Kubeasy")
 		fmt.Println("Please enter your API key to login.")
 		fmt.Println("If you don't have an API key or forgot it, please visit https://kubeasy.dev/profile")
-			fmt.Print("API Key: ")
-			// Read the API key without echoing input
-			byteKey, err := term.ReadPassword(int(os.Stdin.Fd()))
-			fmt.Println()
-			if err != nil {
-				fmt.Printf("❌ Error reading API key: %v\n", err)
-				return
-			}
-			apiKey := strings.TrimSpace(string(byteKey))
-			if apiKey == "" {
-				fmt.Println("❌ API key cannot be empty.")
-				return
-			}
+		fmt.Print("API Key: ")
+		// Read the API key without echoing input
+		byteKey, err := term.ReadPassword(int(os.Stdin.Fd()))
+		fmt.Println()
+		if err != nil {
+			fmt.Printf("❌ Error reading API key: %v\n", err)
+			return
+		}
+		apiKey := strings.TrimSpace(string(byteKey))
+		if apiKey == "" {
+			fmt.Println("❌ API key cannot be empty.")
+			return
+		}
 
-			err = keyring.Set(constants.KeyringServiceName, "api_key", apiKey)
+		err = keyring.Set(constants.KeyringServiceName, "api_key", apiKey)
 		if err != nil {
 			fmt.Printf("❌ Error storing API key: %v\n", err)
 			return

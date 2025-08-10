@@ -24,6 +24,11 @@ type ChallengeEntity struct {
 	Objective        string `json:"objective"`
 }
 
+type UserProfile struct {
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+}
+
 type ProgressStatus string
 
 const (
@@ -83,6 +88,26 @@ func getUserIDFromKeyring() (string, error) {
 	}
 
 	return sub, nil
+}
+
+func GetProfile() (*UserProfile, error) {
+	client, err := createSupabaseClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Supabase client: %w", err)
+	}
+
+	data, _, err := client.From("profiles").Select("*", "exact", false).Single().Execute()
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch user profile: %w", err)
+	}
+
+	var profile UserProfile
+	err = json.Unmarshal(data, &profile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse user profile: %w", err)
+	}
+
+	return &profile, nil
 }
 
 // GetChallenge retrieves a specific challenge by its slug name from the API.

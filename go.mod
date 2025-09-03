@@ -2,19 +2,19 @@ module github.com/kubeasy-dev/kubeasy-cli
 
 go 1.24.0
 
-toolchain go1.25.0
+toolchain go1.25.1
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/kubeasy-dev/challenge-operator v1.2.0
-	github.com/spf13/cobra v1.9.1
+	github.com/spf13/cobra v1.10.1
 	github.com/supabase-community/supabase-go v0.0.4
 	github.com/zalando/go-keyring v0.2.6
-	k8s.io/api v0.33.4
-	k8s.io/apimachinery v0.33.4
-	k8s.io/client-go v0.33.4
+	k8s.io/api v0.34.0
+	k8s.io/apimachinery v0.34.0
+	k8s.io/client-go v0.34.0
 	k8s.io/klog/v2 v2.130.1
-	sigs.k8s.io/kind v0.29.0
+	sigs.k8s.io/kind v0.30.0
 )
 
 require (

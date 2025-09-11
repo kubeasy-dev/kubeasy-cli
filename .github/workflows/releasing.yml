@@ -66,7 +66,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
-          node-version: '24.7.0'
+          node-version: '24.8.0'
           registry-url: 'https://registry.npmjs.org'
       - name: Create a .npmrc file
         run: echo "registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> .npmrc

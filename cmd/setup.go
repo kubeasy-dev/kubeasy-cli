@@ -2,22 +2,20 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/argocd"
+	"github.com/kubeasy-dev/kubeasy-cli/pkg/ui"
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/kind/pkg/cluster"
 )
 
-var replaceFlag bool
-
-func checkClusterExists() bool {
+func checkClusterExists() (bool, error) {
 	provider := cluster.NewProvider()
 	clusters, err := provider.List()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error listing clusters: %v\n", err)
-		os.Exit(1)
+		ui.Error("Failed to list clusters")
+		return false, fmt.Errorf("failed to list clusters: %w", err)
 	}
 	clusterExists := false
 	for _, c := range clusters {
@@ -26,54 +24,72 @@ func checkClusterExists() bool {
 			break
 		}
 	}
-	return clusterExists
+	return clusterExists, nil
 }
 
 var setupCmd = &cobra.Command{
 	Use:   "setup",
 	Short: "Setup",
 	Long:  "It will setup a local cluster for the Kubeasy challenges and install ArgoCD",
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("[Kubeasy] Checking if cluster exists...")
-		if !checkClusterExists() {
-			fmt.Println("Creating kind cluster 'kubeasy'...")
-			if err := cluster.NewProvider().Create("kubeasy"); err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to create kind cluster 'kubeasy': %v\n", err)
-				os.Exit(1)
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ui.PrintLogo()
+		ui.Section("Kubeasy Environment Setup")
+		ui.Println()
+
+		// Step 1: Check/Create cluster
+		exists, err := checkClusterExists()
+		if err != nil {
+			return err
+		}
+		if !exists {
+			err := ui.TimedSpinner("Creating kind cluster 'kubeasy'", func() error {
+				return cluster.NewProvider().Create("kubeasy")
+			})
+			if err != nil {
+				ui.Error("Failed to create kind cluster 'kubeasy'")
+				return fmt.Errorf("failed to create kind cluster: %w", err)
 			}
-			fmt.Println("Kind cluster 'kubeasy' created successfully.")
+		} else {
+			ui.Success("Kind cluster 'kubeasy' already exists")
 		}
 
-		fmt.Println("Checking if ArgoCD is already installed...")
+		// Step 2: Install ArgoCD
 		isInstalled, err := argocd.IsArgoCDInstalled()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error checking ArgoCD installation status: %v\n", err)
-			os.Exit(1)
+			ui.Error("Error checking ArgoCD installation status")
+			return fmt.Errorf("failed to check ArgoCD installation: %w", err)
 		}
 
 		if isInstalled {
-			fmt.Println("ArgoCD is already installed and ready.")
+			ui.Success("ArgoCD is already installed")
 		} else {
-			fmt.Println("Installing ArgoCD...")
-			options := argocd.DefaultInstallOptions()
-			if err := argocd.InstallArgoCD(options); err != nil {
-				fmt.Fprintf(os.Stderr, "Error installing ArgoCD: %v\n", err)
-				os.Exit(1)
+			err := ui.TimedSpinner("Installing ArgoCD", func() error {
+				options := argocd.DefaultInstallOptions()
+				return argocd.InstallArgoCD(options)
+			})
+			if err != nil {
+				ui.Error("Error installing ArgoCD")
+				return fmt.Errorf("failed to install ArgoCD: %w", err)
 			}
-			fmt.Println("ArgoCD installed successfully.")
 		}
 
-		fmt.Println("Waiting for ArgoCD applications to be ready...")
+		// Step 3: Wait for apps
 		apps := []string{"kubeasy-cli-setup", "kyverno", "argocd", "kubeasy-challenge-operator"}
-		if err := argocd.WaitForArgoCDAppsReadyCore(apps, 8*time.Minute); err != nil {
-			fmt.Fprintf(os.Stderr, "Error waiting for ArgoCD apps: %v\n", err)
-			os.Exit(1)
+		err = ui.TimedSpinner("Waiting for ArgoCD applications to be ready", func() error {
+			return argocd.WaitForArgoCDAppsReadyCore(apps, 8*time.Minute)
+		})
+		if err != nil {
+			ui.Error("Error waiting for ArgoCD apps")
+			return fmt.Errorf("failed to wait for ArgoCD apps: %w", err)
 		}
-		fmt.Println("All ArgoCD applications are ready!")
+
+		ui.Println()
+		ui.Success("Kubeasy environment is ready!")
+		ui.Info("You can now start challenges with 'kubeasy challenge start <slug>'")
+		return nil
 	},
 }
 
 func init() {
-	setupCmd.Flags().BoolVarP(&replaceFlag, "force", "f", false, "Force replacement of existing cluster")
 	rootCmd.AddCommand(setupCmd)
 }

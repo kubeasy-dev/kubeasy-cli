@@ -1,14 +1,12 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"log"
-	"os"
 
 	operator "github.com/kubeasy-dev/challenge-operator/api/v1alpha1"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/api"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/kube"
+	"github.com/kubeasy-dev/kubeasy-cli/pkg/ui"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -21,31 +19,50 @@ var submitCmd = &cobra.Command{
 	Long: `Submit a challenge solution to Kubeasy. This command will package your solution
 and send it to the Kubeasy API for evaluation. Make sure you have completed the challenge before submitting.`,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		challengeSlug := args[0]
-		fmt.Printf("Submitting solution for challenge: %s\n", challengeSlug)
 
-		_, err := api.GetChallenge(challengeSlug)
+		ui.Section(fmt.Sprintf("Submitting Challenge: %s", challengeSlug))
+
+		// Verify challenge exists
+		err := ui.WaitMessage("Verifying challenge", func() error {
+			_, err := api.GetChallenge(challengeSlug)
+			return err
+		})
 		if err != nil {
-			log.Fatalf("Error fetching challenge: %v", err)
+			ui.Error("Failed to fetch challenge")
+			return fmt.Errorf("failed to fetch challenge: %w", err)
 		}
 
-		progress, err := api.GetChallengeProgress(challengeSlug)
+		// Check progress
+		var progress *api.ChallengeStatusResponse
+		err = ui.WaitMessage("Checking progress", func() error {
+			var err error
+			progress, err = api.GetChallengeProgress(challengeSlug)
+			return err
+		})
 		if err != nil {
-			log.Fatalf("Error fetching user progress: %v", err)
+			ui.Error("Failed to fetch challenge progress")
+			return fmt.Errorf("failed to fetch challenge progress: %w", err)
 		}
+
 		if progress == nil {
-			fmt.Println("❌ No user_progress found for this challenge. Please start the challenge first.")
-			return
-		}
-		if progress.Status == "completed" {
-			fmt.Printf("❌ This challenge is already completed for this user. Submission is not allowed. You can reset the challenge with 'kubeasy challenge reset %s'.\n", challengeSlug)
-			return
+			ui.Error("Challenge not started")
+			ui.Info("Please start the challenge first with 'kubeasy challenge start " + challengeSlug + "'")
+			return nil
 		}
 
+		if progress.Status == "completed" {
+			ui.Warning("Challenge already completed")
+			ui.Info("You can reset the challenge with 'kubeasy challenge reset " + challengeSlug + "'")
+			return nil
+		}
+
+		// Get Kubernetes client
 		dynamicClient, err := kube.GetDynamicClient()
 		if err != nil {
-			log.Fatalf("Error getting dynamic client: %v", err)
+			ui.Error("Failed to get Kubernetes client")
+			return fmt.Errorf("failed to get Kubernetes client: %w", err)
 		}
 
 		svGVR := schema.GroupVersionResource{
@@ -62,14 +79,19 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 
 		namespace := challengeSlug
 
-		svListUnstructured, err := dynamicClient.Resource(svGVR).Namespace(namespace).List(context.TODO(), metav1.ListOptions{})
+		// Fetch validations
+		ui.Info("Reading validation results...")
+
+		svListUnstructured, err := dynamicClient.Resource(svGVR).Namespace(namespace).List(cmd.Context(), metav1.ListOptions{})
 		if err != nil {
-			log.Fatalf("Error listing StaticValidations in namespace %s: %v", namespace, err)
+			ui.Error(fmt.Sprintf("Failed to list StaticValidations in namespace %s", namespace))
+			return fmt.Errorf("failed to list StaticValidations in namespace %s: %w", namespace, err)
 		}
 
 		if len(svListUnstructured.Items) == 0 {
-			fmt.Printf("No StaticValidations found in namespace %s. Cannot verify submission.\n", namespace)
-			return
+			ui.Warning("No StaticValidations found")
+			ui.Info("Cannot verify submission without validation resources")
+			return nil
 		}
 
 		allStaticSucceeded := true
@@ -79,35 +101,55 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 			"dynamicValidations": map[string][]operator.DynamicValidationStatus{},
 		}
 
+		ui.Println()
+		ui.Section("Static Validations")
+
+		// Process static validations
 		for _, svUnstructured := range svListUnstructured.Items {
 			var sv operator.StaticValidation
 			err = runtime.DefaultUnstructuredConverter.FromUnstructured(svUnstructured.Object, &sv)
 			if err != nil {
-				log.Fatalf("Error converting StaticValidation to StaticValidation: %v", err)
+				ui.Error("Failed to convert StaticValidation")
+				return fmt.Errorf("failed to convert StaticValidation: %w", err)
 			}
 
 			staticStatuses := detailedStatuses["staticValidations"].(map[string][]operator.StaticValidationStatus)
 			staticStatuses[svUnstructured.GetName()] = []operator.StaticValidationStatus{sv.Status}
+
+			// Display validation result
+			validationDetails := []string{}
+			for _, resource := range sv.Status.Resources {
+				for _, ruleResult := range resource.RuleResults {
+					detail := fmt.Sprintf("%s: %s", ruleResult.Rule, ruleResult.Status)
+					if ruleResult.Message != "" {
+						detail += fmt.Sprintf(" - %s", ruleResult.Message)
+					}
+					validationDetails = append(validationDetails, detail)
+				}
+			}
+
+			ui.ValidationResult(svUnstructured.GetName(), sv.Status.AllPassed, validationDetails)
 
 			if !sv.Status.AllPassed {
 				allStaticSucceeded = false
 			}
 		}
 
-		// --- Check DynamicValidations ---
-		dvListUnstructured, err := dynamicClient.Resource(dvGVR).Namespace(namespace).List(context.TODO(), metav1.ListOptions{})
+		ui.Println()
+		ui.Section("Dynamic Validations")
+
+		// Process dynamic validations
+		dvListUnstructured, err := dynamicClient.Resource(dvGVR).Namespace(namespace).List(cmd.Context(), metav1.ListOptions{})
 		if err != nil {
-			log.Printf("Error listing DynamicValidations in namespace %s: %v", namespace, err)
-			// Continue with the submission process even if there's an error with DynamicValidations
+			ui.Warning("Failed to list DynamicValidations")
 			allDynamicSucceeded = false
 		} else {
-			// Process DynamicValidations if any exist
 			if len(dvListUnstructured.Items) > 0 {
 				for _, dvUnstructured := range dvListUnstructured.Items {
 					var dv operator.DynamicValidation
 					err = runtime.DefaultUnstructuredConverter.FromUnstructured(dvUnstructured.Object, &dv)
 					if err != nil {
-						log.Printf("Error converting DynamicValidation to DynamicValidation: %v", err)
+						ui.Warning("Failed to convert DynamicValidation")
 						allDynamicSucceeded = false
 						continue
 					}
@@ -115,37 +157,62 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 					dynamicStatuses := detailedStatuses["dynamicValidations"].(map[string][]operator.DynamicValidationStatus)
 					dynamicStatuses[dvUnstructured.GetName()] = []operator.DynamicValidationStatus{dv.Status}
 
+					// Display validation result
+					validationDetails := []string{}
+					for _, resource := range dv.Status.Resources {
+						for _, checkResult := range resource.CheckResults {
+							detail := fmt.Sprintf("%s: %s", checkResult.Kind, checkResult.Status)
+							if checkResult.Message != "" {
+								detail += fmt.Sprintf(" - %s", checkResult.Message)
+							}
+							validationDetails = append(validationDetails, detail)
+						}
+					}
+
+					ui.ValidationResult(dvUnstructured.GetName(), dv.Status.AllPassed, validationDetails)
+
 					if !dv.Status.AllPassed {
 						allDynamicSucceeded = false
 					}
 				}
+			} else {
+				ui.Info("No dynamic validations defined for this challenge")
 			}
 		}
 
-		// --- Report Result & Call API ---
+		// Display overall result
+		ui.Println()
+		ui.Section("Submission Result")
+
 		if allStaticSucceeded && allDynamicSucceeded {
-			fmt.Println("\n✅ All validations succeeded!")
-			fmt.Printf("Congratulations! You have successfully completed the '%s' challenge.\n", challengeSlug)
-			fmt.Printf("You can use the 'kubeasy challenge clean %s' command to remove the challenge namespace if you want to.\n", challengeSlug)
+			ui.Success("All validations passed!")
+			ui.Info("Sending results to server...")
 			err = api.SendSubmit(challengeSlug, true, true, detailedStatuses)
+			if err == nil {
+				ui.Println()
+				ui.Success(fmt.Sprintf("Congratulations! Challenge '%s' completed!", challengeSlug))
+				ui.Info("You can clean up with 'kubeasy challenge clean " + challengeSlug + "'")
+			}
 		} else if allStaticSucceeded && !allDynamicSucceeded {
-			fmt.Println("\n✅ All StaticValidations succeeded!")
-			fmt.Println("❌ Some DynamicValidations did not succeed or encountered errors.")
+			ui.Success("Static validations passed")
+			ui.Error("Some dynamic validations failed")
 			err = api.SendSubmit(challengeSlug, true, false, detailedStatuses)
 		} else if !allStaticSucceeded && allDynamicSucceeded {
-			fmt.Println("\n❌ Some StaticValidations did not succeed or encountered errors.")
-			fmt.Println("✅ All DynamicValidations succeeded!")
+			ui.Error("Some static validations failed")
+			ui.Success("Dynamic validations passed")
 			err = api.SendSubmit(challengeSlug, false, true, detailedStatuses)
 		} else {
-			fmt.Println("\n❌ Some StaticValidations did not succeed or encountered errors.")
-			fmt.Println("❌ Some DynamicValidations did not succeed or encountered errors.")
+			ui.Error("Some validations failed")
+			ui.Info("Review the results above and try again")
 			err = api.SendSubmit(challengeSlug, false, false, detailedStatuses)
 		}
 
 		if err != nil {
-			log.Printf("Error sending submission: %v", err)
-			os.Exit(1) // Envisager de sortir avec une erreur
+			ui.Error("Failed to submit results")
+			return fmt.Errorf("failed to submit results: %w", err)
 		}
+
+		return nil
 	},
 }
 

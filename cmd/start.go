@@ -1,14 +1,13 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os"
 
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/api"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/argocd"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/kube"
+	"github.com/kubeasy-dev/kubeasy-cli/pkg/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -17,56 +16,98 @@ var startChallengeCmd = &cobra.Command{
 	Short: "Start a challenge",
 	Long:  `Starts a challenge by installing the necessary components into the local Kubernetes cluster.`,
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		challengeSlug := args[0]
-		_, err := api.GetChallenge(challengeSlug)
+
+		ui.Section(fmt.Sprintf("Starting Challenge: %s", challengeSlug))
+
+		// Fetch challenge details
+		var challenge *api.ChallengeEntity
+		err := ui.WaitMessage("Fetching challenge details", func() error {
+			var err error
+			challenge, err = api.GetChallenge(challengeSlug)
+			return err
+		})
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error fetching challenge: %v\n", err)
-			os.Exit(1)
+			ui.Error("Failed to fetch challenge")
+			return fmt.Errorf("failed to fetch challenge: %w", err)
 		}
 
-		progress, err := api.GetChallengeProgress(challengeSlug)
+		ui.Info(fmt.Sprintf("Challenge: %s", challenge.Title))
+
+		// Check progress
+		var progress *api.ChallengeStatusResponse
+		err = ui.WaitMessage("Checking challenge progress", func() error {
+			var err error
+			progress, err = api.GetChallengeProgress(challengeSlug)
+			return err
+		})
+		if err != nil {
+			ui.Error("Failed to fetch challenge progress")
+			return fmt.Errorf("failed to fetch challenge progress: %w", err)
+		}
 
 		if progress != nil && (progress.Status == "in_progress" || progress.Status == "completed") {
-			fmt.Printf("Challenge already started. Continue the challenge or you can reset it with 'kubeasy challenge reset %s'\n", challengeSlug)
-			os.Exit(0)
+			ui.Warning("Challenge already started")
+			ui.Info(fmt.Sprintf("Continue the challenge or reset it with 'kubeasy challenge reset %s'", challengeSlug))
+			return nil // Not an error, just already started
 		}
 
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error fetching challenge progress: %v\n", err)
-			os.Exit(1)
-		}
+		// Setup environment - use context from command
+		ctx := cmd.Context()
+		ui.Println()
 
-		fmt.Println("Installing ArgoCD app for challenge...")
-		ctx := context.Background()
+		// Step 1: Create namespace
 		dynamicClient, err := kube.GetDynamicClient()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error getting Kubernetes dynamic client: %v\n", err)
-			os.Exit(1)
+			ui.Error("Failed to get Kubernetes dynamic client")
+			return fmt.Errorf("failed to get dynamic client: %w", err)
 		}
 
 		staticClient, err := kube.GetKubernetesClient()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error getting Kubernetes static client: %v\n", err)
-			os.Exit(1)
+			ui.Error("Failed to get Kubernetes static client")
+			return fmt.Errorf("failed to get static client: %w", err)
 		}
 
-		if err := kube.CreateNamespace(ctx, staticClient, challengeSlug); err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating namespace: %v\n", err)
-			os.Exit(1)
+		err = ui.WaitMessage("Creating namespace", func() error {
+			return kube.CreateNamespace(ctx, staticClient, challengeSlug)
+		})
+		if err != nil {
+			ui.Error("Failed to create namespace")
+			return fmt.Errorf("failed to create namespace: %w", err)
 		}
-		if err := argocd.CreateOrUpdateChallengeApplication(ctx, dynamicClient, challengeSlug); err != nil {
-			fmt.Fprintf(os.Stderr, "Error installing ArgoCD app: %v\n", err)
-			os.Exit(1)
+
+		// Step 2: Deploy ArgoCD app
+		err = ui.WaitMessage("Deploying ArgoCD application", func() error {
+			return argocd.CreateOrUpdateChallengeApplication(ctx, dynamicClient, challengeSlug)
+		})
+		if err != nil {
+			ui.Error("Failed to install ArgoCD application")
+			return fmt.Errorf("failed to install ArgoCD application: %w", err)
 		}
+
+		// Step 3: Configure context
 		_ = kube.SetNamespaceForContext(constants.KubeasyClusterContext, challengeSlug)
-		fmt.Printf("Kubernetes context set to 'kind-kubeasy' and namespace to '%s' \n", challengeSlug)
-		if err := api.StartChallenge(challengeSlug); err != nil {
-			fmt.Fprintf(os.Stderr, "Error starting challenge: %v\n", err)
-			os.Exit(1)
+		ui.Success("Kubectl context configured")
+
+		// Step 4: Register progress
+		err = ui.WaitMessage("Registering challenge progress", func() error {
+			return api.StartChallenge(challengeSlug)
+		})
+		if err != nil {
+			ui.Error("Failed to start challenge")
+			return fmt.Errorf("failed to start challenge: %w", err)
 		}
-		fmt.Println("Challenge environment is ready!")
-		fmt.Printf("You can now start working on the challenge '%s'", challengeSlug)
+
+		ui.Println()
+		ui.Success("Challenge environment is ready!")
+		ui.KeyValue("Challenge", challengeSlug)
+		ui.KeyValue("Namespace", challengeSlug)
+		ui.KeyValue("Context", "kind-kubeasy")
+		ui.Println()
+		ui.Info("You can now start working on the challenge!")
+		return nil
 	},
 }
 

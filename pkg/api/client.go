@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
 	"github.com/zalando/go-keyring"
@@ -47,7 +48,9 @@ func makeAuthenticatedRequest(method, path string, body interface{}) (*http.Resp
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)

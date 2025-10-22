@@ -2,9 +2,10 @@ package cmd
 
 import (
 	"bufio"
-	"fmt"
 	"os"
 
+	"github.com/kubeasy-dev/kubeasy-cli/pkg/ui"
+	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 )
 
@@ -13,24 +14,49 @@ var getChallengeCmd = &cobra.Command{
 	Short: "Get and display details for a specific challenge",
 	Long:  `Retrieves challenge details (description, content, etc.) from the Kubeasy API and displays them.`,
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		challengeSlug := args[0]
 
-		challenge := getChallengeOrExit(challengeSlug)
+		challenge, err := getChallenge(challengeSlug)
+		if err != nil {
+			ui.Error(err.Error())
+			return err
+		}
 
-		fmt.Printf("Challenge: %s\n", challenge.Title)
-		fmt.Printf("Difficulty: %s   Theme: %s\n", challenge.Difficulty, challenge.Theme)
-		fmt.Println()
-		fmt.Println(challenge.Description)
-		fmt.Println()
-		fmt.Println("Initial Situation:")
-		fmt.Println(challenge.InitialSituation)
-		fmt.Println()
-		fmt.Println("Objective:")
-		fmt.Println(challenge.Objective)
-		fmt.Println()
-		fmt.Println("Press Enter to quit.")
+		ui.Println()
+		ui.Section(challenge.Title)
+
+		// Display metadata
+		ui.KeyValue("Difficulty", challenge.Difficulty)
+		ui.KeyValue("Theme", challenge.Theme)
+		ui.KeyValue("Slug", challenge.Slug)
+
+		ui.Println()
+
+		// Display description in a panel
+		if challenge.Description != "" {
+			ui.Panel("Description", challenge.Description)
+			ui.Println()
+		}
+
+		// Display initial situation
+		if challenge.InitialSituation != "" {
+			pterm.DefaultSection.Println("Initial Situation")
+			pterm.Println(challenge.InitialSituation)
+			ui.Println()
+		}
+
+		// Display objective
+		if challenge.Objective != "" {
+			pterm.DefaultSection.Println("Objective")
+			pterm.Println(challenge.Objective)
+			ui.Println()
+		}
+
+		ui.Info("Press Enter to continue...")
 		_, _ = bufio.NewReader(os.Stdin).ReadBytes('\n')
+
+		return nil
 	},
 }
 

@@ -12,10 +12,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	debugLogging bool // Variable to store the debug flag value
-)
-
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "kubeasy-cli",
@@ -27,28 +23,18 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		// Initialize logger globally here
+		// Initialize logger globally here with INFO level
 		loggerOpts := logger.DefaultOptions()
-		// Always set the file path
 		loggerOpts.FilePath = constants.LogFilePath
+		loggerOpts.Level = logger.INFO
 
-		if debugLogging {
-			// Attempt to truncate the log file at the start
-			if err := os.Truncate(constants.LogFilePath, 0); err != nil && !os.IsNotExist(err) {
-				fmt.Fprintf(os.Stderr, "[WARN] Failed to clear log file %s: %v\n", constants.LogFilePath, err)
-			}
-			loggerOpts.Level = logger.DEBUG
-		} else {
-			loggerOpts.Level = logger.INFO
+		// Attempt to truncate the log file at the start
+		if err := os.Truncate(constants.LogFilePath, 0); err != nil && !os.IsNotExist(err) {
+			fmt.Fprintf(os.Stderr, "[WARN] Failed to clear log file %s: %v\n", constants.LogFilePath, err)
 		}
 
 		logger.Initialize(loggerOpts)
-
-		// Log the file path only when debugging, after initialization
-		if debugLogging {
-			logger.Debug("Logging debug messages to: %s (max lines: %d)",
-				constants.LogFilePath, constants.MaxLogLines)
-		}
+		logger.Info("Kubeasy CLI started - logging to: %s", constants.LogFilePath)
 	},
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
@@ -65,9 +51,6 @@ func Execute() {
 }
 
 func init() {
-	// Add the persistent debug flag
-	rootCmd.PersistentFlags().BoolVar(&debugLogging, "debug", false, "Enable debug logging to kubeasy-cli.log")
-
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.

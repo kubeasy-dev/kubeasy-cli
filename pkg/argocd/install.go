@@ -162,10 +162,9 @@ func WaitForArgoCDAppsReadyCore(appNames []string, timeout time.Duration) error 
 
 	// Use the new unified approach for all apps
 	options := WaitOptions{
-		CheckHealth:    true,
-		CheckSync:      true,
-		CheckOperation: false,
-		Timeout:        timeout,
+		CheckHealth: true,
+		CheckSync:   true,
+		Timeout:     timeout,
 	}
 
 	for _, appName := range appNames {

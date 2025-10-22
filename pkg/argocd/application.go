@@ -124,9 +124,8 @@ func CreateOrUpdateChallengeApplication(ctx context.Context, dynamicClient dynam
 		// Wait for sync to complete using the generalized method
 		// ArgoCD handles retry/backoff internally, so we just wait for completion
 		return WaitForApplicationStatus(ctx, dynamicClient, challengeSlug, ArgoCDNamespace, WaitOptions{
-			CheckSync:      true,
-			CheckHealth:    false,
-			CheckOperation: true,
+			CheckSync:   true,
+			CheckHealth: false,
 		})
 	}
 	return nil
@@ -237,19 +236,17 @@ func DeleteChallengeApplication(ctx context.Context, dynamicClient dynamic.Inter
 
 // WaitOptions defines what conditions to wait for in an ArgoCD Application
 type WaitOptions struct {
-	CheckHealth    bool          // Wait for health status to be "Healthy"
-	CheckSync      bool          // Wait for sync status to be "Synced"
-	CheckOperation bool          // Wait for operation phase to be "Succeeded"
-	Timeout        time.Duration // Timeout for the wait operation (optional, no timeout if 0)
+	CheckHealth bool          // Wait for health status to be "Healthy"
+	CheckSync   bool          // Wait for sync status to be "Synced"
+	Timeout     time.Duration // Timeout for the wait operation (optional, no timeout if 0)
 }
 
 // DefaultWaitOptions returns sensible defaults for waiting
 func DefaultWaitOptions() WaitOptions {
 	return WaitOptions{
-		CheckHealth:    true,
-		CheckSync:      true,
-		CheckOperation: false,
-		Timeout:        0, // No timeout by default, let ArgoCD handle retry/backoff
+		CheckHealth: true,
+		CheckSync:   true,
+		Timeout:     0, // No timeout by default, let ArgoCD handle retry/backoff
 	}
 }
 
@@ -263,9 +260,6 @@ func WaitForApplicationStatus(ctx context.Context, dynamicClient dynamic.Interfa
 	}
 	if options.CheckSync {
 		conditions = append(conditions, "Synced")
-	}
-	if options.CheckOperation {
-		conditions = append(conditions, "Operation Succeeded")
 	}
 
 	logger.Info("Waiting for ArgoCD Application '%s' to be: %s", appName, strings.Join(conditions, " + "))
@@ -313,9 +307,6 @@ func WaitForApplicationStatus(ctx context.Context, dynamicClient dynamic.Interfa
 			if options.CheckSync && sync != syncedStatus {
 				ready = false
 			}
-			if options.CheckOperation && phase != "Succeeded" {
-				ready = false
-			}
 
 			if ready {
 				logger.Info("ArgoCD Application '%s' meets all required conditions: %s", appName, strings.Join(conditions, " + "))
@@ -326,28 +317,6 @@ func WaitForApplicationStatus(ctx context.Context, dynamicClient dynamic.Interfa
 			logger.Debug("Waiting for ArgoCD Application '%s'... (health=%s, sync=%s, phase=%s)", appName, health, sync, phase)
 		}
 	}
-}
-
-// WaitForApplicationSync is a convenience wrapper for sync + operation completion
-// Deprecated: Use WaitForApplicationStatus with appropriate WaitOptions instead
-func WaitForApplicationSync(ctx context.Context, dynamicClient dynamic.Interface, appName, namespace string, timeout time.Duration) error {
-	return WaitForApplicationStatus(ctx, dynamicClient, appName, namespace, WaitOptions{
-		CheckHealth:    false,
-		CheckSync:      true,
-		CheckOperation: true,
-		Timeout:        timeout,
-	})
-}
-
-// WaitForApplicationReady is a convenience wrapper for health + sync readiness
-// Deprecated: Use WaitForApplicationStatus with appropriate WaitOptions instead
-func WaitForApplicationReady(ctx context.Context, dynamicClient dynamic.Interface, appName, namespace string, timeout time.Duration) error {
-	return WaitForApplicationStatus(ctx, dynamicClient, appName, namespace, WaitOptions{
-		CheckHealth:    true,
-		CheckSync:      true,
-		CheckOperation: false,
-		Timeout:        timeout,
-	})
 }
 
 // getApplicationFullStatus retrieves the health, sync status and operation phase of an ArgoCD Application

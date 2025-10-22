@@ -18,10 +18,11 @@ var resetChallengeCmd = &cobra.Command{
 		challengeSlug := args[0]
 
 		deleteChallengeResources(challengeSlug)
-		challenge := getChallengeOrExit(challengeSlug)
+		// Verify challenge exists before resetting
+		_ = getChallengeOrExit(challengeSlug)
 
-		// Reset challenge progress
-		if err := api.ResetChallengeProgress(challenge.ID); err != nil {
+		// Reset challenge progress using slug
+		if err := api.ResetChallengeProgress(challengeSlug); err != nil {
 			fmt.Fprintf(os.Stderr, "Error resetting challenge '%s': %v\n", challengeSlug, err)
 			os.Exit(1)
 		}

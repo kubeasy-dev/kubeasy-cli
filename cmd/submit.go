@@ -25,7 +25,7 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 		challengeSlug := args[0]
 		fmt.Printf("Submitting solution for challenge: %s\n", challengeSlug)
 
-		challenge, err := api.GetChallenge(challengeSlug)
+		_, err := api.GetChallenge(challengeSlug)
 		if err != nil {
 			log.Fatalf("Error fetching challenge: %v", err)
 		}
@@ -127,19 +127,19 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 			fmt.Println("\n✅ All validations succeeded!")
 			fmt.Printf("Congratulations! You have successfully completed the '%s' challenge.\n", challengeSlug)
 			fmt.Printf("You can use the 'kubeasy challenge clean %s' command to remove the challenge namespace if you want to.\n", challengeSlug)
-			err = api.SendSubmit(challenge.ID, true, true, detailedStatuses)
+			err = api.SendSubmit(challengeSlug, true, true, detailedStatuses)
 		} else if allStaticSucceeded && !allDynamicSucceeded {
 			fmt.Println("\n✅ All StaticValidations succeeded!")
 			fmt.Println("❌ Some DynamicValidations did not succeed or encountered errors.")
-			err = api.SendSubmit(challenge.ID, true, false, detailedStatuses)
+			err = api.SendSubmit(challengeSlug, true, false, detailedStatuses)
 		} else if !allStaticSucceeded && allDynamicSucceeded {
 			fmt.Println("\n❌ Some StaticValidations did not succeed or encountered errors.")
 			fmt.Println("✅ All DynamicValidations succeeded!")
-			err = api.SendSubmit(challenge.ID, false, true, detailedStatuses)
+			err = api.SendSubmit(challengeSlug, false, true, detailedStatuses)
 		} else {
 			fmt.Println("\n❌ Some StaticValidations did not succeed or encountered errors.")
 			fmt.Println("❌ Some DynamicValidations did not succeed or encountered errors.")
-			err = api.SendSubmit(challenge.ID, false, false, detailedStatuses)
+			err = api.SendSubmit(challengeSlug, false, false, detailedStatuses)
 		}
 
 		if err != nil {

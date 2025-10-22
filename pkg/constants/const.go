@@ -1,6 +1,9 @@
 package constants
 
-var RestAPIUrl = "https://api.kubeasy.dev"
+// WebsiteURL is the base URL for the Kubeasy website (used for CLI API routes)
+var WebsiteURL = "http://localhost:3000"
+
+var RestAPIUrl = WebsiteURL + "/api/cli"
 
 var KeyringServiceName = "kubeasy-cli"
 

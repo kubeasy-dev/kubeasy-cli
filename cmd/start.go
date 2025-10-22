@@ -27,7 +27,7 @@ var startChallengeCmd = &cobra.Command{
 
 		progress, err := api.GetChallengeProgress(challengeSlug)
 
-		if progress != nil {
+		if progress != nil && (progress.Status == "in_progress" || progress.Status == "completed") {
 			fmt.Printf("Challenge already started. Continue the challenge or you can reset it with 'kubeasy challenge reset %s'\n", challengeSlug)
 			os.Exit(0)
 		}

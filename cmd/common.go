@@ -42,7 +42,6 @@ func getChallenge(slug string) (*api.ChallengeEntity, error) {
 	return challenge, nil
 }
 
-
 // deleteChallengeResources deletes ArgoCD Application and all subresources for a challenge
 func deleteChallengeResources(ctx context.Context, challengeSlug string) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)

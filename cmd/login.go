@@ -53,7 +53,11 @@ After successful login, you will be able to use commands requiring authenticatio
 					ui.Warning("Token exists but failed to fetch profile")
 					ui.Info("You may need to login again")
 				} else {
-					fullName := strings.TrimSpace(profile.FirstName + " " + profile.LastName)
+					lastName := ""
+					if profile.LastName != nil {
+						lastName = *profile.LastName
+					}
+					fullName := strings.TrimSpace(profile.FirstName + " " + lastName)
 					if fullName != "" {
 						ui.KeyValue("Profile", fullName)
 					}
@@ -99,7 +103,11 @@ After successful login, you will be able to use commands requiring authenticatio
 		if err != nil {
 			ui.Warning("Logged in, but failed to fetch profile")
 		} else {
-			fullName := strings.TrimSpace(profile.FirstName + " " + profile.LastName)
+			lastName := ""
+			if profile.LastName != nil {
+				lastName = *profile.LastName
+			}
+			fullName := strings.TrimSpace(profile.FirstName + " " + lastName)
 			if fullName != "" {
 				ui.KeyValue("Welcome", fullName)
 			}

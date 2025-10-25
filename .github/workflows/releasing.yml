@@ -124,30 +124,11 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           cache: 'npm'  # Enable NPM cache
 
-      # Wait for binaries to be available on R2 before npm ci (which runs postinstall)
-      - name: Wait for R2 binaries availability
+      # Small delay to ensure R2 upload is complete (~10-15s after build)
+      - name: Wait for R2 upload
         run: |
-          VERSION="${GITHUB_REF#refs/tags/v}"
-          BASE_URL="https://download.kubeasy.dev/kubeasy-cli/v${VERSION}"
-          BINARY_URL="${BASE_URL}/kubeasy-cli_v${VERSION}_linux_amd64.tar.gz"
-
-          echo "Waiting for binary to be available at: $BINARY_URL"
-
-          # Wait up to 5 minutes (60 attempts * 5 seconds)
-          for i in {1..60}; do
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BINARY_URL")
-
-            if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
-              echo "✓ Binary is available (HTTP $HTTP_CODE)"
-              exit 0
-            fi
-
-            echo "Attempt $i/60: Binary not yet available (HTTP $HTTP_CODE), waiting 5s..."
-            sleep 5
-          done
-
-          echo "✗ Binary still not available after 5 minutes"
-          exit 1
+          echo "Waiting 30s for R2 upload to complete..."
+          sleep 30
 
       - name: Install dependencies
         run: npm ci

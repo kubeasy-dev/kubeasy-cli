@@ -12,7 +12,7 @@ type UserResponse struct {
 
 // ChallengeResponse represents the response from GET /api/cli/challenge/[slug]
 type ChallengeResponse struct {
-	ID               string `json:"id"`
+	ID               int    `json:"id"`
 	Title            string `json:"title"`
 	Slug             string `json:"slug"`
 	Description      string `json:"description"`

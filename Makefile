@@ -79,6 +79,11 @@ test-coverage: test ## Generate HTML coverage report
 
 lint: ## Run golangci-lint
 	@echo "$(YELLOW)Running linters...$(NC)"
+	@if ! command -v golangci-lint >/dev/null 2>&1; then \
+		echo "$(RED)✗ golangci-lint not installed$(NC)"; \
+		echo "$(YELLOW)ℹ  Install it with: make install-tools$(NC)"; \
+		exit 1; \
+	fi
 	@if [ ! -f .github/linters/.golangci.yml ]; then \
 		echo "$(RED)✗ .github/linters/.golangci.yml not found$(NC)"; \
 		exit 1; \
@@ -88,6 +93,11 @@ lint: ## Run golangci-lint
 
 lint-fix: ## Run golangci-lint with auto-fix
 	@echo "$(YELLOW)Running linters with auto-fix...$(NC)"
+	@if ! command -v golangci-lint >/dev/null 2>&1; then \
+		echo "$(RED)✗ golangci-lint not installed$(NC)"; \
+		echo "$(YELLOW)ℹ  Install it with: make install-tools$(NC)"; \
+		exit 1; \
+	fi
 	@golangci-lint run --config .github/linters/.golangci.yml --fix
 	@gofmt -w $$(find . -name "*.go" -not -path "./vendor/*")
 	@echo "$(GREEN)✓ Linting fixed$(NC)"

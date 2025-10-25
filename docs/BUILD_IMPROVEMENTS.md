@@ -249,6 +249,7 @@ Tag pushed (v1.4.0)
 - ~2-3 minutes faster
 - Better PR experience (only new issues shown)
 - Clearer separation of concerns
+- Uses golangci-lint-action for automatic installation and caching
 
 ### 4. Automated Release Script
 

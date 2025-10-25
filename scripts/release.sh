@@ -127,8 +127,14 @@ fi
 echo ""
 echo -e "${GREEN}✓ Creating release...${NC}"
 
-# Create version bump commit and tag
-npm version $VERSION_TYPE -m "chore: release %s"
+# Update version in package.json without creating git commit/tag
+# (we'll do that manually to have more control)
+npm version $VERSION_TYPE --no-git-tag-version
+
+# Create git commit and tag manually
+git add package.json package-lock.json
+git commit -m "chore: release $NEW_VERSION"
+git tag -a "$NEW_VERSION" -m "Release $NEW_VERSION"
 
 echo ""
 echo -e "${GREEN}✓ Version bumped to $NEW_VERSION${NC}"

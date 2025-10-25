@@ -4,3 +4,14 @@ bin
 node_modules
 vendor
 kubeasy-cli
+
+# Test coverage
+coverage.out
+coverage.html
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

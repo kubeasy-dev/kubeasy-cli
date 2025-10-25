@@ -22,30 +22,27 @@ on:
       - 'go.sum'
       - 'package-lock.json'
       - 'package.json'
+
 jobs:
-  lint:
-    name: Lint  
+  # Go linting with golangci-lint (faster and more focused than super-linter)
+  golangci-lint:
+    name: Go Lint
     runs-on: ubuntu-latest
 
     permissions:
       contents: read
       packages: read
-      statuses: write
+      pull-requests: read
 
     steps:
       - name: Checkout code
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-        with:
-          # super-linter needs the full git history to get the
-          # list of files that changed across commits
-          fetch-depth: 0
 
-      - name: Load super-linter configuration
-        # Use grep inverse matching to exclude eventual comments in the .env file
-        # because the GitHub Actions command to set environment variables doesn't
-        # support comments.
-        # Ref: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions#setting-an-environment-variable
-        run: grep -v '^#' .github/super-linter.env >> "$GITHUB_ENV"
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: "1.25.3"
+          cache: true  # Enable Go modules caching
 
       - name: Generate a token
         id: generate-token
@@ -58,14 +55,43 @@ jobs:
       - name: Configure private token
         env:
           GH_ACCESS_TOKEN: ${{ steps.generate-token.outputs.token }}
-        run: | 
+        run: |
           git config --global url."https://x-access-token:${GH_ACCESS_TOKEN}@github.com/".insteadOf "https://github.com/"
 
-      - name: Run go mod vendor to ensure all dependencies are available
-        run: go mod vendor
+      - name: Download dependencies
+        run: go mod download
 
-      - name: Super-linter
-        uses: super-linter/super-linter@2bdd90ed3262e023ac84bf8fe35dc480721fc1f2 # v8.2.1 
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@7bd08c8e7f389e7e5b175a0f7c1cfaa252b8e26e # v6.2.0
+        with:
+          version: latest
+          args: --config .github/linters/.golangci.yml --timeout 5m
+          # Only show new issues on PRs (not historical issues)
+          only-new-issues: ${{ github.event_name == 'pull_request' }}
+
+  # Additional validation with super-linter (GitHub Actions, YAML, etc.)
+  super-linter:
+    name: Other Linters
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: read
+      statuses: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Load super-linter configuration
+        run: grep -v '^#' .github/super-linter.env >> "$GITHUB_ENV"
+
+      - name: Super-linter (non-Go files)
+        uses: super-linter/super-linter@2bdd90ed3262e023ac84bf8fe35dc480721fc1f2 # v8.2.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GOPRIVATE: github.com/kubeasy-dev/challenge-operator
+          # Disable Go linting in super-linter since golangci-lint handles it
+          VALIDATE_GO: false
+          VALIDATE_GO_MODULES: true

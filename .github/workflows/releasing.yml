@@ -3,25 +3,28 @@ name: "Releasing process"
 on:
   push:
     tags:
-      - "*" 
+      - "v*"  # Only trigger on version tags (v1.0.0, v1.2.3, etc.)
 
 permissions:
   contents: write
   id-token: write
 
 jobs:
-  build:
+  # Pre-release validation - ensures quality before building
+  pre-release-checks:
+    name: Pre-release validation
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           fetch-depth: 0
-          
+
       - name: Set up Go
         uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
         with:
           go-version: "1.25.3"
+          cache: true  # Enable Go modules caching
 
       - name: Generate a token
         id: generate-token
@@ -34,9 +37,52 @@ jobs:
       - name: Configure private token
         env:
           GH_ACCESS_TOKEN: ${{ steps.generate-token.outputs.token }}
-        run: | 
+        run: |
           git config --global url."https://x-access-token:${GH_ACCESS_TOKEN}@github.com/".insteadOf "https://github.com/"
-      
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: make test
+
+      - name: Run linters
+        run: make lint
+
+      - name: Test build
+        run: make build
+
+  # Build and release binaries
+  build:
+    name: Build and release
+    needs: [pre-release-checks]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: "1.25.3"
+          cache: true  # Enable Go modules caching
+
+      - name: Generate a token
+        id: generate-token
+        uses: actions/create-github-app-token@67018539274d69449ef7c02e8e71183d1719ab42 # v2.1.4
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Configure private token
+        env:
+          GH_ACCESS_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          git config --global url."https://x-access-token:${GH_ACCESS_TOKEN}@github.com/".insteadOf "https://github.com/"
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6.4.0
         with:
@@ -56,23 +102,54 @@ jobs:
           path: |
             dist/kubeasy_*.tar.gz
             dist/checksums.txt
+
+  # Publish to NPM - must wait for binaries to be uploaded to R2
   publish-npm:
-    needs: [build]
+    name: Publish to NPM
+    needs: [build]  # Wait for build to complete and upload to R2
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
         with:
           node-version: '24.10.0'
           registry-url: 'https://registry.npmjs.org'
-      - name: Create a .npmrc file
-        run: echo "registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> .npmrc
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - name: Publish to NPM
+          cache: 'npm'  # Enable NPM cache
+
+      # Wait for binaries to be available on R2 before npm ci (which runs postinstall)
+      - name: Wait for R2 binaries availability
         run: |
-          npm ci
-          npm publish --access public
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          BASE_URL="https://download.kubeasy.dev/kubeasy-cli/v${VERSION}"
+          BINARY_URL="${BASE_URL}/kubeasy-cli_v${VERSION}_linux_amd64.tar.gz"
+
+          echo "Waiting for binary to be available at: $BINARY_URL"
+
+          # Wait up to 5 minutes (60 attempts * 5 seconds)
+          for i in {1..60}; do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BINARY_URL")
+
+            if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
+              echo "✓ Binary is available (HTTP $HTTP_CODE)"
+              exit 0
+            fi
+
+            echo "Attempt $i/60: Binary not yet available (HTTP $HTTP_CODE), waiting 5s..."
+            sleep 5
+          done
+
+          echo "✗ Binary still not available after 5 minutes"
+          exit 1
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Publish to NPM
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -49,7 +49,7 @@ jobs:
       - name: Run linters
         uses: golangci/golangci-lint-action@971e284b6050e8a5849b72094c50ab08da042db8 # v6.1.1
         with:
-          version: latest
+          version: v2
           args: --config .github/linters/.golangci.yml --timeout 5m
 
       - name: Test build

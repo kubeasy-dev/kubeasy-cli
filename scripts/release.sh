@@ -64,7 +64,7 @@ echo -e "${GREEN}✓ Working directory clean${NC}"
 # Verify branch is up to date
 echo -e "${YELLOW}  Fetching latest from origin...${NC}"
 git fetch origin main --quiet
-if [ "$(git rev-parse HEAD)" != "$(git rev-parse @{u})" ]; then
+if [ "$(git rev-parse HEAD)" != "$(git rev-parse '@{u}')" ]; then
 	echo -e "${RED}✗ Your branch is not up to date with origin/main${NC}"
 	echo -e "  Run: git pull origin main"
 	exit 1

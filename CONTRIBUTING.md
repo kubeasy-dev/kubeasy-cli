@@ -7,11 +7,11 @@ Thank you for considering contributing to Kubeasy CLI! This document provides gu
 Before you start, ensure you have the following tools installed:
 
 - **Go 1.25.3+** - [Download](https://go.dev/dl/)
-- **Node.js 24.10.0+** - For NPM scripts and release management
+- **Node.js 24.10.0+** - For npm scripts and release management
 - **Make** - Build automation tool (usually pre-installed on macOS/Linux)
 - **golangci-lint** - Go linting tool
 - **Docker** - Required for running Kind clusters (local Kubernetes)
-- **kubectl** - Kubernetes CLI tool
+- **kubectl** - Kubernetes command-line tool
 - **Git** - Version control
 
 ### Installing Development Tools
@@ -23,6 +23,7 @@ make install-tools
 ```
 
 This will install:
+
 - golangci-lint (Go linter)
 - goreleaser (Release automation)
 
@@ -31,7 +32,7 @@ This will install:
 1. **Clone the repository**
 
 ```bash
-git clone https://github.com/kubeasy-dev/kubeasy-cli.git
+Git clone https://github.com/kubeasy-dev/kubeasy-cli.git
 cd kubeasy-cli
 ```
 
@@ -118,6 +119,7 @@ make vendor
 ### Creating a Release
 
 **Prerequisites**:
+
 - You must be on the `main` branch
 - Your branch must be up to date with `origin/main`
 - All tests and linters must pass
@@ -140,15 +142,17 @@ Or specify the version type directly:
 ```
 
 The script will:
-- Run all pre-release checks (tests, lint, build)
+
+- Run all prerelease checks (tests, lint, build)
 - Bump the version in `package.json`
-- Create a git commit and tag
+- Create a Git commit and tag
 - Push to GitHub
 - Trigger the CI/CD pipeline
 
 2. **Monitor the release**
 
 Watch the GitHub Actions workflow:
+
 - https://github.com/kubeasy-dev/kubeasy-cli/actions
 
 3. **Verify the release**
@@ -158,8 +162,9 @@ Watch the GitHub Actions workflow:
 ```
 
 This checks:
+
 - GitHub Release exists
-- NPM package is published
+- npm package is published
 - Cloudflare R2 binaries are available
 - Checksums file is present
 
@@ -168,14 +173,14 @@ This checks:
 If you prefer the manual approach:
 
 ```bash
-# Run pre-release checks
+# Run prerelease checks
 make release-check
 
 # Create version and tag
 npm version patch   # or minor/major
 
 # Push to GitHub
-git push --follow-tags
+Git push --follow-tags
 ```
 
 ### Testing Release Locally
@@ -193,15 +198,17 @@ This creates a snapshot build without publishing.
 ### Lint Workflow
 
 Runs on every push and PR to `main`:
+
 - Go linting with `golangci-lint`
 - Additional checks with `super-linter` (GitHub Actions, YAML, etc.)
 
 ### Release Workflow
 
 Triggered when a version tag is pushed:
-1. **Pre-release checks** - Runs tests, lint, and build
+
+1. **Prerelease checks** - Runs tests, lint, and build
 2. **Build** - GoReleaser builds binaries for all platforms
-3. **NPM Publish** - Publishes to NPM (runs in parallel with build)
+3. **npm Publish** - Publishes to npm (runs in parallel with build)
 
 ## Project Structure
 
@@ -229,7 +236,7 @@ kubeasy-cli/
 We follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 - `feat:` - New feature
-- `fix:` - Bug fix
+- `fix:` - bugfix
 - `docs:` - Documentation changes
 - `style:` - Code style changes (formatting, etc.)
 - `refactor:` - Code refactoring
@@ -238,6 +245,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/):
 - `chore:` - Maintenance tasks
 
 Examples:
+
 ```
 feat: add support for multi-cluster management
 fix: resolve issue with ArgoCD app sync
@@ -249,7 +257,7 @@ chore: bump dependencies to latest versions
 
 - **Issues**: [GitHub Issues](https://github.com/kubeasy-dev/kubeasy-cli/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/kubeasy-dev/kubeasy-cli/discussions)
-- **Website**: [kubeasy.dev](https://kubeasy.dev)
+- **Site**: [kubeasy.dev](https://kubeasy.dev)
 
 ## License
 

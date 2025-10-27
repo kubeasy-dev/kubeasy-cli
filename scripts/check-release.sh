@@ -18,23 +18,23 @@ echo ""
 # Check GitHub Release
 echo -e "${YELLOW}1. Checking GitHub Release...${NC}"
 if gh release view "v$VERSION" >/dev/null 2>&1; then
-  echo -e "${GREEN}   ✓ GitHub Release exists${NC}"
-  RELEASE_URL="https://github.com/kubeasy-dev/kubeasy-cli/releases/tag/v$VERSION"
-  echo -e "${BLUE}   → $RELEASE_URL${NC}"
+	echo -e "${GREEN}   ✓ GitHub Release exists${NC}"
+	RELEASE_URL="https://github.com/kubeasy-dev/kubeasy-cli/releases/tag/v$VERSION"
+	echo -e "${BLUE}   → $RELEASE_URL${NC}"
 else
-  echo -e "${RED}   ✗ GitHub Release not found${NC}"
+	echo -e "${RED}   ✗ GitHub Release not found${NC}"
 fi
 
 echo ""
 
 # Check NPM Package
 echo -e "${YELLOW}2. Checking NPM Package...${NC}"
-if npm view @kubeasy-dev/kubeasy-cli@$VERSION >/dev/null 2>&1; then
-  echo -e "${GREEN}   ✓ NPM package published${NC}"
-  NPM_URL="https://www.npmjs.com/package/@kubeasy-dev/kubeasy-cli/v/$VERSION"
-  echo -e "${BLUE}   → $NPM_URL${NC}"
+if npm view "@kubeasy-dev/kubeasy-cli@$VERSION" >/dev/null 2>&1; then
+	echo -e "${GREEN}   ✓ NPM package published${NC}"
+	NPM_URL="https://www.npmjs.com/package/@kubeasy-dev/kubeasy-cli/v/$VERSION"
+	echo -e "${BLUE}   → $NPM_URL${NC}"
 else
-  echo -e "${RED}   ✗ NPM package not found${NC}"
+	echo -e "${RED}   ✗ NPM package not found${NC}"
 fi
 
 echo ""
@@ -46,20 +46,20 @@ PLATFORMS=("linux_amd64" "linux_arm64" "darwin_amd64" "darwin_arm64" "windows_am
 R2_FAILURES=0
 
 for PLATFORM in "${PLATFORMS[@]}"; do
-  URL="https://download.kubeasy.dev/kubeasy-cli/v${VERSION}/kubeasy-cli_v${VERSION}_${PLATFORM}.tar.gz"
+	URL="https://download.kubeasy.dev/kubeasy-cli/v${VERSION}/kubeasy-cli_v${VERSION}_${PLATFORM}.tar.gz"
 
-  if curl -s -I "$URL" 2>&1 | grep -q "200 OK\|302 Found"; then
-    echo -e "${GREEN}   ✓ $PLATFORM${NC}"
-  else
-    echo -e "${RED}   ✗ $PLATFORM${NC}"
-    R2_FAILURES=$((R2_FAILURES + 1))
-  fi
+	if curl -s -I "$URL" 2>&1 | grep -q "200 OK\|302 Found"; then
+		echo -e "${GREEN}   ✓ $PLATFORM${NC}"
+	else
+		echo -e "${RED}   ✗ $PLATFORM${NC}"
+		R2_FAILURES=$((R2_FAILURES + 1))
+	fi
 done
 
 if [ $R2_FAILURES -eq 0 ]; then
-  echo -e "${GREEN}   All binaries available${NC}"
+	echo -e "${GREEN}   All binaries available${NC}"
 else
-  echo -e "${RED}   $R2_FAILURES binaries missing${NC}"
+	echo -e "${RED}   $R2_FAILURES binaries missing${NC}"
 fi
 
 echo ""
@@ -68,10 +68,10 @@ echo ""
 echo -e "${YELLOW}4. Checking checksums...${NC}"
 CHECKSUMS_URL="https://download.kubeasy.dev/kubeasy-cli/v${VERSION}/checksums.txt"
 if curl -s -I "$CHECKSUMS_URL" 2>&1 | grep -q "200 OK\|302 Found"; then
-  echo -e "${GREEN}   ✓ Checksums file available${NC}"
-  echo -e "${BLUE}   → $CHECKSUMS_URL${NC}"
+	echo -e "${GREEN}   ✓ Checksums file available${NC}"
+	echo -e "${BLUE}   → $CHECKSUMS_URL${NC}"
 else
-  echo -e "${RED}   ✗ Checksums file not found${NC}"
+	echo -e "${RED}   ✗ Checksums file not found${NC}"
 fi
 
 echo ""

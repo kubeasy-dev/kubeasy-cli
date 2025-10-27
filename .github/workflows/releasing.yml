@@ -3,7 +3,7 @@ name: "Releasing process"
 on:
   push:
     tags:
-      - "v*"  # Only trigger on version tags (v1.0.0, v1.2.3, etc.)
+      - "v*" # Only trigger on version tags (v1.0.0, v1.2.3, etc.)
 
 permissions:
   contents: write
@@ -24,7 +24,7 @@ jobs:
         uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
         with:
           go-version: "1.24.9"
-          cache: true  # Enable Go modules caching
+          cache: true # Enable Go modules caching
 
       - name: Download dependencies
         run: go mod download
@@ -56,13 +56,13 @@ jobs:
         uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
         with:
           go-version: "1.24.9"
-          cache: true  # Enable Go modules caching
+          cache: true # Enable Go modules caching
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6.4.0
         with:
           distribution: goreleaser
-          version: '~> v2'
+          version: "~> v2"
           args: release --clean --timeout=60m
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -80,7 +80,7 @@ jobs:
   # Publish to NPM - must wait for binaries to be uploaded to R2
   publish-npm:
     name: Publish to NPM
-    needs: [build]  # Wait for build to complete and upload to R2
+    needs: [build] # Wait for build to complete and upload to R2
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -91,9 +91,9 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
         with:
-          node-version: '24.10.0'
-          registry-url: 'https://registry.npmjs.org'
-          cache: 'npm'  # Enable NPM cache
+          node-version: "24.10.0"
+          registry-url: "https://registry.npmjs.org"
+          cache: "npm" # Enable NPM cache
 
       # Small delay to ensure R2 upload is complete (~10-15s after build)
       - name: Wait for R2 upload

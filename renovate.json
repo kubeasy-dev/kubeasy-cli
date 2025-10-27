@@ -12,13 +12,8 @@
     {
       "groupName": "{{manager}} non-major dependencies",
       "groupSlug": "{{manager}}-minor-patch",
-      "matchUpdateTypes": [
-        "minor",
-        "patch"
-      ],
-      "matchPackageNames": [
-        "*"
-      ]
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchPackageNames": ["*"]
     }
   ],
   "separateMajorMinor": true

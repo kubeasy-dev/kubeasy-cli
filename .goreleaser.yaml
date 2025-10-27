@@ -46,27 +46,27 @@ changelog:
   sort: asc
   filters:
     exclude:
-      - '^docs:'
-      - '^test:'
-      - '^ci:'
-      - '^chore(deps):'
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore(deps):"
       - Merge pull request
       - Merge branch
   groups:
-    - title: '🚀 Features'
-      regexp: '^feat:'
+    - title: "🚀 Features"
+      regexp: "^feat:"
       order: 0
-    - title: '🐛 Bug Fixes'
-      regexp: '^fix:'
+    - title: "🐛 Bug Fixes"
+      regexp: "^fix:"
       order: 1
-    - title: '📚 Documentation'
-      regexp: '^docs:'
+    - title: "📚 Documentation"
+      regexp: "^docs:"
       order: 2
-    - title: '🔧 Improvements'
-      regexp: '^refactor:|^perf:|^style:'
+    - title: "🔧 Improvements"
+      regexp: "^refactor:|^perf:|^style:"
       order: 3
-    - title: '🧰 Maintenance'
-      regexp: '^chore:'
+    - title: "🧰 Maintenance"
+      regexp: "^chore:"
       order: 4
-    - title: 'Others'
+    - title: "Others"
       order: 999

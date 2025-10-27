@@ -7,7 +7,7 @@ This document describes the comprehensive improvements made to the kubeasy-cli b
 - [Overview](#overview)
 - [Problems Solved](#problems-solved)
 - [Implementation Details](#implementation-details)
-- [NPM Publish Race Condition Fix](#npm-publish-race-condition-fix)
+- [npm Publish Race Condition Fix](#npm-publish-race-condition-fix)
 - [New Features](#new-features)
 - [Performance Improvements](#performance-improvements)
 - [Usage Guide](#usage-guide)
@@ -18,16 +18,17 @@ This document describes the comprehensive improvements made to the kubeasy-cli b
 ## Overview
 
 This phase focused on automating and optimizing the build and release process to:
+
 - Eliminate manual errors and race conditions
 - Reduce build and release times
 - Improve developer experience
-- Ensure reliable releases with zero NPM publish failures
+- Ensure reliable releases with zero npm publish failures
 
 ### Key Achievements
 
-✅ **100% reliable NPM publishing** (eliminated 403 errors)
+✅ **100% reliable npm publishing** (eliminated 403 errors)
 ✅ **2-3 minutes faster builds** (Go modules cache)
-✅ **Automated pre-release validation** (tests, lint, build)
+✅ **Automated prerelease validation** (tests, lint, build)
 ✅ **Standardized build commands** (Makefile with 15 targets)
 ✅ **Secure release process** (automated validation script)
 
@@ -35,7 +36,7 @@ This phase focused on automating and optimizing the build and release process to
 
 ## Problems Solved
 
-### 1. ❌ NPM Publish Race Condition (403 Errors)
+### 1. ❌ npm Publish Race Condition (403 Errors)
 
 **Problem**: During `npm publish`, the `postinstall` hook executes `golang-npm install` which downloads the binary from Cloudflare R2. However, GoReleaser hadn't finished uploading, resulting in **403 Forbidden** errors.
 
@@ -46,17 +47,19 @@ Error: Error downloading binary. HTTP Status Code: 403
 **Impact**: ~30% of releases failed, requiring manual retry.
 
 **Solution**:
-- NPM publish now waits for build completion (`needs: [build]`)
+
+- npm publish now waits for build completion (`needs: [build]`)
 - Added R2 binary availability check with retry logic (up to 5 minutes)
 - Fails gracefully with clear error if binaries unavailable
 
 **Result**: ✅ **0% error rate**, 100% reliable releases
 
-### 2. ❌ No Pre-Release Validation
+### 2. ❌ No Prerelease Validation
 
 **Problem**: No automated checks before release. Failures discovered too late (~15 minutes into the process).
 
-**Solution**: Added `pre-release-checks` job that validates:
+**Solution**: Added `prerelease-checks` job that validates:
+
 - All tests pass
 - Linting is clean
 - Build succeeds
@@ -74,6 +77,7 @@ Error: Error downloading binary. HTTP Status Code: 403
 ### 4. ❌ Manual, Error-Prone Release Process
 
 **Problem**:
+
 - Easy to forget validation steps
 - Risk of releasing from wrong branch
 - No automated test verification
@@ -87,8 +91,9 @@ Error: Error downloading binary. HTTP Status Code: 403
 **Problem**: No caching, full rebuild every time.
 
 **Solution**:
+
 - Go modules cache
-- NPM cache
+- npm cache
 - Parallel lint jobs
 
 **Result**: ✅ ~2-3 minutes saved per build
@@ -101,7 +106,7 @@ Error: Error downloading binary. HTTP Status Code: 403
 
 **File**: `Makefile`
 
-A comprehensive build system with 15 targets:
+A comprehensive build tool with 15 targets:
 
 ```bash
 make help           # Display all available commands
@@ -122,12 +127,14 @@ make install-tools  # Install development tools
 ```
 
 **Key Features**:
+
 - Colored output for better readability
 - Self-documenting with descriptions
 - Version information automatically injected via ldflags
 - Comprehensive validation in `release-check` target
 
 **Example Usage**:
+
 ```bash
 # Quick development workflow
 make build && ./bin/kubeasy version
@@ -144,11 +151,12 @@ make release-check
 **File**: `.github/workflows/releasing.yml`
 
 **Architecture**:
+
 ```
 Tag pushed (v1.4.0)
     ↓
 ┌───────────────────────┐
-│ pre-release-checks    │
+│ prerelease-checks     │
 │ - Run tests           │
 │ - Run lint            │
 │ - Test build          │
@@ -172,23 +180,25 @@ Tag pushed (v1.4.0)
 **Improvements**:
 
 1. **Go Modules Cache**
+
    ```yaml
    - name: Set up Go
      uses: actions/setup-go@v6
      with:
        go-version: "1.25.3"
-       cache: true  # Saves ~2-3 min
+       cache: true # Saves ~2-3 min
    ```
 
-2. **NPM Cache**
+2. **npm Cache**
+
    ```yaml
    - name: Setup Node.js
      uses: actions/setup-node@v6
      with:
-       cache: 'npm'  # Faster npm ci
+       cache: "npm" # Faster npm ci
    ```
 
-3. **Pre-Release Validation**
+3. **Prerelease Validation**
    - Runs before building
    - Fails fast if issues detected
    - Saves ~12 minutes on failed releases
@@ -207,14 +217,15 @@ Tag pushed (v1.4.0)
    ```
 
 **Timeline**:
+
 ```
 0:00 - Tag pushed
-0:01 - Pre-release checks start
+0:01 - Prerelease checks start
 0:04 - ✅ Validation passed, build starts
 0:05 - Setup Go (with cache)
 0:11 - Build 6 platform binaries
 0:14 - Upload to R2 + GitHub
-0:14 - NPM publish starts
+0:14 - npm publish starts
 0:15 - Wait for R2 availability (~10-30s)
 0:15 - npm ci + publish
 0:17 - ✅ Release complete
@@ -225,6 +236,7 @@ Tag pushed (v1.4.0)
 **File**: `.github/workflows/lint.yml`
 
 **Changes**:
+
 - Split into two parallel jobs for better performance
 - Dedicated golangci-lint job (faster, better caching)
 - super-linter for non-Go files (GitHub Actions, YAML, etc.)
@@ -232,6 +244,7 @@ Tag pushed (v1.4.0)
 - Added `only-new-issues` for PR linting
 
 **Architecture**:
+
 ```
 ┌──────────────────┐    ┌──────────────────┐
 │ golangci-lint    │    │ super-linter     │
@@ -246,6 +259,7 @@ Tag pushed (v1.4.0)
 ```
 
 **Benefits**:
+
 - ~2-3 minutes faster
 - Better PR experience (only new issues shown)
 - Clearer separation of concerns
@@ -264,6 +278,7 @@ Comprehensive release automation with safety checks:
 ```
 
 **Validation Steps**:
+
 1. ✅ Verify on `main` branch
 2. ✅ Check for uncommitted changes
 3. ✅ Ensure branch is up to date with origin
@@ -277,12 +292,13 @@ Comprehensive release automation with safety checks:
 11. ✅ Display tracking URLs
 
 **Example Output**:
+
 ```
 ========================================
   Kubeasy CLI Release Script
 ========================================
 
-Running pre-release checks...
+Running prerelease checks...
 ✓ On main branch
 ✓ Working directory clean
 ✓ Branch up to date
@@ -317,12 +333,14 @@ Verifies release artifacts are published correctly:
 ```
 
 **Checks**:
+
 1. ✅ GitHub Release exists
-2. ✅ NPM package published
+2. ✅ npm package published
 3. ✅ Cloudflare R2 binaries available (6 platforms)
 4. ✅ Checksums file present
 
 **Example Output**:
+
 ```
 ========================================
   Release Verification for v1.4.0
@@ -332,8 +350,8 @@ Verifies release artifacts are published correctly:
    ✓ GitHub Release exists
    → https://github.com/kubeasy-dev/kubeasy-cli/releases/tag/v1.4.0
 
-2. Checking NPM Package...
-   ✓ NPM package published
+2. Checking npm Package...
+   ✓ npm package published
    → https://www.npmjs.com/package/@kubeasy-dev/kubeasy-cli/v/1.4.0
 
 3. Checking Cloudflare R2 binaries...
@@ -366,50 +384,54 @@ changelog:
   sort: asc
   filters:
     exclude:
-      - '^docs:'
-      - '^test:'
-      - '^ci:'
-      - '^chore(deps):'
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore(deps):"
       - Merge pull request
       - Merge branch
   groups:
-    - title: '🚀 Features'
-      regexp: '^feat:'
+    - title: "🚀 Features"
+      regexp: "^feat:"
       order: 0
-    - title: '🐛 Bug Fixes'
-      regexp: '^fix:'
+    - title: "🐛 Bug Fixes"
+      regexp: "^fix:"
       order: 1
-    - title: '📚 Documentation'
-      regexp: '^docs:'
+    - title: "📚 Documentation"
+      regexp: "^docs:"
       order: 2
-    - title: '🔧 Improvements'
-      regexp: '^refactor:|^perf:|^style:'
+    - title: "🔧 Improvements"
+      regexp: "^refactor:|^perf:|^style:"
       order: 3
-    - title: '🧰 Maintenance'
-      regexp: '^chore:'
+    - title: "🧰 Maintenance"
+      regexp: "^chore:"
       order: 4
-    - title: 'Others'
+    - title: "Others"
       order: 999
 ```
 
 **Example Output**:
+
 ```markdown
 ## 🚀 Features
+
 - feat: add support for multi-cluster management (#42)
 - feat: implement challenge progress tracking (#38)
 
 ## 🐛 Bug Fixes
+
 - fix: resolve ArgoCD sync timeout issue (#45)
 - fix: correct namespace creation order (#41)
 
 ## 🔧 Improvements
+
 - refactor: simplify authentication flow (#43)
 - perf: optimize kubectl calls with batch processing (#40)
 ```
 
 ---
 
-## NPM Publish Race Condition Fix
+## npm Publish Race Condition Fix
 
 ### The Problem in Detail
 
@@ -428,12 +450,13 @@ We evaluated 5 different approaches:
 
 #### ✅ Solution 1: Wait for R2 Upload (IMPLEMENTED)
 
-**Approach**: NPM publish waits for build completion + R2 availability check
+**Approach**: npm publish waits for build completion + R2 availability check
 
 **Implementation**:
+
 ```yaml
 publish-npm:
-  needs: [build]  # Wait for GoReleaser
+  needs: [build] # Wait for GoReleaser
   steps:
     - name: Wait for R2 binaries
       run: |
@@ -451,14 +474,16 @@ publish-npm:
 ```
 
 **Pros**:
+
 - ✅ Simple and reliable
 - ✅ Clear error messages
 - ✅ No changes to package.json
 - ✅ Safe failover (timeout after 5 minutes)
 
 **Cons**:
+
 - ⚠️ Adds ~10-30 seconds wait time
-- ⚠️ NPM publish sequential instead of parallel
+- ⚠️ npm publish sequential instead of parallel
 
 **Verdict**: Best balance of simplicity and reliability.
 
@@ -475,10 +500,12 @@ publish-npm:
 ```
 
 **Pros**:
-- ✅ NPM publish can be parallel
+
+- ✅ npm publish can be parallel
 - ✅ Fast
 
 **Cons**:
+
 - ⚠️ Postinstall not tested in CI
 - ⚠️ Silent failures possible
 
@@ -492,33 +519,37 @@ publish-npm:
 async function waitForBinary(url, maxAttempts = 30) {
   for (let i = 0; i < maxAttempts; i++) {
     try {
-      const response = await fetch(url, { method: 'HEAD' });
+      const response = await fetch(url, { method: "HEAD" });
       if (response.ok) return true;
     } catch (e) {}
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    await new Promise((resolve) => setTimeout(resolve, 5000));
   }
-  throw new Error('Binary not available');
+  throw new Error("Binary not available");
 }
 ```
 
 **Pros**:
+
 - ✅ Better user experience
 - ✅ Automatic retry
 
 **Cons**:
+
 - ⚠️ More complex to maintain
 - ⚠️ Slower installs for users
 
-**Verdict**: Over-engineered for current needs.
+**Verdict**: overengineered for current needs.
 
 #### Solution 4: Double Publish
 
 **Approach**: Publish to `@next`, test, then promote to `@latest`
 
 **Pros**:
+
 - ✅ Safe validation
 
 **Cons**:
+
 - ⚠️ Very complex
 - ⚠️ User confusion risk
 
@@ -529,9 +560,11 @@ async function waitForBinary(url, maxAttempts = 30) {
 **Approach**: Use GitHub artifacts instead of R2 during CI
 
 **Pros**:
+
 - ✅ No R2 dependency
 
 **Cons**:
+
 - ⚠️ Requires modifying golang-npm
 - ⚠️ Very complex
 
@@ -539,13 +572,13 @@ async function waitForBinary(url, maxAttempts = 30) {
 
 ### Comparison Table
 
-| Solution | Complexity | Performance | Reliability | Recommended |
-|----------|------------|-------------|-------------|-------------|
-| 1. Wait for R2 | Low | Medium | High | ✅ **YES** |
-| 2. Skip postinstall | Low | High | Medium | No |
-| 3. Smart download | High | High | High | Maybe |
-| 4. Double publish | High | High | High | No |
-| 5. Local artifacts | Very High | Medium | High | No |
+| Solution            | Complexity | Performance | Reliability | Recommended |
+| ------------------- | ---------- | ----------- | ----------- | ----------- |
+| 1. Wait for R2      | Low        | Medium      | High        | ✅ **YES**  |
+| 2. Skip postinstall | Low        | High        | Medium      | No          |
+| 3. Smart download   | High       | High        | High        | Maybe       |
+| 4. Double publish   | High       | High        | High        | No          |
+| 5. Local artifacts  | Very High  | Medium      | High        | No          |
 
 ---
 
@@ -553,22 +586,22 @@ async function waitForBinary(url, maxAttempts = 30) {
 
 ### Files Created
 
-| File | Description |
-|------|-------------|
-| `Makefile` | Build automation with 15 targets |
-| `scripts/release.sh` | Automated release script |
-| `scripts/check-release.sh` | Post-release verification |
-| `CONTRIBUTING.md` | Developer contribution guide |
-| `docs/BUILD_IMPROVEMENTS.md` | This document |
+| File                         | Description                      |
+| ---------------------------- | -------------------------------- |
+| `Makefile`                   | Build automation with 15 targets |
+| `scripts/release.sh`         | Automated release script         |
+| `scripts/check-release.sh`   | Post-release verification        |
+| `CONTRIBUTING.md`            | Developer contribution guide     |
+| `docs/BUILD_IMPROVEMENTS.md` | This document                    |
 
 ### Files Modified
 
-| File | Changes |
-|------|---------|
+| File                              | Changes                               |
+| --------------------------------- | ------------------------------------- |
 | `.github/workflows/releasing.yml` | Cache, validation, race condition fix |
-| `.github/workflows/lint.yml` | Parallel jobs, cache, optimizations |
-| `.goreleaser.yaml` | Enhanced changelog categorization |
-| `.gitignore` | Coverage files, IDE directories |
+| `.github/workflows/lint.yml`      | Parallel jobs, cache, optimizations   |
+| `.goreleaser.yaml`                | Enhanced changelog categorization     |
+| `.gitignore`                      | Coverage files, IDE directories       |
 
 ---
 
@@ -576,30 +609,30 @@ async function waitForBinary(url, maxAttempts = 30) {
 
 ### Build Time Comparison
 
-| Stage | Before | After | Improvement |
-|-------|--------|-------|-------------|
-| CI Lint | ~5-7 min | ~3-4 min | **~2-3 min** |
-| CI Build | ~5-7 min | ~3-5 min | **~2 min** |
-| Error Detection | ~15 min | ~3 min | **~12 min** |
-| Total Release | ~15-20 min | ~12-17 min | **~3-5 min** |
+| Stage           | Before     | After      | Improvement  |
+| --------------- | ---------- | ---------- | ------------ |
+| CI Lint         | ~5-7 min   | ~3-4 min   | **~2-3 min** |
+| CI Build        | ~5-7 min   | ~3-5 min   | **~2 min**   |
+| Error Detection | ~15 min    | ~3 min     | **~12 min**  |
+| Total Release   | ~15-20 min | ~12-17 min | **~3-5 min** |
 
 ### Reliability Improvements
 
-| Metric | Before | After | Improvement |
-|--------|--------|-------|-------------|
-| NPM 403 Errors | ~30% | **0%** | **100%** |
-| Manual Steps | ~8 | **1** | **87.5%** |
-| Failed Releases | ~20% | **<1%** | **95%** |
-| Release Confidence | Medium | **High** | **N/A** |
+| Metric             | Before | After    | Improvement |
+| ------------------ | ------ | -------- | ----------- |
+| npm 403 Errors     | ~30%   | **0%**   | **100%**    |
+| Manual Steps       | ~8     | **1**    | **87.5%**   |
+| Failed Releases    | ~20%   | **<1%**  | **95%**     |
+| Release Confidence | Medium | **High** | **N/A**     |
 
 ### Developer Experience
 
-| Aspect | Before | After |
-|--------|--------|-------|
-| Commands to remember | ~10+ | `make help` |
-| Pre-release validation | Manual | Automated |
-| Error clarity | Poor | Excellent |
-| Documentation | Scattered | Centralized |
+| Aspect                 | Before    | After       |
+| ---------------------- | --------- | ----------- |
+| Commands to remember   | ~10+      | `make help` |
+| Pre-release validation | Manual    | Automated   |
+| Error clarity          | Poor      | Excellent   |
+| Documentation          | Scattered | Centralized |
 
 ---
 
@@ -646,12 +679,13 @@ make test           # Ensure tests pass
 ./scripts/release.sh
 
 # Direct mode
-./scripts/release.sh patch   # Bug fixes
+./scripts/release.sh patch   # bugfixes
 ./scripts/release.sh minor   # New features
 ./scripts/release.sh major   # Breaking changes
 ```
 
 The script will:
+
 1. Validate everything locally
 2. Show version change
 3. Ask for confirmation
@@ -683,8 +717,9 @@ git push --follow-tags
 ```
 
 Verifies:
+
 - GitHub Release created
-- NPM package published
+- npm package published
 - R2 binaries available (all platforms)
 - Checksums file present
 
@@ -712,7 +747,7 @@ make deps
 make build
 ```
 
-#### Lint Errors
+#### Linting errors
 
 ```bash
 # Auto-fix what's possible
@@ -747,24 +782,28 @@ make release-check
 ### Before vs After
 
 #### Release Success Rate
+
 ```
 Before: █████░░░░░ 50%
 After:  ██████████ 100%
 ```
 
 #### Time to Detect Failure
+
 ```
 Before: ████████████████ 15 min
 After:  ███░░░░░░░░░░░░░ 3 min
 ```
 
 #### Build Time
+
 ```
 Before: ████████████░░░░ 7 min
 After:  ████████░░░░░░░░ 4 min
 ```
 
 #### Manual Steps Required
+
 ```
 Before: ████████ 8 steps
 After:  █░░░░░░░ 1 step
@@ -773,29 +812,31 @@ After:  █░░░░░░░ 1 step
 ### Release Timeline
 
 **Before**:
+
 ```
-0:00  npm version patch && git push --follow-tags
+0:00  npm version patch && Git push --follow-tags
 0:01  GitHub Actions starts
 0:02  Setup Go, download dependencies
 0:08  GoReleaser builds (6 platforms)
 0:15  Upload to R2
-0:16  NPM publish starts
+0:16  npm publish starts
 0:16  ❌ 403 Error (binaries not on R2)
 0:20  Manual retry required
 ```
 
 **After**:
+
 ```
 0:00  ./scripts/release.sh patch
 0:00  ✅ Local validation (tests, lint, build)
 0:03  Confirmation + push
 0:04  GitHub Actions starts
-0:05  Pre-release checks
+0:05  Prerelease checks
 0:08  ✅ Validation OK, build starts
 0:09  Setup Go (with cache)
 0:15  GoReleaser builds
 0:18  Upload to R2
-0:18  NPM publish starts
+0:18  npm publish starts
 0:18  Wait for R2 (~10-30s)
 0:19  npm ci + publish
 0:20  ✅ Release complete
@@ -810,6 +851,7 @@ After:  █░░░░░░░ 1 step
 **No Breaking Changes** - All existing workflows still work.
 
 **New Recommended Workflow**:
+
 ```bash
 # Install dev tools once
 make install-tools
@@ -824,12 +866,14 @@ make fmt lint
 ### For Release Managers
 
 **Old Process Still Works**:
+
 ```bash
 npm version patch
-git push --follow-tags
+Git push --follow-tags
 ```
 
 **New Recommended Process**:
+
 ```bash
 ./scripts/release.sh patch
 ./scripts/check-release.sh
@@ -840,7 +884,7 @@ git push --follow-tags
 If issues arise, you can revert to the old process:
 
 1. **Builds**: Use `go build` directly
-2. **Releases**: Use `npm version` + `git push --follow-tags`
+2. **Releases**: Use `npm version` + `Git push --follow-tags`
 3. **Linting**: Run `golangci-lint` directly
 
 All enhancements are additive, not replacements.
@@ -866,7 +910,7 @@ All enhancements are additive, not replacements.
    - `gosec` for Go vulnerabilities
    - SAST/DAST integration
 
-4. **Pre-Release Builds**
+4. **Prerelease Builds**
    - Automatic builds on every `main` push
    - Snapshot artifacts for testing
    - Beta releases for early adopters
@@ -884,7 +928,7 @@ These improvements transform the build and release process from **manual and fra
 
 ### Key Takeaways
 
-✅ **Zero NPM publish failures** - Race condition completely resolved
+✅ **Zero npm publish failures** - Race condition completely resolved
 ✅ **Faster builds** - 2-3 minutes saved per build with caching
 ✅ **Better DX** - Standardized commands, clear documentation
 ✅ **Secure releases** - Automated validation prevents errors
@@ -892,12 +936,12 @@ These improvements transform the build and release process from **manual and fra
 
 ### Impact Summary
 
-| Aspect | Before | After |
-|--------|--------|-------|
-| Reliability | 🎲 Unpredictable | ✅ 100% |
-| Speed | 🐌 Slow | ⚡ Fast |
-| Safety | 😰 Risky | 🔒 Secure |
-| Experience | 😕 Frustrating | 😊 Smooth |
+| Aspect      | Before           | After     |
+| ----------- | ---------------- | --------- |
+| Reliability | 🎲 Unpredictable | ✅ 100%   |
+| Speed       | 🐌 Slow          | ⚡ Fast   |
+| Safety      | 😰 Risky         | 🔒 Secure |
+| Experience  | 😕 Frustrating   | 😊 Smooth |
 
 **Ready for production!** 🚀
 

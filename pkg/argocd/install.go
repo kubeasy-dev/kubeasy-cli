@@ -9,9 +9,9 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors" // Add alias
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/logger"
-
+	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/kube"
+	"github.com/kubeasy-dev/kubeasy-cli/pkg/logger"
 )
 
 const (
@@ -119,9 +119,77 @@ func InstallArgoCD(options *InstallOptions) error {
 		logger.Info("ArgoCD core StatefulSets are ready.")
 	}
 
+	// Fix ArgoCD Core v3.0.0+ bug: add server.secretkey to argocd-secret
+	// See: https://github.com/argoproj/argo-cd/issues/22931
+	logger.Info("Adding server.secretkey to argocd-secret (ArgoCD Core v3.0.0+ requirement)...")
+	secret, err := clientset.CoreV1().Secrets(ArgoCDNamespace).Get(ctx, "argocd-secret", metav1.GetOptions{})
+	if err != nil {
+		logger.Error("Failed to get argocd-secret: %v", err)
+		return err
+	}
+	if secret.Data == nil {
+		secret.Data = make(map[string][]byte)
+	}
+	// Add server.secretkey if it doesn't exist (any value works, ArgoCD Core just checks for presence)
+	if _, exists := secret.Data["server.secretkey"]; !exists {
+		secret.Data["server.secretkey"] = []byte("kubeasy-argocd-core-secret")
+		_, err = clientset.CoreV1().Secrets(ArgoCDNamespace).Update(ctx, secret, metav1.UpdateOptions{})
+		if err != nil {
+			logger.Error("Failed to update argocd-secret with server.secretkey: %v", err)
+			return err
+		}
+		logger.Info("server.secretkey added to argocd-secret")
+	} else {
+		logger.Debug("server.secretkey already exists in argocd-secret")
+	}
+
+	// Restart application controller to pick up the new secret
+	logger.Info("Restarting ArgoCD application controller to apply changes...")
+	sts, err := clientset.AppsV1().StatefulSets(ArgoCDNamespace).Get(ctx, "argocd-application-controller", metav1.GetOptions{})
+	if err != nil {
+		logger.Error("Failed to get argocd-application-controller StatefulSet: %v", err)
+		return err
+	}
+	// Trigger restart by updating an annotation
+	if sts.Spec.Template.Annotations == nil {
+		sts.Spec.Template.Annotations = make(map[string]string)
+	}
+	sts.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
+	_, err = clientset.AppsV1().StatefulSets(ArgoCDNamespace).Update(ctx, sts, metav1.UpdateOptions{})
+	if err != nil {
+		logger.Error("Failed to restart argocd-application-controller: %v", err)
+		return err
+	}
+	logger.Info("ArgoCD application controller restarted")
+
+	// Create default AppProject FIRST (ArgoCD Core doesn't create it automatically)
+	logger.Info("Creating default ArgoCD AppProject...")
+	defaultProjectManifest := `apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: default
+  namespace: argocd
+spec:
+  description: Default project
+  sourceRepos:
+  - '*'
+  destinations:
+  - namespace: '*'
+    server: '*'
+  clusterResourceWhitelist:
+  - group: '*'
+    kind: '*'
+`
+	logger.Debug("Applying default AppProject manifest...")
+	if err = kube.ApplyManifest(ctx, []byte(defaultProjectManifest), ArgoCDNamespace, clientset, dynamicClient); err != nil {
+		logger.Error("Failed to apply default AppProject manifest: %v", err)
+		return err
+	}
+	logger.Info("Default AppProject created successfully.")
+
 	// Install ArgoCD application (App of Apps) AFTER core components are ready
 	logger.Info("Applying App-of-Apps manifest (kubeasy-cli-setup)...")
-	appManifestURL := "https://raw.githubusercontent.com/kubeasy-dev/cli-setup/refs/heads/main/app-of-apps.yaml"
+	appManifestURL := fmt.Sprintf("%s/raw/refs/heads/%s/app-of-apps.yaml", constants.CliSetupAppsURL, constants.CliSetupAppsBranch)
 	logger.Debug("Fetching App-of-Apps manifest from %s...", appManifestURL)
 	appManifestBytes, err := kube.FetchManifest(appManifestURL)
 	if err != nil {
@@ -138,6 +206,110 @@ func InstallArgoCD(options *InstallOptions) error {
 	logger.Info("App-of-Apps manifest applied successfully.")
 
 	logger.Info("ArgoCD installation process completed.")
+	return nil
+}
+
+// EnsureArgoCDResources ensures that default project and app-of-apps exist
+// This function can be called even if ArgoCD is already installed
+func EnsureArgoCDResources() error {
+	logger.Info("Ensuring ArgoCD resources (default project and app-of-apps)...")
+	ctx := context.Background()
+
+	// Get Kubernetes clients
+	clientset, err := kube.GetKubernetesClient()
+	if err != nil {
+		logger.Error("Failed to get Kubernetes clientset: %v", err)
+		return err
+	}
+	dynamicClient, err := kube.GetDynamicClient()
+	if err != nil {
+		logger.Error("Failed to get Kubernetes dynamic client: %v", err)
+		return err
+	}
+
+	// Fix ArgoCD Core v3.0.0+ bug: add server.secretkey to argocd-secret if missing
+	// See: https://github.com/argoproj/argo-cd/issues/22931
+	logger.Info("Checking server.secretkey in argocd-secret...")
+	secret, err := clientset.CoreV1().Secrets(ArgoCDNamespace).Get(ctx, "argocd-secret", metav1.GetOptions{})
+	if err != nil {
+		logger.Error("Failed to get argocd-secret: %v", err)
+		return err
+	}
+	if secret.Data == nil {
+		secret.Data = make(map[string][]byte)
+	}
+	// Add server.secretkey if it doesn't exist
+	if _, exists := secret.Data["server.secretkey"]; !exists {
+		logger.Info("Adding missing server.secretkey to argocd-secret...")
+		secret.Data["server.secretkey"] = []byte("kubeasy-argocd-core-secret")
+		_, err = clientset.CoreV1().Secrets(ArgoCDNamespace).Update(ctx, secret, metav1.UpdateOptions{})
+		if err != nil {
+			logger.Error("Failed to update argocd-secret with server.secretkey: %v", err)
+			return err
+		}
+		logger.Info("server.secretkey added to argocd-secret")
+
+		// Restart application controller to pick up the new secret
+		logger.Info("Restarting ArgoCD application controller...")
+		sts, err := clientset.AppsV1().StatefulSets(ArgoCDNamespace).Get(ctx, "argocd-application-controller", metav1.GetOptions{})
+		if err != nil {
+			logger.Error("Failed to get argocd-application-controller StatefulSet: %v", err)
+			return err
+		}
+		if sts.Spec.Template.Annotations == nil {
+			sts.Spec.Template.Annotations = make(map[string]string)
+		}
+		sts.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
+		_, err = clientset.AppsV1().StatefulSets(ArgoCDNamespace).Update(ctx, sts, metav1.UpdateOptions{})
+		if err != nil {
+			logger.Error("Failed to restart argocd-application-controller: %v", err)
+			return err
+		}
+		logger.Info("ArgoCD application controller restarted")
+	} else {
+		logger.Debug("server.secretkey already exists in argocd-secret")
+	}
+
+	// Create default AppProject
+	logger.Info("Creating/updating default ArgoCD AppProject...")
+	defaultProjectManifest := `apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: default
+  namespace: argocd
+spec:
+  description: Default project
+  sourceRepos:
+  - '*'
+  destinations:
+  - namespace: '*'
+    server: '*'
+  clusterResourceWhitelist:
+  - group: '*'
+    kind: '*'
+`
+	if err = kube.ApplyManifest(ctx, []byte(defaultProjectManifest), ArgoCDNamespace, clientset, dynamicClient); err != nil {
+		logger.Error("Failed to apply default AppProject manifest: %v", err)
+		return err
+	}
+	logger.Info("Default AppProject ensured.")
+
+	// Apply App-of-Apps
+	logger.Info("Creating/updating App-of-Apps manifest (kubeasy-cli-setup)...")
+	appManifestURL := fmt.Sprintf("%s/raw/refs/heads/%s/app-of-apps.yaml", constants.CliSetupAppsURL, constants.CliSetupAppsBranch)
+	appManifestBytes, err := kube.FetchManifest(appManifestURL)
+	if err != nil {
+		logger.Error("Failed to fetch App-of-Apps manifest: %v", err)
+		return err
+	}
+
+	if err = kube.ApplyManifest(ctx, appManifestBytes, ArgoCDNamespace, clientset, dynamicClient); err != nil {
+		logger.Error("Failed to apply App-of-Apps manifest: %v", err)
+		return err
+	}
+	logger.Info("App-of-Apps manifest ensured.")
+
+	logger.Info("ArgoCD resources ensured successfully.")
 	return nil
 }
 

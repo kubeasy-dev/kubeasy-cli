@@ -62,6 +62,12 @@ var setupCmd = &cobra.Command{
 
 		if isInstalled {
 			ui.Success("ArgoCD is already installed")
+			// Ensure default project and app-of-apps exist even if ArgoCD was already installed
+			err := ui.TimedSpinner("Ensuring ArgoCD resources", argocd.EnsureArgoCDResources)
+			if err != nil {
+				ui.Error("Error ensuring ArgoCD resources")
+				return fmt.Errorf("failed to ensure ArgoCD resources: %w", err)
+			}
 		} else {
 			err := ui.TimedSpinner("Installing ArgoCD", func() error {
 				options := argocd.DefaultInstallOptions()

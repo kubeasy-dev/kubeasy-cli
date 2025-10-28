@@ -278,17 +278,30 @@ func WaitForApplicationStatus(ctx context.Context, dynamicClient dynamic.Interfa
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
+	// Log every 10 seconds in detail
+	detailedLogTicker := time.NewTicker(10 * time.Second)
+	defer detailedLogTicker.Stop()
+
 	for {
 		select {
 		case <-waitCtx.Done():
 			// Get final status for better error reporting
-			health, sync, phase, err := getApplicationFullStatus(context.Background(), dynamicClient, appName, namespace)
+			health, sync, phase, conditions, err := getApplicationFullStatusWithConditions(context.Background(), dynamicClient, appName, namespace)
 			if err != nil {
 				logger.Error("Timeout waiting for ArgoCD Application '%s'. Failed to get final status: %v", appName, err)
 				return fmt.Errorf("timeout waiting for ArgoCD Application '%s'", appName)
 			}
-			logger.Error("Timeout waiting for ArgoCD Application '%s'. Final status: health=%s, sync=%s, phase=%s", appName, health, sync, phase)
-			return fmt.Errorf("timeout waiting for ArgoCD Application '%s' (final status: health=%s, sync=%s, phase=%s)", appName, health, sync, phase)
+			logger.Error("Timeout waiting for ArgoCD Application '%s'. Final status: health=%s, sync=%s, phase=%s, conditions=%s", appName, health, sync, phase, conditions)
+			return fmt.Errorf("timeout waiting for ArgoCD Application '%s' (final status: health=%s, sync=%s, phase=%s, conditions=%s)", appName, health, sync, phase, conditions)
+
+		case <-detailedLogTicker.C:
+			// Detailed logging every 10 seconds
+			health, sync, phase, conditions, err := getApplicationFullStatusWithConditions(waitCtx, dynamicClient, appName, namespace)
+			if err != nil {
+				logger.Warning("Failed to get ArgoCD Application '%s' detailed status: %v", appName, err)
+			} else {
+				logger.Info("ArgoCD Application '%s' detailed status: health=%s, sync=%s, phase=%s, conditions=%s", appName, health, sync, phase, conditions)
+			}
 
 		case <-ticker.C:
 			health, sync, phase, err := getApplicationFullStatus(waitCtx, dynamicClient, appName, namespace)
@@ -343,4 +356,43 @@ func getApplicationFullStatus(ctx context.Context, dynamicClient dynamic.Interfa
 	// Don't return error for phase as it may not exist
 
 	return health, sync, phase, nil
+}
+
+// getApplicationFullStatusWithConditions retrieves the full status including error conditions
+func getApplicationFullStatusWithConditions(ctx context.Context, dynamicClient dynamic.Interface, appName, namespace string) (health string, sync string, phase string, conditions string, err error) {
+	app, err := dynamicClient.Resource(argoAppGVR).Namespace(namespace).Get(ctx, appName, metav1.GetOptions{})
+	if err != nil {
+		return "", "", "", "", fmt.Errorf("failed to get ArgoCD Application '%s': %w", appName, err)
+	}
+
+	// Extract health status
+	health, _, _ = unstructured.NestedString(app.Object, "status", "health", "status")
+
+	// Extract sync status
+	sync, _, _ = unstructured.NestedString(app.Object, "status", "sync", "status")
+
+	// Extract operation phase (may not exist if no operation is running)
+	phase, _, _ = unstructured.NestedString(app.Object, "status", "operationState", "phase")
+
+	// Extract conditions (error messages)
+	conditionsList, found, _ := unstructured.NestedSlice(app.Object, "status", "conditions")
+	if found && len(conditionsList) > 0 {
+		var conditionsStrings []string
+		for _, cond := range conditionsList {
+			condMap, ok := cond.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			condType, _, _ := unstructured.NestedString(condMap, "type")
+			message, _, _ := unstructured.NestedString(condMap, "message")
+			if condType != "" && message != "" {
+				conditionsStrings = append(conditionsStrings, fmt.Sprintf("%s: %s", condType, message))
+			}
+		}
+		conditions = strings.Join(conditionsStrings, "; ")
+	} else {
+		conditions = "none"
+	}
+
+	return health, sync, phase, conditions, nil
 }

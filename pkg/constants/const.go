@@ -15,6 +15,8 @@ var ExercicesRepoBranch = "copilot/fix-6"
 
 var CliSetupAppsURL = GithubRootURL + "/cli-setup"
 
+var CliSetupAppsBranch = "main"
+
 var Version = "dev"
 
 var KubeasyClusterContext = "kind-kubeasy"

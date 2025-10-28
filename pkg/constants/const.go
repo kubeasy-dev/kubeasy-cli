@@ -11,7 +11,7 @@ var GithubRootURL = "https://github.com/kubeasy-dev"
 
 var ExercisesRepoURL = GithubRootURL + "/challenges"
 
-var ExercicesRepoBranch = "copilot/fix-6"
+var ExercicesRepoBranch = "main"
 
 var CliSetupAppsURL = GithubRootURL + "/cli-setup"
 

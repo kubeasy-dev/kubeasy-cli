@@ -104,7 +104,29 @@ echo -e "${BLUE}========================================${NC}"
 
 # Get version information
 CURRENT_VERSION=$(node -p "require('./package.json').version")
-NEW_VERSION=$(npm version "$VERSION_TYPE" --no-git-tag-version --dry-run | tail -1)
+
+# Calculate new version manually instead of using npm --dry-run (which has side effects)
+IFS='.' read -r -a version_parts <<< "$CURRENT_VERSION"
+major="${version_parts[0]}"
+minor="${version_parts[1]}"
+patch="${version_parts[2]}"
+
+case "$VERSION_TYPE" in
+	"patch")
+		patch=$((patch + 1))
+		;;
+	"minor")
+		minor=$((minor + 1))
+		patch=0
+		;;
+	"major")
+		major=$((major + 1))
+		minor=0
+		patch=0
+		;;
+esac
+
+NEW_VERSION="v${major}.${minor}.${patch}"
 
 echo -e "${YELLOW}Current version:${NC} $CURRENT_VERSION"
 echo -e "${GREEN}New version:    ${NC} $NEW_VERSION"
@@ -132,7 +154,7 @@ echo -e "${GREEN}✓ Creating release...${NC}"
 
 # Update version in package.json without creating git commit/tag
 # (we'll do that manually to have more control)
-npm version "$VERSION_TYPE" --no-git-tag-version
+npm version "$VERSION_TYPE" --no-git-tag-version > /dev/null 2>&1
 
 # Create git commit and tag manually
 git add package.json package-lock.json

@@ -3,15 +3,88 @@ package cmd
 import (
 	"fmt"
 
-	operator "github.com/kubeasy-dev/challenge-operator/api/v1alpha1"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/api"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/kube"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/ui"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
+
+// ValidationType represents a Kubeasy validation CRD type
+type ValidationType struct {
+	Name     string
+	Resource string
+	GVR      schema.GroupVersionResource
+}
+
+// All supported validation types
+var validationTypes = []ValidationType{
+	{
+		Name:     "Log Validation",
+		Resource: "logvalidations",
+		GVR: schema.GroupVersionResource{
+			Group:    "challenge.kubeasy.dev",
+			Version:  "v1alpha1",
+			Resource: "logvalidations",
+		},
+	},
+	{
+		Name:     "Status Validation",
+		Resource: "statusvalidations",
+		GVR: schema.GroupVersionResource{
+			Group:    "challenge.kubeasy.dev",
+			Version:  "v1alpha1",
+			Resource: "statusvalidations",
+		},
+	},
+	{
+		Name:     "Event Validation",
+		Resource: "eventvalidations",
+		GVR: schema.GroupVersionResource{
+			Group:    "challenge.kubeasy.dev",
+			Version:  "v1alpha1",
+			Resource: "eventvalidations",
+		},
+	},
+	{
+		Name:     "Metrics Validation",
+		Resource: "metricsvalidations",
+		GVR: schema.GroupVersionResource{
+			Group:    "challenge.kubeasy.dev",
+			Version:  "v1alpha1",
+			Resource: "metricsvalidations",
+		},
+	},
+	{
+		Name:     "RBAC Validation",
+		Resource: "rbacvalidations",
+		GVR: schema.GroupVersionResource{
+			Group:    "challenge.kubeasy.dev",
+			Version:  "v1alpha1",
+			Resource: "rbacvalidations",
+		},
+	},
+	{
+		Name:     "Connectivity Validation",
+		Resource: "connectivityvalidations",
+		GVR: schema.GroupVersionResource{
+			Group:    "challenge.kubeasy.dev",
+			Version:  "v1alpha1",
+			Resource: "connectivityvalidations",
+		},
+	},
+}
+
+// ValidationResult holds the result of a single validation instance
+type ValidationResult struct {
+	Name       string
+	Type       string
+	AllPassed  bool
+	Details    []string
+	RawStatus  map[string]interface{}
+}
 
 var submitCmd = &cobra.Command{
 	Use:   "submit [challenge-slug]",
@@ -65,148 +138,65 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 			return fmt.Errorf("failed to get Kubernetes client: %w", err)
 		}
 
-		svGVR := schema.GroupVersionResource{
-			Group:    "challenge.kubeasy.dev",
-			Version:  "v1alpha1",
-			Resource: "staticvalidations",
-		}
-
-		dvGVR := schema.GroupVersionResource{
-			Group:    "challenge.kubeasy.dev",
-			Version:  "v1alpha1",
-			Resource: "dynamicvalidations",
-		}
-
 		namespace := challengeSlug
 
-		// Fetch validations
+		// Fetch validations for all types
 		ui.Info("Reading validation results...")
 
-		svListUnstructured, err := dynamicClient.Resource(svGVR).Namespace(namespace).List(cmd.Context(), metav1.ListOptions{})
-		if err != nil {
-			ui.Error(fmt.Sprintf("Failed to list StaticValidations in namespace %s", namespace))
-			return fmt.Errorf("failed to list StaticValidations in namespace %s: %w", namespace, err)
+		var allResults []ValidationResult
+		allPassed := true
+		foundValidations := false
+
+		// Iterate through all validation types
+		for _, valType := range validationTypes {
+			results, err := fetchValidationsOfType(cmd.Context(), dynamicClient, namespace, valType)
+			if err != nil {
+				ui.Warning(fmt.Sprintf("Failed to list %s: %v", valType.Name, err))
+				continue
+			}
+
+			if len(results) > 0 {
+				foundValidations = true
+				allResults = append(allResults, results...)
+
+				// Display results for this type
+				ui.Println()
+				ui.Section(valType.Name)
+				for _, result := range results {
+					ui.ValidationResult(result.Name, result.AllPassed, result.Details)
+					if !result.AllPassed {
+						allPassed = false
+					}
+				}
+			}
 		}
 
-		if len(svListUnstructured.Items) == 0 {
-			ui.Warning("No StaticValidations found")
+		if !foundValidations {
+			ui.Warning("No validations found")
 			ui.Info("Cannot verify submission without validation resources")
 			return nil
 		}
 
-		allStaticSucceeded := true
-		allDynamicSucceeded := true
-		detailedStatuses := map[string]interface{}{
-			"staticValidations":  map[string][]operator.StaticValidationStatus{},
-			"dynamicValidations": map[string][]operator.DynamicValidationStatus{},
-		}
-
-		ui.Println()
-		ui.Section("Static Validations")
-
-		// Process static validations
-		for _, svUnstructured := range svListUnstructured.Items {
-			var sv operator.StaticValidation
-			err = runtime.DefaultUnstructuredConverter.FromUnstructured(svUnstructured.Object, &sv)
-			if err != nil {
-				ui.Error("Failed to convert StaticValidation")
-				return fmt.Errorf("failed to convert StaticValidation: %w", err)
-			}
-
-			staticStatuses := detailedStatuses["staticValidations"].(map[string][]operator.StaticValidationStatus)
-			staticStatuses[svUnstructured.GetName()] = []operator.StaticValidationStatus{sv.Status}
-
-			// Display validation result
-			validationDetails := []string{}
-			for _, resource := range sv.Status.Resources {
-				for _, ruleResult := range resource.RuleResults {
-					detail := fmt.Sprintf("%s: %s", ruleResult.Rule, ruleResult.Status)
-					if ruleResult.Message != "" {
-						detail += fmt.Sprintf(" - %s", ruleResult.Message)
-					}
-					validationDetails = append(validationDetails, detail)
-				}
-			}
-
-			ui.ValidationResult(svUnstructured.GetName(), sv.Status.AllPassed, validationDetails)
-
-			if !sv.Status.AllPassed {
-				allStaticSucceeded = false
-			}
-		}
-
-		ui.Println()
-		ui.Section("Dynamic Validations")
-
-		// Process dynamic validations
-		dvListUnstructured, err := dynamicClient.Resource(dvGVR).Namespace(namespace).List(cmd.Context(), metav1.ListOptions{})
-		hasDynamicValidations := false
-		if err != nil {
-			ui.Warning("Failed to list DynamicValidations")
-			allDynamicSucceeded = false
-		} else {
-			if len(dvListUnstructured.Items) > 0 {
-				hasDynamicValidations = true
-				for _, dvUnstructured := range dvListUnstructured.Items {
-					var dv operator.DynamicValidation
-					err = runtime.DefaultUnstructuredConverter.FromUnstructured(dvUnstructured.Object, &dv)
-					if err != nil {
-						ui.Warning("Failed to convert DynamicValidation")
-						allDynamicSucceeded = false
-						continue
-					}
-
-					dynamicStatuses := detailedStatuses["dynamicValidations"].(map[string][]operator.DynamicValidationStatus)
-					dynamicStatuses[dvUnstructured.GetName()] = []operator.DynamicValidationStatus{dv.Status}
-
-					// Display validation result
-					validationDetails := []string{}
-					for _, resource := range dv.Status.Resources {
-						for _, checkResult := range resource.CheckResults {
-							detail := fmt.Sprintf("%s: %s", checkResult.Kind, checkResult.Status)
-							if checkResult.Message != "" {
-								detail += fmt.Sprintf(" - %s", checkResult.Message)
-							}
-							validationDetails = append(validationDetails, detail)
-						}
-					}
-
-					ui.ValidationResult(dvUnstructured.GetName(), dv.Status.AllPassed, validationDetails)
-
-					if !dv.Status.AllPassed {
-						allDynamicSucceeded = false
-					}
-				}
-			} else {
-				ui.Info("No dynamic validations defined for this challenge")
-			}
-		}
+		// Build validation results payload
+		validations := buildValidationPayload(allResults)
 
 		// Display overall result
 		ui.Println()
 		ui.Section("Submission Result")
 
-		if allStaticSucceeded && allDynamicSucceeded {
+		if allPassed {
 			ui.Success("All validations passed!")
 			ui.Info("Sending results to server...")
-			err = api.SendSubmit(challengeSlug, true, hasDynamicValidations && allDynamicSucceeded, detailedStatuses)
+			err = api.SendSubmit(challengeSlug, validations)
 			if err == nil {
 				ui.Println()
 				ui.Success(fmt.Sprintf("Congratulations! Challenge '%s' completed!", challengeSlug))
 				ui.Info("You can clean up with 'kubeasy challenge clean " + challengeSlug + "'")
 			}
-		} else if allStaticSucceeded && !allDynamicSucceeded {
-			ui.Success("Static validations passed")
-			ui.Error("Some dynamic validations failed")
-			err = api.SendSubmit(challengeSlug, true, false, detailedStatuses)
-		} else if !allStaticSucceeded && allDynamicSucceeded {
-			ui.Error("Some static validations failed")
-			ui.Success("Dynamic validations passed")
-			err = api.SendSubmit(challengeSlug, false, hasDynamicValidations && allDynamicSucceeded, detailedStatuses)
 		} else {
 			ui.Error("Some validations failed")
 			ui.Info("Review the results above and try again")
-			err = api.SendSubmit(challengeSlug, false, false, detailedStatuses)
+			err = api.SendSubmit(challengeSlug, validations)
 		}
 
 		if err != nil {
@@ -216,6 +206,127 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 
 		return nil
 	},
+}
+
+// fetchValidationsOfType fetches all validation resources of a specific type
+func fetchValidationsOfType(ctx interface{}, dynamicClient interface{}, namespace string, valType ValidationType) ([]ValidationResult, error) {
+	// Type assertion for context and client
+	listUnstructured, err := dynamicClient.(interface {
+		Resource(resource schema.GroupVersionResource) interface {
+			Namespace(namespace string) interface {
+				List(ctx interface{}, opts metav1.ListOptions) (*unstructured.UnstructuredList, error)
+			}
+		}
+	}).Resource(valType.GVR).Namespace(namespace).List(ctx, metav1.ListOptions{})
+
+	if err != nil {
+		return nil, err
+	}
+
+	var results []ValidationResult
+	for _, item := range listUnstructured.Items {
+		result := parseValidationResult(item, valType)
+		results = append(results, result)
+	}
+
+	return results, nil
+}
+
+// parseValidationResult extracts validation result from unstructured resource
+func parseValidationResult(obj unstructured.Unstructured, valType ValidationType) ValidationResult {
+	result := ValidationResult{
+		Name:    obj.GetName(),
+		Type:    valType.Resource,
+		Details: []string{},
+	}
+
+	// Extract status
+	status, found, err := unstructured.NestedMap(obj.Object, "status")
+	if !found || err != nil {
+		result.AllPassed = false
+		result.Details = append(result.Details, "Status not found or invalid")
+		return result
+	}
+
+	result.RawStatus = status
+
+	// Extract allPassed field
+	allPassed, found, err := unstructured.NestedBool(status, "allPassed")
+	if found && err == nil {
+		result.AllPassed = allPassed
+	}
+
+	// Extract error message if present
+	errorMsg, found, err := unstructured.NestedString(status, "error")
+	if found && err == nil && errorMsg != "" {
+		result.Details = append(result.Details, fmt.Sprintf("Error: %s", errorMsg))
+	}
+
+	// Build details from status
+	result.Details = append(result.Details, buildDetailsFromStatus(status, valType)...)
+
+	return result
+}
+
+// buildDetailsFromStatus extracts detailed information from status
+func buildDetailsFromStatus(status map[string]interface{}, valType ValidationType) []string {
+	var details []string
+
+	// Extract resources array if present
+	resources, found, err := unstructured.NestedSlice(status, "resources")
+	if !found || err != nil {
+		return details
+	}
+
+	// Limit details to avoid overwhelming output
+	maxDetails := 5
+	count := 0
+
+	for _, resource := range resources {
+		if count >= maxDetails {
+			remaining := len(resources) - count
+			details = append(details, fmt.Sprintf("... and %d more", remaining))
+			break
+		}
+
+		resourceMap, ok := resource.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Extract message if present
+		message, found, err := unstructured.NestedString(resourceMap, "message")
+		if found && err == nil && message != "" {
+			details = append(details, message)
+			count++
+		}
+	}
+
+	return details
+}
+
+// buildValidationPayload creates the payload structure for the API
+func buildValidationPayload(results []ValidationResult) map[string]interface{} {
+	payload := make(map[string]interface{})
+
+	// Group results by validation type
+	for _, result := range results {
+		typeKey := result.Type
+		if _, exists := payload[typeKey]; !exists {
+			payload[typeKey] = []map[string]interface{}{}
+		}
+
+		resultMap := map[string]interface{}{
+			"name":      result.Name,
+			"passed":    result.AllPassed,
+			"details":   result.Details,
+			"rawStatus": result.RawStatus,
+		}
+
+		payload[typeKey] = append(payload[typeKey].([]map[string]interface{}), resultMap)
+	}
+
+	return payload
 }
 
 func init() {

@@ -11,11 +11,11 @@ var GithubRootURL = "https://github.com/kubeasy-dev"
 
 var ExercisesRepoURL = GithubRootURL + "/challenges"
 
-var ExercicesRepoBranch = "main"
+var ExercicesRepoBranch = "feat/specialized-validations"
 
 var CliSetupAppsURL = GithubRootURL + "/cli-setup"
 
-var CliSetupAppsBranch = "main"
+var CliSetupAppsBranch = "feat/specialized-validations"
 
 var Version = "dev"
 

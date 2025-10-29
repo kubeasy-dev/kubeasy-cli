@@ -79,11 +79,11 @@ var validationTypes = []ValidationType{
 
 // ValidationResult holds the result of a single validation instance
 type ValidationResult struct {
-	Name       string
-	Type       string
-	AllPassed  bool
-	Details    []string
-	RawStatus  map[string]interface{}
+	Name      string
+	Type      string
+	AllPassed bool
+	Details   []string
+	RawStatus map[string]interface{}
 }
 
 var submitCmd = &cobra.Command{

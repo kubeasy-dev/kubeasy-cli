@@ -61,7 +61,7 @@ go run main.go --debug [command]
   - `login.go` - Stores API key in system keyring (uses `zalando/go-keyring`)
   - `challenge` (parent command in `challenge.go`):
     - `start.go` - Deploys challenge via ArgoCD, creates namespace, tracks progress
-    - `submit.go` - Validates solutions via operator CRDs (StaticValidation, DynamicValidation)
+    - `submit.go` - Validates solutions by fetching all 6 validation CRD types and submitting results
     - `reset.go` - Deletes resources and resets progress in backend
     - `clean.go` - Removes challenge resources without resetting backend
     - `get.go` - Displays challenge details
@@ -71,7 +71,7 @@ go run main.go --debug [command]
 
 #### `pkg/api/api.go`
 
-- Communicates with Supabase backend
+- Communicates with backend API (Next.js + tRPC)
 - Authentication via JWT tokens stored in keyring
 - Key functions:
   - `createSupabaseClient()` - Retrieves token from keyring
@@ -79,7 +79,10 @@ go run main.go --debug [command]
   - `GetChallenge(slug)` - Fetches challenge metadata
   - `GetChallengeProgress(slug)` - Checks user's progress
   - `StartChallenge(slug)` - Creates progress record
-  - `SendSubmit(challengeID, ...)` - Submits validation results
+  - `SendSubmit(challengeSlug, validations)` - Submits validation results with new structure
+    - Accepts `validations map[string]interface{}` containing all validation types
+    - Automatically determines if all validations passed
+    - Sends structured payload: `{validated: bool, validations: {...}}`
   - `GetProfile()` - Fetches user profile information
 
 #### `pkg/argocd/`
@@ -129,10 +132,26 @@ go run main.go --debug [command]
 
 #### Validation System
 
-- Challenge operator creates CRDs in challenge namespace:
-  - `StaticValidation` (v1alpha1) - Static resource checks
-  - `DynamicValidation` (v1alpha1) - Dynamic behavior checks
-- `submit` command reads CRD statuses and reports results
+The CLI works with the challenge operator which creates specialized validation CRDs in the challenge namespace:
+
+**Validation Types (all v1alpha1)**:
+- `LogValidation` - Validates container logs contain expected strings
+- `StatusValidation` - Checks resource status conditions (e.g., Pod Ready, Deployment Available)
+- `EventValidation` - Detects forbidden Kubernetes events (e.g., BackOff, Evicted)
+- `MetricsValidation` - Validates pod/deployment metrics (restartCount, replicas, etc.)
+- `RBACValidation` - Verifies ServiceAccount permissions using SubjectAccessReview
+- `ConnectivityValidation` - Tests network connectivity between pods via curl
+
+**Submit Flow**:
+1. `submit` command discovers all validation CRDs in the challenge namespace
+2. For each validation type, reads status and collects results
+3. Builds structured payload: `{logvalidations: [{name, passed, details, rawStatus}], statusvalidations: [...], ...}`
+4. Sends to backend API with `validated: bool` (true if all validations passed)
+5. Backend stores individual validation results in database for progress tracking
+
+**Legacy Compatibility**:
+- Old `StaticValidation` and `DynamicValidation` CRDs have been removed
+- Backend still accepts legacy fields for backward compatibility but prioritizes new structure
 
 ## Important Implementation Details
 

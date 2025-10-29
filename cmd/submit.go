@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/api"
@@ -10,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 )
 
 // ValidationType represents a Kubeasy validation CRD type
@@ -209,15 +211,9 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 }
 
 // fetchValidationsOfType fetches all validation resources of a specific type
-func fetchValidationsOfType(ctx interface{}, dynamicClient interface{}, namespace string, valType ValidationType) ([]ValidationResult, error) {
-	// Type assertion for context and client
-	listUnstructured, err := dynamicClient.(interface {
-		Resource(resource schema.GroupVersionResource) interface {
-			Namespace(namespace string) interface {
-				List(ctx interface{}, opts metav1.ListOptions) (*unstructured.UnstructuredList, error)
-			}
-		}
-	}).Resource(valType.GVR).Namespace(namespace).List(ctx, metav1.ListOptions{})
+func fetchValidationsOfType(ctx context.Context, dynamicClient dynamic.Interface, namespace string, valType ValidationType) ([]ValidationResult, error) {
+	// List the resources
+	listUnstructured, err := dynamicClient.Resource(valType.GVR).Namespace(namespace).List(ctx, metav1.ListOptions{})
 
 	if err != nil {
 		return nil, err

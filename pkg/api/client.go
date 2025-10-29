@@ -221,9 +221,25 @@ func GetChallengeProgress(slug string) (*ChallengeStatusResponse, error) {
 // SendSubmit submits a challenge with validation results (backward compatibility wrapper)
 // This function wraps SubmitChallenge to maintain compatibility with old code that uses challenge ID
 func SendSubmit(challengeSlug string, staticValidation bool, dynamicValidation bool, payload interface{}) error {
-	// Create request object
+	// Determine if challenge has dynamic validations by checking payload
+	payloadMap, ok := payload.(map[string]interface{})
+	hasDynamicValidations := false
+	if ok {
+		if dvs, exists := payloadMap["dynamicValidations"]; exists {
+			if dvsMap, ok := dvs.(map[string]interface{}); ok && len(dvsMap) > 0 {
+				hasDynamicValidations = true
+			}
+		}
+	}
+
+	// Calculate validated: for challenges without dynamic validations, only static is required
+	validated := staticValidation
+	if hasDynamicValidations {
+		validated = staticValidation && dynamicValidation
+	}
+
 	req := ChallengeSubmitRequest{
-		Validated:         staticValidation && dynamicValidation,
+		Validated:         validated,
 		StaticValidation:  &staticValidation,
 		DynamicValidation: &dynamicValidation,
 		Payload:           payload,

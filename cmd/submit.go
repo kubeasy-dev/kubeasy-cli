@@ -140,11 +140,13 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 
 		// Process dynamic validations
 		dvListUnstructured, err := dynamicClient.Resource(dvGVR).Namespace(namespace).List(cmd.Context(), metav1.ListOptions{})
+		hasDynamicValidations := false
 		if err != nil {
 			ui.Warning("Failed to list DynamicValidations")
 			allDynamicSucceeded = false
 		} else {
 			if len(dvListUnstructured.Items) > 0 {
+				hasDynamicValidations = true
 				for _, dvUnstructured := range dvListUnstructured.Items {
 					var dv operator.DynamicValidation
 					err = runtime.DefaultUnstructuredConverter.FromUnstructured(dvUnstructured.Object, &dv)
@@ -187,7 +189,7 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 		if allStaticSucceeded && allDynamicSucceeded {
 			ui.Success("All validations passed!")
 			ui.Info("Sending results to server...")
-			err = api.SendSubmit(challengeSlug, true, true, detailedStatuses)
+			err = api.SendSubmit(challengeSlug, true, hasDynamicValidations && allDynamicSucceeded, detailedStatuses)
 			if err == nil {
 				ui.Println()
 				ui.Success(fmt.Sprintf("Congratulations! Challenge '%s' completed!", challengeSlug))
@@ -200,7 +202,7 @@ and send it to the Kubeasy API for evaluation. Make sure you have completed the 
 		} else if !allStaticSucceeded && allDynamicSucceeded {
 			ui.Error("Some static validations failed")
 			ui.Success("Dynamic validations passed")
-			err = api.SendSubmit(challengeSlug, false, true, detailedStatuses)
+			err = api.SendSubmit(challengeSlug, false, hasDynamicValidations && allDynamicSucceeded, detailedStatuses)
 		} else {
 			ui.Error("Some validations failed")
 			ui.Info("Review the results above and try again")

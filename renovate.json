@@ -21,9 +21,9 @@
       "description": "Group all GitHub Actions non-major updates (including digests)",
       "matchManagers": ["github-actions"],
       "matchUpdateTypes": ["minor", "patch", "digest"],
-      "excludePackageNames": ["go"],
+      "matchPackageNames": ["!go"],
       "groupName": "GitHub Actions non-major dependencies",
-      "groupSlug": "github-actions-non-major",      
+      "groupSlug": "github-actions-non-major",
       "automerge": true
     },
     {

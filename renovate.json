@@ -11,33 +11,57 @@
   "packageRules": [
     {
       "description": "Keep Go version in sync between go.mod and GitHub Actions workflows",
-      "matchDatasources": ["golang-version"],
-      "matchPackageNames": ["go"],
+      "matchDatasources": [
+        "golang-version"
+      ],
+      "matchPackageNames": [
+        "go"
+      ],
       "groupName": "Go version",
       "groupSlug": "go-version",
       "automerge": false
     },
     {
       "description": "Group all GitHub Actions non-major updates (including digests)",
-      "matchManagers": ["github-actions"],
-      "matchUpdateTypes": ["minor", "patch", "digest"],
-      "excludePackageNames": ["go"],
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest"
+      ],
       "groupName": "GitHub Actions non-major dependencies",
-      "groupSlug": "github-actions-non-major",      
-      "automerge": true
+      "groupSlug": "github-actions-non-major",
+      "automerge": true,
+      "matchPackageNames": [
+        "!go"
+      ]
     },
     {
       "description": "Group Go modules non-major updates",
-      "matchManagers": ["gomod"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "groupName": "Go non-major dependencies",
       "groupSlug": "go-non-major",
       "automerge": true
     },
     {
       "description": "Group npm updates",
-      "matchManagers": ["npm"],
-      "matchUpdateTypes": ["major", "minor", "patch", "digest"],
+      "matchManagers": [
+        "npm"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor",
+        "patch",
+        "digest"
+      ],
       "groupName": "npm dependencies",
       "groupSlug": "npm",
       "automerge": true

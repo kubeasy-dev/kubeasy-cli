@@ -121,7 +121,7 @@ func splitToInt3(v string) [3]int {
 			}
 			n = n*10 + int(ch-'0')
 		}
-		out[i] = n
+		out[i] = n // #nosec G602 - i is bounded by loop condition i < 3
 	}
 	return out
 }

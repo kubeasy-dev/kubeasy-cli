@@ -12,7 +12,7 @@
     {
       "description": "Keep Go version in sync between go.mod and GitHub Actions workflows",
       "matchDatasources": ["golang-version"],
-      "matchPackageNames": ["go"],
+      "matchPackageNames": ["golang"],
       "groupName": "Go version",
       "groupSlug": "go-version",
       "automerge": false
@@ -21,7 +21,7 @@
       "description": "Group all GitHub Actions non-major updates (including digests)",
       "matchManagers": ["github-actions"],
       "matchUpdateTypes": ["minor", "patch", "digest"],
-      "matchPackageNames": ["!go"],
+      "matchPackageNames": ["!golang"],
       "groupName": "GitHub Actions non-major dependencies",
       "groupSlug": "github-actions-non-major",
       "automerge": true

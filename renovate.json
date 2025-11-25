@@ -10,9 +10,8 @@
   ],
   "packageRules": [
     {
-      "description": "Keep Go version in sync between go.mod and GitHub Actions workflows",
-      "matchDatasources": ["golang-version"],
-      "matchPackageNames": ["golang"],
+      "description": "Keep Go version in sync between all files",
+      "matchPackageNames": ["golang", "go"],
       "groupName": "Go version",
       "groupSlug": "go-version",
       "automerge": false

@@ -12,6 +12,7 @@ kubeasy-cli
 
 # Test coverage
 coverage.out
+coverage-*.out
 coverage.html
 
 # IDE

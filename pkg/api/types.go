@@ -38,8 +38,8 @@ type ChallengeStartResponse struct {
 // ObjectiveResult represents the raw validation result from a CRD
 // This is the simplified payload sent by the CLI - no processing, just CRD status
 type ObjectiveResult struct {
-	ObjectiveKey string  `json:"objectiveKey"` // CRD metadata.name (e.g., "pod-ready-check")
-	Passed       bool    `json:"passed"`       // CRD status.allPassed
+	ObjectiveKey string  `json:"objectiveKey"`      // CRD metadata.name (e.g., "pod-ready-check")
+	Passed       bool    `json:"passed"`            // CRD status.allPassed
 	Message      *string `json:"message,omitempty"` // CRD status message or error
 }
 

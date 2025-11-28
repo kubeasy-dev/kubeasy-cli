@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -13,6 +14,15 @@ import (
 const (
 	// ChallengesRepoBaseURL is the base URL for the challenges repository
 	ChallengesRepoBaseURL = "https://raw.githubusercontent.com/kubeasy-dev/challenges/main"
+
+	// DefaultLogSinceSeconds is the default time window for log searches (5 minutes)
+	DefaultLogSinceSeconds = 300
+
+	// DefaultEventSinceSeconds is the default time window for event searches (5 minutes)
+	DefaultEventSinceSeconds = 300
+
+	// DefaultConnectivityTimeoutSeconds is the default timeout for connectivity checks
+	DefaultConnectivityTimeoutSeconds = 5
 )
 
 // LoadFromFile loads validations from a local file
@@ -41,10 +51,15 @@ func FindLocalChallengeFile(slug string) string {
 	return ""
 }
 
-// LoadFromURL loads validations from a remote URL
-// This function only fetches from the known challenges repository base URL
-func LoadFromURL(url string) (*ValidationConfig, error) {
-	resp, err := http.Get(url) //nolint:gosec // URL is constructed from trusted ChallengesRepoBaseURL
+// loadFromURL loads validations from a remote URL (internal use only)
+// URL must be from ChallengesRepoBaseURL for security
+func loadFromURL(url string) (*ValidationConfig, error) {
+	// Validate URL starts with trusted base URL
+	if !strings.HasPrefix(url, ChallengesRepoBaseURL) {
+		return nil, fmt.Errorf("invalid URL: must be from %s", ChallengesRepoBaseURL)
+	}
+
+	resp, err := http.Get(url) //nolint:gosec // URL validated against ChallengesRepoBaseURL
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch validations: %w", err)
 	}
@@ -72,7 +87,7 @@ func LoadForChallenge(slug string) (*ValidationConfig, error) {
 
 	// Fall back to GitHub
 	url := fmt.Sprintf("%s/%s/challenge.yaml", ChallengesRepoBaseURL, slug)
-	return LoadFromURL(url)
+	return loadFromURL(url)
 }
 
 // Parse parses validation config from YAML data
@@ -110,6 +125,9 @@ func parseSpec(v *Validation) error {
 		if err := yaml.Unmarshal(specYAML, &spec); err != nil {
 			return err
 		}
+		if err := validateTarget(spec.Target); err != nil {
+			return err
+		}
 		v.Spec = spec
 
 	case TypeLog:
@@ -117,9 +135,12 @@ func parseSpec(v *Validation) error {
 		if err := yaml.Unmarshal(specYAML, &spec); err != nil {
 			return err
 		}
-		// Default sinceSeconds to 300 (5 minutes)
+		if err := validateTarget(spec.Target); err != nil {
+			return err
+		}
+		// Apply default sinceSeconds if not specified
 		if spec.SinceSeconds == 0 {
-			spec.SinceSeconds = 300
+			spec.SinceSeconds = DefaultLogSinceSeconds
 		}
 		v.Spec = spec
 
@@ -128,15 +149,21 @@ func parseSpec(v *Validation) error {
 		if err := yaml.Unmarshal(specYAML, &spec); err != nil {
 			return err
 		}
-		// Default sinceSeconds to 300 (5 minutes)
+		if err := validateTarget(spec.Target); err != nil {
+			return err
+		}
+		// Apply default sinceSeconds if not specified
 		if spec.SinceSeconds == 0 {
-			spec.SinceSeconds = 300
+			spec.SinceSeconds = DefaultEventSinceSeconds
 		}
 		v.Spec = spec
 
 	case TypeMetrics:
 		var spec MetricsSpec
 		if err := yaml.Unmarshal(specYAML, &spec); err != nil {
+			return err
+		}
+		if err := validateTarget(spec.Target); err != nil {
 			return err
 		}
 		v.Spec = spec
@@ -146,10 +173,13 @@ func parseSpec(v *Validation) error {
 		if err := yaml.Unmarshal(specYAML, &spec); err != nil {
 			return err
 		}
-		// Default timeout
+		if err := validateSourcePod(spec.SourcePod); err != nil {
+			return err
+		}
+		// Apply default timeout to connectivity targets if not specified
 		for i := range spec.Targets {
 			if spec.Targets[i].TimeoutSeconds == 0 {
-				spec.Targets[i].TimeoutSeconds = 5
+				spec.Targets[i].TimeoutSeconds = DefaultConnectivityTimeoutSeconds
 			}
 		}
 		v.Spec = spec
@@ -158,5 +188,21 @@ func parseSpec(v *Validation) error {
 		return fmt.Errorf("unknown validation type: %s", v.Type)
 	}
 
+	return nil
+}
+
+// validateTarget checks if a target has at least name or labelSelector
+func validateTarget(target Target) error {
+	if target.Name == "" && len(target.LabelSelector) == 0 {
+		return fmt.Errorf("target must specify either name or labelSelector")
+	}
+	return nil
+}
+
+// validateSourcePod checks if a source pod has at least name or labelSelector
+func validateSourcePod(sourcePod SourcePod) error {
+	if sourcePod.Name == "" && len(sourcePod.LabelSelector) == 0 {
+		return fmt.Errorf("sourcePod must specify either name or labelSelector")
+	}
 	return nil
 }

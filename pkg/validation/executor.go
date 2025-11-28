@@ -22,8 +22,17 @@ import (
 )
 
 const (
-	errNoMatchingPods       = "No matching pods found"
-	errNoMatchingSourcePods = "No matching source pods found"
+	errNoMatchingPods          = "No matching pods found"
+	errNoMatchingSourcePods    = "No matching source pods found"
+	errNoRunningSourcePods     = "No running source pods found"
+	errNoSourcePodSpecified    = "No source pod specified"
+	errNoMatchingResources     = "No matching resources found"
+	errNoTargetSpecified       = "No target name or labelSelector specified"
+	errAllMetricsChecksPassed  = "All metric checks passed"
+	errAllConnectivityPassed   = "All connectivity checks passed"
+	errAllConditionsMet        = "All %d pod(s) meet the required conditions"
+	errFoundAllExpectedStrings = "Found all expected strings in logs"
+	errNoForbiddenEvents       = "No forbidden events found"
 )
 
 // Executor executes validations against a Kubernetes cluster
@@ -125,7 +134,7 @@ func (e *Executor) executeStatus(ctx context.Context, spec StatusSpec) (bool, st
 	}
 
 	if allPassed {
-		return true, fmt.Sprintf("All %d pod(s) meet the required conditions", len(pods)), nil
+		return true, fmt.Sprintf(errAllConditionsMet, len(pods)), nil
 	}
 	return false, strings.Join(messages, "; "), nil
 }
@@ -145,6 +154,7 @@ func (e *Executor) executeLog(ctx context.Context, spec LogSpec) (bool, string, 
 
 	sinceSeconds := int64(spec.SinceSeconds)
 	var missingStrings []string
+	var logErrors []string
 
 	for _, expected := range spec.ExpectedStrings {
 		found := false
@@ -162,7 +172,9 @@ func (e *Executor) executeLog(ctx context.Context, spec LogSpec) (bool, string, 
 			req := e.clientset.CoreV1().Pods(e.namespace).GetLogs(pod.Name, opts)
 			logs, err := req.Do(ctx).Raw()
 			if err != nil {
-				logger.Debug("Failed to get logs for pod %s: %v", pod.Name, err)
+				errMsg := fmt.Sprintf("pod %s: %v", pod.Name, err)
+				logger.Debug("Failed to get logs for %s", errMsg)
+				logErrors = append(logErrors, errMsg)
 				continue
 			}
 
@@ -178,7 +190,12 @@ func (e *Executor) executeLog(ctx context.Context, spec LogSpec) (bool, string, 
 	}
 
 	if len(missingStrings) == 0 {
-		return true, "Found all expected strings in logs", nil
+		return true, errFoundAllExpectedStrings, nil
+	}
+
+	// Include log errors in the failure message if present
+	if len(logErrors) > 0 {
+		return false, fmt.Sprintf("Missing strings in logs: %v (errors fetching logs: %s)", missingStrings, strings.Join(logErrors, "; ")), nil
 	}
 	return false, fmt.Sprintf("Missing strings in logs: %v", missingStrings), nil
 }
@@ -231,7 +248,7 @@ func (e *Executor) executeEvent(ctx context.Context, spec EventSpec) (bool, stri
 	}
 
 	if len(forbiddenFound) == 0 {
-		return true, "No forbidden events found", nil
+		return true, errNoForbiddenEvents, nil
 	}
 	return false, fmt.Sprintf("Forbidden events detected: %v", forbiddenFound), nil
 }
@@ -241,9 +258,12 @@ func (e *Executor) executeMetrics(ctx context.Context, spec MetricsSpec) (bool, 
 	logger.Debug("Executing metrics validation for %s", spec.Target.Kind)
 
 	// Get the resource
-	gvr := getGVRForKind(spec.Target.Kind)
+	gvr, err := getGVRForKind(spec.Target.Kind)
+	if err != nil {
+		return false, "", err
+	}
+
 	var obj *unstructured.Unstructured
-	var err error
 
 	switch {
 	case spec.Target.Name != "":
@@ -256,12 +276,12 @@ func (e *Executor) executeMetrics(ctx context.Context, spec MetricsSpec) (bool, 
 			return false, "", listErr
 		}
 		if len(list.Items) == 0 {
-			return false, "No matching resources found", nil
+			return false, errNoMatchingResources, nil
 		}
 		obj = &list.Items[0]
 		err = nil
 	default:
-		return false, "No target name or labelSelector specified", nil
+		return false, errNoTargetSpecified, nil
 	}
 
 	if err != nil {
@@ -288,7 +308,7 @@ func (e *Executor) executeMetrics(ctx context.Context, spec MetricsSpec) (bool, 
 	}
 
 	if allPassed {
-		return true, "All metric checks passed", nil
+		return true, errAllMetricsChecksPassed, nil
 	}
 	return false, strings.Join(messages, "; "), nil
 }
@@ -324,10 +344,10 @@ func (e *Executor) executeConnectivity(ctx context.Context, spec ConnectivitySpe
 			}
 		}
 		if sourcePod == nil {
-			return false, "No running source pods found", nil
+			return false, errNoRunningSourcePods, nil
 		}
 	default:
-		return false, "No source pod specified", nil
+		return false, errNoSourcePodSpecified, nil
 	}
 
 	allPassed := true
@@ -342,7 +362,7 @@ func (e *Executor) executeConnectivity(ctx context.Context, spec ConnectivitySpe
 	}
 
 	if allPassed {
-		return true, "All connectivity checks passed", nil
+		return true, errAllConnectivityPassed, nil
 	}
 	return false, strings.Join(messages, "; "), nil
 }
@@ -416,12 +436,15 @@ func (e *Executor) checkConnectivity(ctx context.Context, pod *corev1.Pod, targe
 	}
 
 	statusCode := strings.TrimSpace(stdout.String())
-	code, _ := strconv.Atoi(statusCode)
+	code, err := strconv.Atoi(statusCode)
+	if err != nil {
+		return false, fmt.Sprintf("Invalid response from %s: %s", target.URL, statusCode)
+	}
 
 	if code == target.ExpectedStatusCode {
 		return true, ""
 	}
-	return false, fmt.Sprintf("Connection to %s: got status %s, expected %d", target.URL, statusCode, target.ExpectedStatusCode)
+	return false, fmt.Sprintf("Connection to %s: got status %d, expected %d", target.URL, code, target.ExpectedStatusCode)
 }
 
 // getTargetPods returns pods matching the target specification
@@ -446,7 +469,10 @@ func (e *Executor) getTargetPods(ctx context.Context, target Target) ([]corev1.P
 
 // getPodsForResource returns pods owned by a higher-level resource
 func (e *Executor) getPodsForResource(ctx context.Context, target Target) ([]corev1.Pod, error) {
-	gvr := getGVRForKind(target.Kind)
+	gvr, err := getGVRForKind(target.Kind)
+	if err != nil {
+		return nil, err
+	}
 
 	var labelSelector string
 
@@ -475,24 +501,24 @@ func (e *Executor) getPodsForResource(ctx context.Context, target Target) ([]cor
 }
 
 // getGVRForKind returns the GroupVersionResource for a given kind
-func getGVRForKind(kind string) schema.GroupVersionResource {
+func getGVRForKind(kind string) (schema.GroupVersionResource, error) {
 	switch strings.ToLower(kind) {
 	case "deployment":
-		return schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
+		return schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}, nil
 	case "statefulset":
-		return schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "statefulsets"}
+		return schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "statefulsets"}, nil
 	case "daemonset":
-		return schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "daemonsets"}
+		return schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "daemonsets"}, nil
 	case "replicaset":
-		return schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "replicasets"}
+		return schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "replicasets"}, nil
 	case "job":
-		return schema.GroupVersionResource{Group: "batch", Version: "v1", Resource: "jobs"}
+		return schema.GroupVersionResource{Group: "batch", Version: "v1", Resource: "jobs"}, nil
 	case "pod":
-		return schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
+		return schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}, nil
 	case "service":
-		return schema.GroupVersionResource{Group: "", Version: "v1", Resource: "services"}
+		return schema.GroupVersionResource{Group: "", Version: "v1", Resource: "services"}, nil
 	default:
-		return schema.GroupVersionResource{Group: "", Version: "v1", Resource: strings.ToLower(kind) + "s"}
+		return schema.GroupVersionResource{}, fmt.Errorf("unsupported resource kind: %s", kind)
 	}
 }
 

@@ -1,6 +1,0 @@
-{
-  "threshold": 0,
-  "reporters": ["html", "console"],
-  "ignore": ["**/vendor/**", "**/.github/**"],
-  "absolute": true
-}

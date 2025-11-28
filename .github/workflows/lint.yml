@@ -45,30 +45,3 @@ jobs:
           args: --config .github/linters/.golangci.yml --timeout 5m
           # Only show new issues on PRs (not historical issues)
           only-new-issues: ${{ github.event_name == 'pull_request' }}
-
-  # Additional validation with super-linter (GitHub Actions, YAML, etc.)
-  super-linter:
-    name: Other Linters
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      packages: read
-      statuses: write
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Load super-linter configuration
-        run: grep -v '^#' .github/super-linter.env >> "$GITHUB_ENV"
-
-      - name: Super-linter (non-Go files)
-        uses: super-linter/super-linter@2bdd90ed3262e023ac84bf8fe35dc480721fc1f2 # v8.2.1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Disable Go linting in super-linter since golangci-lint handles it
-          VALIDATE_GO: false

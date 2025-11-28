@@ -218,28 +218,10 @@ func GetChallengeProgress(slug string) (*ChallengeStatusResponse, error) {
 	return GetChallengeStatus(slug)
 }
 
-// SendSubmit submits a challenge with validation results
-// Accepts validation results grouped by type and determines if all validations passed
-func SendSubmit(challengeSlug string, validations map[string]interface{}) error {
-	// Check if all validations passed
-	allPassed := true
-	for _, valList := range validations {
-		if valArray, ok := valList.([]map[string]interface{}); ok {
-			for _, val := range valArray {
-				if passed, ok := val["passed"].(bool); ok && !passed {
-					allPassed = false
-					break
-				}
-			}
-		}
-		if !allPassed {
-			break
-		}
-	}
-
+// SendSubmit submits a challenge with raw validation results from CRDs
+func SendSubmit(challengeSlug string, results []ObjectiveResult) error {
 	req := ChallengeSubmitRequest{
-		Validated: allPassed,
-		Payload:   validations,
+		Results: results,
 	}
 
 	// Submit the challenge

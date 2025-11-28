@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-`kubeasy-cli` is a command-line tool built with Go and Cobra that helps developers learn Kubernetes through practical challenges. It manages local Kind clusters, deploys challenges via ArgoCD, and validates solutions using a **CLI-based validation system** (as of v1.4.0).
+`kubeasy-cli` is a command-line tool built with Go and Cobra that helps developers learn Kubernetes through practical challenges. It manages local Kind clusters, deploys challenges via ArgoCD, and validates solutions using a **CLI-based validation system** (as of v2.0.0).
 
 ## Documentation
 
@@ -203,7 +203,7 @@ The CLI now uses a **self-contained validation executor** that loads validation 
 ### ArgoCD Integration
 
 - App-of-Apps pattern: `cli-setup` repository contains bootstrap manifests
-- Main bootstrap app: `kubeasy-cli-setup` (installs Kyverno, operator, ArgoCD itself)
+- Main bootstrap app: `kubeasy-cli-setup` (installs Kyverno and ArgoCD itself)
 - Challenge apps created in `argocd` namespace, deploy to challenge-specific namespaces
 
 ### Error Handling
@@ -214,7 +214,6 @@ The CLI now uses a **self-contained validation executor** that loads validation 
 
 ### Dependencies
 
-- **No operator dependency** - Validation system is self-contained in the CLI
 - CI workflows use standard Go tooling
 - Must run `go mod vendor` before linting or building in CI
 

@@ -4,7 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-`kubeasy-cli` is a command-line tool built with Go and Cobra that helps developers learn Kubernetes through practical challenges. It manages local Kind clusters, deploys challenges via ArgoCD, and validates solutions using a Kubernetes operator.
+`kubeasy-cli` is a command-line tool built with Go and Cobra that helps developers learn Kubernetes through practical challenges. It manages local Kind clusters, deploys challenges via ArgoCD, and validates solutions using a **CLI-based validation system** (as of v1.4.0).
+
+## Documentation
+
+Comprehensive documentation is available in the `docs/` folder:
+
+- **[docs/MIGRATION.md](docs/MIGRATION.md)** - Migration guide from operator-based to CLI-based validation system
+- **[docs/VALIDATION_EXAMPLES.md](docs/VALIDATION_EXAMPLES.md)** - Complete validation examples for all 5 validation types
+- **[PR_REVIEW_FIXES.md](PR_REVIEW_FIXES.md)** - Summary of all PR review fixes and decisions
+
+**Always refer to these documents** when working with the validation system, migrating challenges, or creating new validations.
 
 ## Build, Test, and Development Commands
 
@@ -79,11 +89,32 @@ go run main.go --debug [command]
   - `GetChallenge(slug)` - Fetches challenge metadata
   - `GetChallengeProgress(slug)` - Checks user's progress
   - `StartChallenge(slug)` - Creates progress record
-  - `SendSubmit(challengeSlug, validations)` - Submits validation results with new structure
-    - Accepts `validations map[string]interface{}` containing all validation types
-    - Automatically determines if all validations passed
-    - Sends structured payload: `{validated: bool, validations: {...}}`
+  - `SendSubmit(challengeSlug, results)` - Submits validation results
+    - Accepts `[]ObjectiveResult` with key, passed flag, and message
+    - Sends structured payload: `{results: [{objectiveKey, passed, message}, ...]}`
   - `GetProfile()` - Fetches user profile information
+
+#### `pkg/validation/`
+
+**New in v1.4.0** - CLI-based validation system
+
+- `loader.go` - Loads validation configs from challenge.yaml
+  - `LoadForChallenge(slug)` - Tries local file first, falls back to GitHub
+  - `loadFromURL(url)` - Private, validates URLs against trusted base
+  - `Parse(data)` - Parses YAML and validates specs
+  - Security: URL validation prevents injection attacks
+
+- `executor.go` - Executes validations against Kubernetes cluster
+  - `NewExecutor(clientset, dynamicClient, restConfig, namespace)` - Creates executor
+  - `ExecuteAll(ctx, validations)` - Runs all validations sequentially
+  - `Execute(ctx, validation)` - Routes to type-specific executors
+  - Type-specific methods: `executeStatus`, `executeLog`, `executeEvent`, `executeMetrics`, `executeConnectivity`
+
+- `types.go` - Type definitions for validation configs
+  - `ValidationConfig` - Top-level config with validations array
+  - `Validation` - Single validation with key, type, and spec
+  - Spec types: `StatusSpec`, `LogSpec`, `EventSpec`, `MetricsSpec`, `ConnectivitySpec`
+  - `Result` - Validation result with key, passed flag, and message
 
 #### `pkg/argocd/`
 
@@ -118,10 +149,10 @@ go run main.go --debug [command]
 
 #### Challenge Lifecycle
 
-1. **Setup**: `kubeasy setup` → Creates Kind cluster → Installs ArgoCD → Deploys operator/Kyverno
+1. **Setup**: `kubeasy setup` → Creates Kind cluster → Installs ArgoCD + Kyverno
 2. **Start**: `kubeasy challenge start <slug>` → Creates namespace → Deploys ArgoCD app → Tracks progress
 3. **Work**: User modifies cluster resources manually
-4. **Submit**: `kubeasy challenge submit <slug>` → Reads operator CRDs → Validates → Sends results to API
+4. **Submit**: `kubeasy challenge submit <slug>` → Loads validations from challenge.yaml → Executes checks → Sends results to API
 5. **Clean/Reset**: `kubeasy challenge clean/reset <slug>` → Deletes resources ± backend data
 
 #### Authentication Flow
@@ -130,28 +161,36 @@ go run main.go --debug [command]
 - Token reuse: If valid token exists, prompts to reuse with expiration info
 - All API calls retrieve token from keyring and include in Supabase client
 
-#### Validation System
+#### Validation System (CLI-Based, v1.4.0+)
 
-The CLI works with the challenge operator which creates specialized validation CRDs in the challenge namespace:
+The CLI now uses a **self-contained validation executor** that loads validation definitions from `challenge.yaml` and executes checks directly against the cluster. No operator or CRDs required.
 
-**Validation Types (all v1alpha1)**:
-- `LogValidation` - Validates container logs contain expected strings
-- `StatusValidation` - Checks resource status conditions (e.g., Pod Ready, Deployment Available)
-- `EventValidation` - Detects forbidden Kubernetes events (e.g., BackOff, Evicted)
-- `MetricsValidation` - Validates pod/deployment metrics (restartCount, replicas, etc.)
-- `RBACValidation` - Verifies ServiceAccount permissions using SubjectAccessReview
-- `ConnectivityValidation` - Tests network connectivity between pods via curl
+**For complete details, see [docs/VALIDATION_EXAMPLES.md](docs/VALIDATION_EXAMPLES.md)**
+
+**Supported Validation Types** (5 types):
+1. **status** - Checks Pod/Deployment conditions (e.g., Pod Ready, Deployment Available)
+2. **log** - Searches container logs for expected strings
+3. **event** - Detects forbidden Kubernetes events (OOMKilled, Evicted, BackOff)
+4. **metrics** - Validates numeric fields (replicas, restartCount, etc.)
+5. **connectivity** - Tests HTTP connectivity between pods
+
+**Key Components**:
+- **pkg/validation/loader.go** - Loads validations from challenge.yaml (local or GitHub)
+- **pkg/validation/executor.go** - Executes validations directly against cluster
+- **pkg/validation/types.go** - Type definitions for all validation specs
 
 **Submit Flow**:
-1. `submit` command discovers all validation CRDs in the challenge namespace
-2. For each validation type, reads status and collects results
-3. Builds structured payload: `{logvalidations: [{name, passed, details, rawStatus}], statusvalidations: [...], ...}`
-4. Sends to backend API with `validated: bool` (true if all validations passed)
-5. Backend stores individual validation results in database for progress tracking
+1. `submit` command loads validations from `challenge.yaml`
+2. Executor runs each validation against the cluster
+3. Builds results: `{results: [{objectiveKey, passed, message}, ...]}`
+4. Sends to backend API
+5. Backend validates all expected objectives are present and stores results
 
-**Legacy Compatibility**:
-- Old `StaticValidation` and `DynamicValidation` CRDs have been removed
-- Backend still accepts legacy fields for backward compatibility but prioritizes new structure
+**Migration Notes**:
+- Old operator-based system (≤v1.3.0) used CRDs
+- New CLI-based system (≥v1.4.0) loads from challenge.yaml
+- See [docs/MIGRATION.md](docs/MIGRATION.md) for complete migration guide
+- RBAC validation type removed for security reasons
 
 ## Important Implementation Details
 
@@ -175,8 +214,8 @@ The CLI works with the challenge operator which creates specialized validation C
 
 ### Dependencies
 
-- Uses vendoring for private dependency: `github.com/kubeasy-dev/challenge-operator`
-- CI workflows configure GOPRIVATE and GitHub token for access
+- **No operator dependency** - Validation system is self-contained in the CLI
+- CI workflows use standard Go tooling
 - Must run `go mod vendor` before linting or building in CI
 
 ## Release Process
@@ -191,6 +230,7 @@ The CLI works with the challenge operator which creates specialized validation C
 
 ## Related Repositories
 
-- **challenge-operator** - Kubernetes operator for validation CRDs
+- **challenges** - Repository containing all challenge definitions with validation specs
 - **cli-setup** - ArgoCD manifests for bootstrapping local environment
-- **site** - Next.js frontend for browsing challenges
+- **website** - Next.js frontend for browsing challenges and tracking progress
+- **documentation** - Fumadocs documentation site (user guides, developer docs)

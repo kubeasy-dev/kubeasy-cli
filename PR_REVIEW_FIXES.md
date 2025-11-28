@@ -223,7 +223,7 @@ This is the right behavior - an event should be considered only if at least one 
 
 ### Documentation Added (Current commit)
 
-4. `MIGRATION.md` (new)
+4. `docs/MIGRATION.md` (new)
    - Complete migration guide from operator-based to CLI-based validation
    - 327 lines with examples, timelines, and troubleshooting
 
@@ -231,7 +231,12 @@ This is the right behavior - an event should be considered only if at least one 
    - Comprehensive validation examples for all 5 types
    - 650+ lines with use cases, patterns, and best practices
 
-6. `PR_REVIEW_FIXES.md` (this file)
+6. `CLAUDE.md` (updated)
+   - Updated validation system documentation
+   - Added references to docs/ folder
+   - Removed operator-based system references
+
+7. `PR_REVIEW_FIXES.md` (this file)
    - Documentation of all fixes and decisions
 
 ---
@@ -253,7 +258,7 @@ This is the right behavior - an event should be considered only if at least one 
 **Issue**: Operator dependency removed without migration guide or deprecation notice.
 
 **Fix**: Created comprehensive migration documentation
-- **File**: `MIGRATION.md` (327 lines)
+- **File**: `docs/MIGRATION.md` (327 lines)
 - **Content**:
   - Complete migration timeline and context
   - Detailed comparison table (old vs new system)
@@ -326,7 +331,7 @@ These items can be addressed in follow-up PRs if needed, but do NOT block the cu
 
 | Issue | Status | Solution |
 |-------|--------|----------|
-| 1. Operator removal without migration | ✅ Fixed | Created comprehensive MIGRATION.md |
+| 1. Operator removal without migration | ✅ Fixed | Created comprehensive docs/MIGRATION.md |
 | 2. URL injection vulnerability | ✅ Fixed | Made loadFromURL private with validation |
 | 3. Silent log fetch failures | ✅ Fixed | Collect and report errors to users |
 
@@ -351,8 +356,8 @@ These items can be addressed in follow-up PRs if needed, but do NOT block the cu
 
 | Gap | Status | Solution |
 |-----|--------|----------|
-| No migration guide | ✅ Fixed | Created MIGRATION.md (327 lines) |
-| No challenge.yaml examples | ✅ Fixed | Created VALIDATION_EXAMPLES.md (650+ lines) |
+| No migration guide | ✅ Fixed | Created docs/MIGRATION.md (327 lines) |
+| No challenge.yaml examples | ✅ Fixed | Created docs/VALIDATION_EXAMPLES.md (650+ lines) |
 | Missing validation type docs | ✅ Fixed | Complete reference with use cases |
 | No troubleshooting guide | ✅ Fixed | Added to both documentation files |
 

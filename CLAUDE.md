@@ -10,9 +10,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Comprehensive documentation is available in the `docs/` folder:
 
-- **[docs/MIGRATION.md](docs/MIGRATION.md)** - Migration guide from operator-based to CLI-based validation system
 - **[docs/VALIDATION_EXAMPLES.md](docs/VALIDATION_EXAMPLES.md)** - Complete validation examples for all 5 validation types
-- **[PR_REVIEW_FIXES.md](PR_REVIEW_FIXES.md)** - Summary of all PR review fixes and decisions
+- **[CICD.md](docs/CICD.md)** - Continuous Integration and Deployment processes
 
 **Always refer to these documents** when working with the validation system, migrating challenges, or creating new validations.
 

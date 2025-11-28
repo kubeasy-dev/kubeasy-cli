@@ -77,7 +77,7 @@ jobs:
 
       - name: Run integration tests
         run: |
-          export KUBEBUILDER_ASSETS=$(setup-envtest use -p path 1.30.x --bin-dir ./bin/k8s)
+          export KUBEBUILDER_ASSETS="$(pwd)/$(setup-envtest use -p path 1.30.x --bin-dir ./bin/k8s)"
           go test -v -tags=integration -coverprofile=coverage-integration.out \
             -covermode=atomic ./test/integration/... -timeout 15m
 

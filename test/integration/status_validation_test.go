@@ -178,7 +178,7 @@ func TestStatusValidation_MultiplePods_AllReady(t *testing.T) {
 	for i := 1; i <= 3; i++ {
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-pod-" + string(rune('0'+i)),
+				Name:      fmt.Sprintf("test-pod-%d", i),
 				Namespace: env.Namespace,
 				Labels: map[string]string{
 					"app": "multi-pod-app",

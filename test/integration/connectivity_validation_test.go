@@ -264,7 +264,7 @@ func TestConnectivityValidation_LabelSelector(t *testing.T) {
 	for i := 1; i <= 3; i++ {
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "pod-" + string(rune('0'+i)),
+				Name:      fmt.Sprintf("pod-%d", i),
 				Namespace: env.Namespace,
 				Labels: map[string]string{
 					"app":  "test-app",

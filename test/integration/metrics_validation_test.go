@@ -313,7 +313,7 @@ func TestMetricsValidation_LabelSelector(t *testing.T) {
 
 		deployment := &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "deployment-" + string(rune('0'+i)),
+				Name:      fmt.Sprintf("deployment-%d", i),
 				Namespace: env.Namespace,
 				Labels:    labels,
 			},

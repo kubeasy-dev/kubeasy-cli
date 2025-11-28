@@ -26,9 +26,10 @@ help: ## Display this help message
 install-tools: ## Install development tools
 	@echo "$(YELLOW)Installing development tools...$(NC)"
 	@command -v golangci-lint >/dev/null 2>&1 || \
-		(echo "Installing golangci-lint..." && go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest)
+		(echo "Installing golangci-lint..." && \
+		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $$(go env GOPATH)/bin latest)
 	@command -v goreleaser >/dev/null 2>&1 || \
-		(echo "Installing goreleaser..." && go install github.com/goreleaser/goreleaser@latest)
+		(echo "Installing goreleaser..." && go install github.com/goreleaser/goreleaser/v2@latest)
 	@echo "$(GREEN)✓ Tools installed$(NC)"
 
 deps: ## Download and tidy Go dependencies

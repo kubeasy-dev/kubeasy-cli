@@ -80,7 +80,7 @@ var setupCmd = &cobra.Command{
 		}
 
 		// Step 3: Wait for apps
-		apps := []string{"kubeasy-cli-setup", "kyverno", "argocd", "kubeasy-challenge-operator"}
+		apps := []string{"kubeasy-cli-setup", "kyverno", "argocd"}
 		err = ui.TimedSpinner("Waiting for ArgoCD applications to be ready", func() error {
 			return argocd.WaitForArgoCDAppsReadyCore(apps, 8*time.Minute)
 		})

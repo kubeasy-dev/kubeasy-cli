@@ -46,7 +46,7 @@ func CreateOrUpdateChallengeApplication(ctx context.Context, dynamicClient dynam
 					"targetRevision": constants.ExercicesRepoBranch,
 					"directory": map[string]interface{}{
 						"recurse": true,
-						"include": "{manifests/**.yaml,dynamic/**.yaml,static/**.yaml,policies/**.yaml}",
+						"include": "{manifests/**.yaml,policies/**.yaml,validations/**.yaml}",
 					},
 				},
 				"destination": map[string]interface{}{

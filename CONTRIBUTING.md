@@ -6,7 +6,7 @@ Thank you for considering contributing to Kubeasy CLI! This document provides gu
 
 Before you start, ensure you have the following tools installed:
 
-- **Go 1.25.3+** - [Download](https://go.dev/dl/)
+- **Go 1.24.9+** - [Download](https://go.dev/dl/)
 - **Node.js 24.10.0+** - For npm scripts and release management
 - **Make** - Build automation tool (usually pre-installed on macOS/Linux)
 - **golangci-lint** - Go linting tool

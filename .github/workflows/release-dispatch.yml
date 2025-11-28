@@ -1,0 +1,158 @@
+name: "Manual Release"
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: 'patch'
+
+# Minimal permissions at workflow level - each job specifies what it needs
+permissions: {}
+
+jobs:
+  # Pre-release validation
+  pre-release-checks:
+    name: Pre-release validation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: "1.24.9"
+          cache: true
+          cache-dependency-path: |
+            go.sum
+            ${{ github.sha }}
+
+      - name: Verify on main branch
+        run: |
+          if [ "$(git rev-parse --abbrev-ref HEAD)" != "main" ]; then
+            echo "❌ Must be on main branch"
+            exit 1
+          fi
+          echo "✅ On main branch"
+
+      - name: Verify working directory is clean
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "❌ Uncommitted changes detected"
+            git status --short
+            exit 1
+          fi
+          echo "✅ Working directory clean"
+
+      - name: Run tests
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Run linters
+        uses: golangci/golangci-lint-action@0a35821d5c230e903fcfe077583637dea1b27b47 # v9.0.0
+        with:
+          version: latest
+          args: --config .github/linters/.golangci.yml --timeout 5m
+
+      - name: Test build
+        run: go build -o /tmp/kubeasy .
+
+  # Create and push release tag
+  create-release:
+    name: Create release tag
+    needs: [pre-release-checks]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      new_version: ${{ steps.version.outputs.new_version }}
+      current_version: ${{ steps.version.outputs.current_version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: '20'
+
+      - name: Configure git
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+      - name: Calculate new version
+        id: version
+        run: |
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          
+          IFS='.' read -r -a version_parts <<< "$CURRENT_VERSION"
+          major="${version_parts[0]}"
+          minor="${version_parts[1]}"
+          patch="${version_parts[2]}"
+          
+          case "${{ github.event.inputs.version_type }}" in
+            "patch")
+              patch=$((patch + 1))
+              ;;
+            "minor")
+              minor=$((minor + 1))
+              patch=0
+              ;;
+            "major")
+              major=$((major + 1))
+              minor=0
+              patch=0
+              ;;
+          esac
+          
+          NEW_VERSION="v${major}.${minor}.${patch}"
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "### 📦 Release Information" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Current version:** $CURRENT_VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "- **New version:** $NEW_VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "- **Bump type:** ${{ github.event.inputs.version_type }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Update package.json
+        run: |
+          npm version ${{ github.event.inputs.version_type }} --no-git-tag-version
+
+      - name: Commit and tag
+        run: |
+          git add package.json package-lock.json
+          git commit -m "chore: release ${{ steps.version.outputs.new_version }}"
+          git tag -a "${{ steps.version.outputs.new_version }}" -m "Release ${{ steps.version.outputs.new_version }}"
+
+      - name: Push changes
+        run: |
+          git push origin main
+          git push origin ${{ steps.version.outputs.new_version }}
+
+      - name: Add summary
+        run: |
+          echo "### ✅ Release Created Successfully" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** \`${{ steps.version.outputs.new_version }}\` has been pushed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The release workflow will now be triggered automatically." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Next steps:**" >> $GITHUB_STEP_SUMMARY
+          echo "1. Monitor the release: [GitHub Actions](https://github.com/${{ github.repository }}/actions)" >> $GITHUB_STEP_SUMMARY
+          echo "2. Check the release page: [Releases](https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.new_version }})" >> $GITHUB_STEP_SUMMARY
+          echo "3. Verify NPM publish: [NPM Package](https://www.npmjs.com/package/@kubeasy-dev/kubeasy-cli)" >> $GITHUB_STEP_SUMMARY

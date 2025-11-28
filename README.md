@@ -61,6 +61,10 @@ The `submit` command automatically discovers all validation CRDs, evaluates thei
 
 See [CLAUDE.md](./CLAUDE.md) for detailed architecture and development guidance.
 
+## Contributing
+
+See [online docs](https://docs.kubeasy.dev/developer/contributing) for contribution guidelines, setup instructions, and development workflow.
+
 ## License
 
 See LICENSE file for details.

@@ -829,10 +829,10 @@ func TestGetGVRForKind_AllKinds(t *testing.T) {
 
 func TestGetNestedInt64_AllTypes(t *testing.T) {
 	tests := []struct {
-		name      string
-		obj       map[string]interface{}
-		fields    []string
-		expected  int64
+		name       string
+		obj        map[string]interface{}
+		fields     []string
+		expected   int64
 		shouldFind bool
 	}{
 		{
@@ -910,7 +910,7 @@ func TestCompareValues_AllOperators(t *testing.T) {
 
 func TestNewExecutor_NilValues(t *testing.T) {
 	executor := NewExecutor(nil, nil, nil, "")
-	
+
 	assert.NotNil(t, executor)
 	assert.Equal(t, "", executor.namespace)
 }

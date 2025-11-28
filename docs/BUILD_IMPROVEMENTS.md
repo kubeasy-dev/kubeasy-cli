@@ -82,7 +82,7 @@ Error: Error downloading binary. HTTP Status Code: 403
 - Risk of releasing from wrong branch
 - No automated test verification
 
-**Solution**: Automated release script (`./scripts/release.sh`) with comprehensive checks.
+**Solution**: GitHub Actions workflow dispatch with comprehensive pre-release checks.
 
 **Result**: ✅ Secure, validated releases with zero human error
 
@@ -265,79 +265,51 @@ Tag pushed (v1.4.0)
 - Clearer separation of concerns
 - Uses golangci-lint-action for automatic installation and caching
 
-### 4. Automated Release Script
+### 4. GitHub Actions Release Workflow
 
-**File**: `scripts/release.sh`
+**File**: `.github/workflows/release-dispatch.yml`
 
-Comprehensive release automation with safety checks:
+Manual workflow dispatch for creating releases with comprehensive safety checks:
 
-```bash
-./scripts/release.sh patch   # 1.4.0 → 1.4.1
-./scripts/release.sh minor   # 1.4.0 → 1.5.0
-./scripts/release.sh major   # 1.4.0 → 2.0.0
-```
+**Trigger**: Go to [Actions](https://github.com/kubeasy-dev/kubeasy-cli/actions/workflows/release-dispatch.yml) → "Run workflow" → Select version type
+
+**Options**:
+- **patch** - Bug fixes (1.4.0 → 1.4.1)
+- **minor** - New features (1.4.0 → 1.5.0)
+- **major** - Breaking changes (1.4.0 → 2.0.0)
 
 **Validation Steps**:
 
 1. ✅ Verify on `main` branch
-2. ✅ Check for uncommitted changes
-3. ✅ Ensure branch is up to date with origin
-4. ✅ Run tests
-5. ✅ Run linters
-6. ✅ Test build
-7. ✅ Show current → new version
-8. ✅ Require confirmation
-9. ✅ Create commit and tag
-10. ✅ Push to GitHub
-11. ✅ Display tracking URLs
+2. ✅ Check working directory is clean
+3. ✅ Run tests with race detector
+4. ✅ Run golangci-lint
+5. ✅ Test build
+6. ✅ Calculate new version
+7. ✅ Update package.json & package-lock.json
+8. ✅ Create commit and tag
+9. ✅ Push to GitHub
+10. ✅ Trigger release workflow automatically
 
-**Example Output**:
+**Benefits**:
+- ✅ UI-driven release process
+- ✅ Automated pre-release validation
+- ✅ Complete audit trail in GitHub Actions
+- ✅ No local scripts needed
+- ✅ Detailed summary with links to track release
 
-```
-========================================
-  Kubeasy CLI Release Script
-========================================
+### 5. Post-Release Verification
 
-Running prerelease checks...
-✓ On main branch
-✓ Working directory clean
-✓ Branch up to date
-✓ Tests passed
-✓ Linting passed
-✓ Build successful
+Verify release artifacts are published correctly by checking:
 
-========================================
-Current version: 1.4.0
-New version:     1.4.1
-========================================
+**Manual verification**:
 
-This will:
-  1. Update package.json to 1.4.1
-  2. Create a git commit
-  3. Create a git tag v1.4.1
-  4. Push to GitHub
-  5. Trigger CI/CD pipeline
-
-Continue? [y/N]:
-```
-
-### 5. Post-Release Verification Script
-
-**File**: `scripts/check-release.sh`
-
-Verifies release artifacts are published correctly:
-
-```bash
-./scripts/check-release.sh         # Check current version
-./scripts/check-release.sh 1.4.0   # Check specific version
-```
-
-**Checks**:
-
-1. ✅ GitHub Release exists
-2. ✅ npm package published
-3. ✅ Cloudflare R2 binaries available (6 platforms)
+1. ✅ [GitHub Release](https://github.com/kubeasy-dev/kubeasy-cli/releases) - Release exists with artifacts
+2. ✅ [NPM package](https://www.npmjs.com/package/@kubeasy-dev/kubeasy-cli) - Package published
+3. ✅ [Download page](https://download.kubeasy.dev) - Binaries available for all platforms
 4. ✅ Checksums file present
+
+### 6. Improved Changelog Generation
 
 **Example Output**:
 
@@ -586,13 +558,13 @@ async function waitForBinary(url, maxAttempts = 30) {
 
 ### Files Created
 
-| File                         | Description                      |
-| ---------------------------- | -------------------------------- |
-| `Makefile`                   | Build automation with 15 targets |
-| `scripts/release.sh`         | Automated release script         |
-| `scripts/check-release.sh`   | Post-release verification        |
-| `CONTRIBUTING.md`            | Developer contribution guide     |
-| `docs/BUILD_IMPROVEMENTS.md` | This document                    |
+| File                                      | Description                           |
+| ----------------------------------------- | ------------------------------------- |
+| `Makefile`                                | Build automation with 15 targets      |
+| `.github/workflows/release-dispatch.yml`  | Manual release workflow               |
+| `.github/workflows/README.md`             | Workflows documentation               |
+| `CONTRIBUTING.md`                         | Developer contribution guide          |
+| `docs/BUILD_IMPROVEMENTS.md`              | This document                         |
 
 ### Files Modified
 
@@ -627,12 +599,13 @@ async function waitForBinary(url, maxAttempts = 30) {
 
 ### Developer Experience
 
-| Aspect                 | Before    | After       |
-| ---------------------- | --------- | ----------- |
-| Commands to remember   | ~10+      | `make help` |
-| Pre-release validation | Manual    | Automated   |
-| Error clarity          | Poor      | Excellent   |
-| Documentation          | Scattered | Centralized |
+| Aspect                 | Before    | After                      |
+| ---------------------- | --------- | -------------------------- |
+| Commands to remember   | ~10+      | `make help`                |
+| Pre-release validation | Manual    | GitHub Actions UI          |
+| Error clarity          | Poor      | Excellent                  |
+| Documentation          | Scattered | Centralized                |
+| Release trigger        | Terminal  | GitHub UI (workflow_dispatch) |
 
 ---
 
@@ -672,32 +645,31 @@ make test           # Ensure tests pass
 
 ### Release Process
 
-#### Option 1: Automated Script (Recommended)
+#### Option 1: GitHub Actions (Recommended)
 
-```bash
-# Interactive mode
-./scripts/release.sh
+1. Go to [GitHub Actions - Manual Release](https://github.com/kubeasy-dev/kubeasy-cli/actions/workflows/release-dispatch.yml)
+2. Click "Run workflow"
+3. Select version bump type:
+   - **patch** - Bug fixes
+   - **minor** - New features
+   - **major** - Breaking changes
+4. Click "Run workflow"
 
-# Direct mode
-./scripts/release.sh patch   # bugfixes
-./scripts/release.sh minor   # New features
-./scripts/release.sh major   # Breaking changes
-```
-
-The script will:
-
-1. Validate everything locally
-2. Show version change
-3. Ask for confirmation
-4. Create commit and tag
-5. Push to GitHub
-6. Provide tracking URLs
+The workflow will:
+1. Validate everything automatically
+2. Calculate new version
+3. Create commit and tag
+4. Push to GitHub
+5. Trigger release build
+6. Publish to NPM
 
 #### Option 2: Manual Process
 
 ```bash
 # Pre-release validation
-make release-check
+go test -v -race ./...
+golangci-lint run --config .github/linters/.golangci.yml
+go build .
 
 # Create version and tag
 npm version patch   # or minor/major
@@ -708,20 +680,11 @@ git push --follow-tags
 
 ### Post-Release Verification
 
-```bash
-# Check current version
-./scripts/check-release.sh
-
-# Check specific version
-./scripts/check-release.sh 1.4.0
-```
-
-Verifies:
-
-- GitHub Release created
-- npm package published
-- R2 binaries available (all platforms)
-- Checksums file present
+Check manually:
+- [GitHub Releases](https://github.com/kubeasy-dev/kubeasy-cli/releases) - Release created
+- [NPM Package](https://www.npmjs.com/package/@kubeasy-dev/kubeasy-cli) - Package published
+- [Download page](https://download.kubeasy.dev) - Binaries available for all platforms
+- Checksums file present in release assets
 
 ### Testing Releases Locally
 
@@ -827,19 +790,19 @@ After:  █░░░░░░░ 1 step
 **After**:
 
 ```
-0:00  ./scripts/release.sh patch
-0:00  ✅ Local validation (tests, lint, build)
-0:03  Confirmation + push
-0:04  GitHub Actions starts
-0:05  Prerelease checks
-0:08  ✅ Validation OK, build starts
-0:09  Setup Go (with cache)
-0:15  GoReleaser builds
-0:18  Upload to R2
-0:18  npm publish starts
-0:18  Wait for R2 (~10-30s)
-0:19  npm ci + publish
-0:20  ✅ Release complete
+0:00  Trigger GitHub Actions workflow dispatch (select patch/minor/major)
+0:00  ✅ Automated validation (tests, lint, build)
+0:03  ✅ Validation OK, version bump and tag creation
+0:04  Push to GitHub triggers release workflow
+0:05  GitHub Actions starts
+0:06  Prerelease checks
+0:07  Setup Go (with cache)
+0:13  GoReleaser builds
+0:16  Upload to R2
+0:16  npm publish starts
+0:16  Wait for R2 (~10-30s)
+0:17  npm ci + publish
+0:18  ✅ Release complete
 ```
 
 ---
@@ -869,22 +832,23 @@ make fmt lint
 
 ```bash
 npm version patch
-Git push --follow-tags
+git push --follow-tags
 ```
 
 **New Recommended Process**:
 
-```bash
-./scripts/release.sh patch
-./scripts/check-release.sh
-```
+1. Go to [GitHub Actions - Manual Release](https://github.com/kubeasy-dev/kubeasy-cli/actions/workflows/release-dispatch.yml)
+2. Click "Run workflow"
+3. Select version type (patch/minor/major)
+4. Click "Run workflow"
+5. Monitor progress in GitHub Actions
 
 ### Rollback Plan
 
 If issues arise, you can revert to the old process:
 
-1. **Builds**: Use `go build` directly
-2. **Releases**: Use `npm version` + `Git push --follow-tags`
+1. **Builds**: Use `go build` directly or Makefile targets
+2. **Releases**: Use `npm version` + `git push --follow-tags`
 3. **Linting**: Run `golangci-lint` directly
 
 All enhancements are additive, not replacements.

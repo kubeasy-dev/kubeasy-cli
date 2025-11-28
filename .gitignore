@@ -1,8 +1,13 @@
-kubeasy-cli.log
 dist
 bin
 node_modules
 vendor
+
+# Logs
+kubeasy-cli.log
+
+# Build artifacts
+kubeasy
 kubeasy-cli
 
 # Test coverage

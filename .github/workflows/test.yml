@@ -1,0 +1,106 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+      - feat/**
+      - fix/**
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: "1.24.9"
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run unit tests
+        run: |
+          go test -v -race -coverprofile=coverage-unit.out -covermode=atomic \
+            $(go list ./... | grep -v /test/integration)
+
+      - name: Upload unit test coverage
+        uses: codecov/codecov-action@f32b3a3741e1053eb607407145bc9619351dc93b # v5.0.2
+        with:
+          files: ./coverage-unit.out
+          flags: unit
+          name: unit-tests
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: "1.24.9"
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Install setup-envtest
+        run: |
+          go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+      - name: Setup EnvTest
+        run: |
+          mkdir -p ./bin/k8s
+          setup-envtest use 1.30.x --bin-dir ./bin/k8s
+
+      - name: Run integration tests
+        run: |
+          export KUBEBUILDER_ASSETS=$(setup-envtest use -p path 1.30.x --bin-dir ./bin/k8s)
+          go test -v -tags=integration -coverprofile=coverage-integration.out \
+            -covermode=atomic ./test/integration/... -timeout 15m
+
+      - name: Upload integration test coverage
+        uses: codecov/codecov-action@f32b3a3741e1053eb607407145bc9619351dc93b # v5.0.2
+        with:
+          files: ./coverage-integration.out
+          flags: integration
+          name: integration-tests
+
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests]
+    if: always()
+
+    steps:
+      - name: Check test results
+        run: |
+          if [ "${{ needs.unit-tests.result }}" != "success" ] || [ "${{ needs.integration-tests.result }}" != "success" ]; then
+            echo "❌ Tests failed"
+            exit 1
+          fi
+          echo "✅ All tests passed"

@@ -454,6 +454,16 @@ func (e *Executor) getTargetPods(ctx context.Context, target Target) ([]corev1.P
 		return e.getPodsForResource(ctx, target)
 	}
 
+	// If a specific pod name is provided, get that pod
+	if target.Name != "" {
+		pod, err := e.clientset.CoreV1().Pods(e.namespace).Get(ctx, target.Name, metav1.GetOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to get pod %s: %w", target.Name, err)
+		}
+		return []corev1.Pod{*pod}, nil
+	}
+
+	// Otherwise list pods by label selector
 	opts := metav1.ListOptions{}
 	if len(target.LabelSelector) > 0 {
 		opts.LabelSelector = labels.SelectorFromSet(target.LabelSelector).String()

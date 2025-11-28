@@ -30,6 +30,9 @@ install-tools: ## Install development tools
 		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $$(go env GOPATH)/bin latest)
 	@command -v goreleaser >/dev/null 2>&1 || \
 		(echo "Installing goreleaser..." && go install github.com/goreleaser/goreleaser/v2@latest)
+	@command -v setup-envtest >/dev/null 2>&1 || \
+		(echo "Installing setup-envtest..." && go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest)
+	@setup-envtest use 1.30.x --bin-dir ./bin/k8s
 	@echo "$(GREEN)✓ Tools installed$(NC)"
 
 deps: ## Download and tidy Go dependencies
@@ -66,17 +69,64 @@ build-all: clean ## Build binaries for all platforms
 	@GOOS=windows GOARCH=arm64 go build -ldflags "$(LDFLAGS)" -o $(DIST_DIR)/$(BINARY_NAME)-windows-arm64.exe .
 	@echo "$(GREEN)✓ All binaries built in $(DIST_DIR)/$(NC)"
 
-test: ## Run tests with coverage
-	@echo "$(YELLOW)Running tests...$(NC)"
-	@go test -v -race -coverprofile=coverage.out ./...
-	@go tool cover -func=coverage.out | tail -1
-	@echo "$(GREEN)✓ Tests passed$(NC)"
-	@echo "$(BLUE)ℹ  Coverage report: coverage.out$(NC)"
+test: test-all ## Run all tests (unit + integration)
 
-test-coverage: test ## Generate HTML coverage report
-	@echo "$(YELLOW)Generating HTML coverage report...$(NC)"
+test-unit: ## Run unit tests only
+	@echo "$(YELLOW)Running unit tests...$(NC)"
+	@go test -v -race -coverprofile=coverage-unit.out -covermode=atomic \
+		$$(go list ./... | grep -v /test/integration)
+	@go tool cover -func=coverage-unit.out | tail -1
+	@echo "$(GREEN)✓ Unit tests passed$(NC)"
+
+test-integration: setup-envtest ## Run integration tests
+	@echo "$(YELLOW)Running integration tests...$(NC)"
+	@echo "$(BLUE)ℹ  This will start a local Kubernetes API server$(NC)"
+	@KUBEBUILDER_ASSETS=$$(setup-envtest use -p path 1.30.x) \
+		go test -v -tags=integration -coverprofile=coverage-integration.out \
+		-covermode=atomic ./test/integration/... -timeout 10m
+	@echo "$(GREEN)✓ Integration tests passed$(NC)"
+
+test-all: test-unit test-integration ## Run all tests (unit + integration)
+	@echo "$(GREEN)✓ All tests passed$(NC)"
+
+test-verbose: setup-envtest ## Run integration tests with verbose output
+	@echo "$(YELLOW)Running integration tests (verbose)...$(NC)"
+	@KUBEBUILDER_ASSETS=$$(setup-envtest use -p path 1.30.x) \
+		go test -v -tags=integration ./test/integration/... -timeout 10m -v
+
+test-coverage: test-all ## Generate combined coverage report
+	@echo "$(YELLOW)Generating combined coverage report...$(NC)"
+	@mkdir -p coverage
+	@echo "mode: atomic" > coverage.out
+	@test -f coverage-unit.out && tail -q -n +2 coverage-unit.out >> coverage.out || true
+	@test -f coverage-integration.out && tail -q -n +2 coverage-integration.out >> coverage.out || true
 	@go tool cover -html=coverage.out -o coverage.html
-	@echo "$(GREEN)✓ Coverage report: coverage.html$(NC)"
+	@go tool cover -func=coverage.out | tail -1
+	@echo "$(GREEN)✓ Coverage report generated: coverage.html$(NC)"
+
+setup-envtest: ## Install and setup controller-runtime envtest binaries
+	@echo "$(YELLOW)Setting up envtest...$(NC)"
+	@which setup-envtest > /dev/null || \
+		(echo "Installing setup-envtest..." && \
+		go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest)
+	@setup-envtest use 1.30.x --bin-dir ./bin/k8s
+	@echo "$(GREEN)✓ EnvTest setup complete$(NC)"
+
+ci-test: setup-envtest ## Run tests in CI environment
+	@echo "$(YELLOW)Running CI tests...$(NC)"
+	@# Unit tests
+	@go test -v -race -coverprofile=coverage-unit.out -covermode=atomic \
+		$$(go list ./... | grep -v /test/integration)
+	@# Integration tests
+	@KUBEBUILDER_ASSETS=$$(setup-envtest use -p path 1.30.x --bin-dir ./bin/k8s) \
+		go test -v -tags=integration -coverprofile=coverage-integration.out \
+		-covermode=atomic ./test/integration/... -timeout 15m
+	@# Combine coverage
+	@mkdir -p coverage
+	@echo "mode: atomic" > coverage.out
+	@tail -q -n +2 coverage-unit.out >> coverage.out || true
+	@tail -q -n +2 coverage-integration.out >> coverage.out || true
+	@echo "$(GREEN)✓ CI tests complete$(NC)"
 
 lint: ## Run golangci-lint
 	@echo "$(YELLOW)Running linters...$(NC)"
@@ -110,7 +160,8 @@ fmt: ## Format Go code
 
 clean: ## Clean build artifacts
 	@echo "$(YELLOW)Cleaning...$(NC)"
-	@rm -rf $(BUILD_DIR) $(DIST_DIR) vendor coverage.out coverage.html
+	@rm -rf $(BUILD_DIR) $(DIST_DIR) vendor coverage*.out coverage.html coverage/
+	@go clean -testcache
 	@echo "$(GREEN)✓ Cleaned$(NC)"
 
 dev: build ## Build and run in development mode

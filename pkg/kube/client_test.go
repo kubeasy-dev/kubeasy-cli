@@ -70,6 +70,38 @@ func TestCreateNamespace_Logic(t *testing.T) {
 	})
 }
 
+func TestCreateNamespace(t *testing.T) {
+	t.Run("creates new namespace successfully", func(t *testing.T) {
+		clientset := fake.NewSimpleClientset()
+		ctx := context.Background()
+
+		err := CreateNamespace(ctx, clientset, "test-namespace")
+		require.NoError(t, err)
+
+		// Verify namespace was created
+		created, err := clientset.CoreV1().Namespaces().Get(ctx, "test-namespace", metav1.GetOptions{})
+		require.NoError(t, err)
+		assert.Equal(t, "test-namespace", created.Name)
+	})
+
+	t.Run("idempotent - namespace already exists", func(t *testing.T) {
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "existing-namespace",
+			},
+		}
+		clientset := fake.NewSimpleClientset(ns)
+		ctx := context.Background()
+
+		err := CreateNamespace(ctx, clientset, "existing-namespace")
+		require.NoError(t, err)
+
+		// Verify namespace still exists
+		_, err = clientset.CoreV1().Namespaces().Get(ctx, "existing-namespace", metav1.GetOptions{})
+		require.NoError(t, err)
+	})
+}
+
 // TestDeleteNamespace_Logic tests namespace deletion logic
 func TestDeleteNamespace_Logic(t *testing.T) {
 	t.Run("deletes existing namespace successfully", func(t *testing.T) {
@@ -106,6 +138,33 @@ func TestDeleteNamespace_Logic(t *testing.T) {
 		// DeleteNamespace should handle this gracefully (check first)
 		_, err = clientset.CoreV1().Namespaces().Get(ctx, "nonexistent", metav1.GetOptions{})
 		assert.True(t, apierrors.IsNotFound(err))
+	})
+}
+
+func TestDeleteNamespace(t *testing.T) {
+	t.Run("deletes existing namespace successfully", func(t *testing.T) {
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "to-delete",
+			},
+		}
+		clientset := fake.NewSimpleClientset(ns)
+		ctx := context.Background()
+
+		err := DeleteNamespace(ctx, clientset, "to-delete")
+		require.NoError(t, err)
+
+		// Verify namespace was deleted
+		_, err = clientset.CoreV1().Namespaces().Get(ctx, "to-delete", metav1.GetOptions{})
+		assert.True(t, apierrors.IsNotFound(err), "namespace should be deleted")
+	})
+
+	t.Run("idempotent - namespace does not exist", func(t *testing.T) {
+		clientset := fake.NewSimpleClientset()
+		ctx := context.Background()
+
+		err := DeleteNamespace(ctx, clientset, "nonexistent")
+		require.NoError(t, err) // DeleteNamespace should be idempotent
 	})
 }
 

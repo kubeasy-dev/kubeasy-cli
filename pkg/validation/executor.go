@@ -37,14 +37,14 @@ const (
 
 // Executor executes validations against a Kubernetes cluster
 type Executor struct {
-	clientset     *kubernetes.Clientset
+	clientset     kubernetes.Interface
 	dynamicClient dynamic.Interface
 	restConfig    *rest.Config
 	namespace     string
 }
 
 // NewExecutor creates a new validation executor
-func NewExecutor(clientset *kubernetes.Clientset, dynamicClient dynamic.Interface, restConfig *rest.Config, namespace string) *Executor {
+func NewExecutor(clientset kubernetes.Interface, dynamicClient dynamic.Interface, restConfig *rest.Config, namespace string) *Executor {
 	return &Executor{
 		clientset:     clientset,
 		dynamicClient: dynamicClient,

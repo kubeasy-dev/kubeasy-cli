@@ -15,9 +15,9 @@ LDFLAGS=-s -w \
 	-X 'github.com/kubeasy-dev/kubeasy-cli/pkg/constants.LogFilePath=/tmp/kubeasy-cli.log' \
 	-X 'github.com/kubeasy-dev/kubeasy-cli/pkg/constants.WebsiteURL=https://kubeasy.dev' \
 	-X 'github.com/kubeasy-dev/kubeasy-cli/pkg/constants.ExercicesRepoBranch=main'
-# Extract Kubernetes version from go.mod (e.g., v0.34.1 -> 1.34.1)
+# Extract Kubernetes version from go.mod (e.g., v0.34.2 -> 1.34.2)
 K8S_GO_VERSION=$(shell grep 'k8s.io/client-go' go.mod | grep -v '//' | awk '{print $$2}' | sed 's/v0\.\([0-9]*\)\.\([0-9]*\)/1.\1.\2/')
-KUBERNETES_VERSION=$(or $(K8S_GO_VERSION),1.34.1)
+KUBERNETES_VERSION=$(or $(K8S_GO_VERSION),1.34.2)
 
 # Colors for output
 RED=\033[0;31m
@@ -100,7 +100,7 @@ test-integration: setup-envtest ## Run integration tests
 	@echo "$(BLUE)ℹ  This will start a local Kubernetes API server$(NC)"
 	@KUBEBUILDER_ASSETS=$$($(GOPATH)/bin/setup-envtest use -p path $(KUBERNETES_VERSION)) \
 		go test -v -tags=integration -coverprofile=coverage-integration.out \
-		-covermode=atomic -coverpkg=./pkg/... ./test/integration/... -timeout 10m
+		-covermode=atomic -coverpkg=./pkg/... ./test/integration/... -timeout 15m
 	@if [ -s coverage-integration.out ]; then \
 		echo "$(GREEN)✓ Integration tests passed$(NC)"; \
 		go tool cover -func=coverage-integration.out | tail -1; \
@@ -115,7 +115,7 @@ test-all: test-unit test-integration ## Run all tests (unit + integration)
 test-verbose: setup-envtest ## Run integration tests with verbose output
 	@echo "$(YELLOW)Running integration tests (verbose)...$(NC)"
 	@KUBEBUILDER_ASSETS=$$(setup-envtest use -p path $(KUBERNETES_VERSION)) \
-		go test -v -tags=integration ./test/integration/... -timeout 10m -v
+		go test -v -tags=integration ./test/integration/... -timeout 15m -v
 
 test-coverage: test-all ## Generate combined coverage report
 	@echo "$(YELLOW)Generating combined coverage report...$(NC)"
@@ -146,11 +146,18 @@ ci-test: setup-envtest ## Run tests in CI environment
 	@KUBEBUILDER_ASSETS=$$(setup-envtest use -p path $(KUBERNETES_VERSION) --bin-dir ./bin/k8s) \
 		go test -v -tags=integration -coverprofile=coverage-integration.out \
 		-covermode=atomic ./test/integration/... -timeout 15m
-	@# Combine coverage
+	@# Combine coverage using gocovmerge for reliable merging
 	@mkdir -p coverage
-	@echo "mode: atomic" > coverage.out
-	@tail -q -n +2 coverage-unit.out >> coverage.out || true
-	@tail -q -n +2 coverage-integration.out >> coverage.out || true
+	@if [ -s coverage-unit.out ] && [ -s coverage-integration.out ]; then \
+		echo "$(BLUE)ℹ  Merging unit and integration coverage...$(NC)"; \
+		$(GOPATH)/bin/gocovmerge coverage-unit.out coverage-integration.out > coverage.out; \
+	elif [ -s coverage-integration.out ]; then \
+		echo "$(BLUE)ℹ  Using integration coverage only...$(NC)"; \
+		cp coverage-integration.out coverage.out; \
+	elif [ -s coverage-unit.out ]; then \
+		echo "$(BLUE)ℹ  Using unit coverage only...$(NC)"; \
+		cp coverage-unit.out coverage.out; \
+	fi
 	@echo "$(GREEN)✓ CI tests complete$(NC)"
 
 lint: ## Run golangci-lint

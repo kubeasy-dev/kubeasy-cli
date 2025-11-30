@@ -212,8 +212,8 @@ Integration test performance on M1 Mac:
 
 ## Future Work
 
-- [ ] Log validation integration tests
-- [ ] Connectivity validation integration tests
+- [x] Log validation integration tests (completed)
+- [x] Connectivity validation integration tests (completed - with envtest limitations)
 - [ ] Unit tests for pkg/api, pkg/kube, pkg/argocd
 - [ ] E2E tests with real Kind cluster
 - [ ] Performance benchmarks

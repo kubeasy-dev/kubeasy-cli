@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -84,7 +85,9 @@ func (e *TestEnvironment) Cleanup() {
 		if e.Clientset != nil && e.Namespace != "" {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			_ = e.Clientset.CoreV1().Namespaces().Delete(ctx, e.Namespace, metav1.DeleteOptions{})
+			if err := e.Clientset.CoreV1().Namespaces().Delete(ctx, e.Namespace, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
+				e.t.Logf("Warning: failed to delete namespace %s: %v", e.Namespace, err)
+			}
 		}
 
 		// Stop environment
@@ -148,8 +151,13 @@ func (e *TestEnvironment) SetPodReady(podName string) *corev1.Pod {
 	return e.UpdatePodStatus(pod)
 }
 
-// CreateEvent creates a Kubernetes event
+// CreateEvent creates a Kubernetes event with default values
 func (e *TestEnvironment) CreateEvent(event *corev1.Event) *corev1.Event {
+	return e.CreateEventWithDefaults(event, "kubeasy-test", "kubeasy-test-instance")
+}
+
+// CreateEventWithDefaults creates a Kubernetes event with configurable default values
+func (e *TestEnvironment) CreateEventWithDefaults(event *corev1.Event, controller, instance string) *corev1.Event {
 	e.t.Helper()
 
 	if event.Namespace == "" {
@@ -158,10 +166,10 @@ func (e *TestEnvironment) CreateEvent(event *corev1.Event) *corev1.Event {
 
 	// Set required fields for Kubernetes 1.30+
 	if event.ReportingController == "" {
-		event.ReportingController = "kubeasy-test"
+		event.ReportingController = controller
 	}
 	if event.ReportingInstance == "" {
-		event.ReportingInstance = "kubeasy-test-instance"
+		event.ReportingInstance = instance
 	}
 	if event.Action == "" {
 		event.Action = "TestEvent"

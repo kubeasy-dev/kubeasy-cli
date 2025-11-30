@@ -26,25 +26,20 @@ jobs:
         uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
         with:
           go-version: "1.25.4"
-          cache: true # Enable Go modules caching
-          cache-dependency-path: |
-            go.sum
-            ${{ github.sha }}
+          cache: true
+          cache-dependency-path: go.sum
 
-      - name: Download dependencies
-        run: go mod download
+      - name: Install Task
+        uses: go-task/setup-task@v1
 
       - name: Run tests
-        run: make test
+        run: task test
 
       - name: Run linters
-        uses: golangci/golangci-lint-action@0a35821d5c230e903fcfe077583637dea1b27b47 # v9.0.0
-        with:
-          version: latest
-          args: --config .github/linters/.golangci.yml --timeout 5m
+        run: task lint
 
       - name: Test build
-        run: make build
+        run: task build
 
   # Build and release binaries
   build:
@@ -65,10 +60,8 @@ jobs:
         uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
         with:
           go-version: "1.25.4"
-          cache: true # Enable Go modules caching
-          cache-dependency-path: |
-            go.sum
-            ${{ github.sha }}
+          cache: true
+          cache-dependency-path: go.sum
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6.4.0
@@ -109,10 +102,8 @@ jobs:
         with:
           node-version: "24.10.0"
           registry-url: "https://registry.npmjs.org"
-          cache: "npm" # Enable NPM cache
-          cache-dependency-path: |
-            package-lock.json
-            ${{ github.sha }}
+          cache: "npm"
+          cache-dependency-path: package-lock.json
 
       # Small delay to ensure R2 upload is complete (~10-15s after build)
       - name: Wait for R2 upload

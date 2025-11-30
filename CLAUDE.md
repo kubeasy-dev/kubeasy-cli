@@ -17,42 +17,77 @@ Comprehensive documentation is available in the `docs/` folder:
 
 ## Build, Test, and Development Commands
 
+This project uses [Taskfile](https://taskfile.dev) for task automation. Run `task --list` to see all available commands.
+
 ### Building
 
 ```bash
 # Build the binary
-go build -o kubeasy-cli
+task build
 
-# Build with dependencies vendored
-go mod vendor
-go build -o kubeasy-cli
+# Build for all platforms
+task build:all
+```
+
+### Testing
+
+```bash
+# Run all tests (unit + integration)
+task test
+
+# Run unit tests only
+task test:unit
+
+# Run integration tests only
+task test:integration
+
+# Generate coverage report
+task test:coverage
 ```
 
 ### Linting
 
 ```bash
-# Run linting (matches CI workflow)
-go mod vendor
-# Uses super-linter in CI - see .github/workflows/lint.yml
+# Run golangci-lint
+task lint
+
+# Run with auto-fix
+task lint:fix
+
+# Format code
+task fmt
 ```
 
 ### Dependencies
 
 ```bash
-# Download dependencies
-go mod download
+# Download and tidy dependencies
+task deps
 
-# Vendor dependencies (required for linting and private repos)
-go mod vendor
+# Generate vendor directory
+task vendor
+```
 
-# Update dependencies
-go mod tidy
+### Tool Installation
+
+Tools are installed automatically when needed via status checks, but you can install them manually:
+
+```bash
+# Install all development tools
+task install:tools
+
+# Install specific tools
+task install:lint      # golangci-lint
+task install:envtest   # setup-envtest for integration tests
 ```
 
 ### Running Locally
 
 ```bash
-# Run directly
+# Build and run
+task dev
+
+# Or run directly
 go run main.go [command]
 
 # With debug logging
@@ -213,8 +248,9 @@ The CLI now uses a **self-contained validation executor** that loads validation 
 
 ### Dependencies
 
-- CI workflows use standard Go tooling
-- Must run `go mod vendor` before linting or building in CI
+- CI workflows use [Taskfile](https://taskfile.dev) for task automation
+- Task is installed via `go-task/setup-task@v1` action in CI
+- Tools are installed on-demand with status checks (skip if already installed)
 
 ## Release Process
 

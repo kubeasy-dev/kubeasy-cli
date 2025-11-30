@@ -30,8 +30,11 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
+      - name: Install Task
+        uses: go-task/setup-task@v1
+
       - name: Run unit tests
-        run: make test-unit
+        run: task test:unit
 
       - name: Upload unit test coverage
         uses: codecov/codecov-action@f32b3a3741e1053eb607407145bc9619351dc93b # v5.0.2
@@ -57,8 +60,11 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
+      - name: Install Task
+        uses: go-task/setup-task@v1
+
       - name: Run integration tests
-        run: make test-integration
+        run: task test:integration
 
       - name: Upload integration test coverage
         uses: codecov/codecov-action@f32b3a3741e1053eb607407145bc9619351dc93b # v5.0.2

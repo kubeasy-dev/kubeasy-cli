@@ -21,4 +21,4 @@ coverage.html
 .idea/
 *.swp
 *.swo
-*~
+*~.task/

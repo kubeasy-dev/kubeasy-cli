@@ -103,6 +103,16 @@ func TestStatusValidation_PodReady_Failure_NotReady(t *testing.T) {
 	createdPod := env.CreatePod(pod)
 	require.NotNil(t, createdPod)
 
+	// Set pod Ready condition to False so the test validates the message format correctly
+	createdPod.Status.Conditions = []corev1.PodCondition{
+		{
+			Type:   corev1.PodReady,
+			Status: corev1.ConditionFalse,
+		},
+	}
+	updatedPod := env.UpdatePodStatus(createdPod)
+	require.NotNil(t, updatedPod)
+
 	// Create validation spec
 	spec := validation.StatusSpec{
 		Target: validation.Target{

@@ -40,6 +40,12 @@
       "groupName": "npm dependencies",
       "groupSlug": "npm",
       "automerge": true
+    },
+    {
+      "description": "Don't pin claude-code action",
+      "matchPackageNames": ["anthropics/claude-code-action"],
+      "matchManagers": ["github-actions"],
+      "pinDigests": false
     }
   ],
   "separateMajorMinor": true

@@ -4,6 +4,7 @@ node_modules
 vendor
 
 # Logs
+logs
 kubeasy-cli.log
 
 # Build artifacts

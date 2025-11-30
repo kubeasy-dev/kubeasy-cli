@@ -224,7 +224,7 @@ The CLI now uses a **self-contained validation executor** that loads validation 
   - GitHub Releases (binaries + checksums)
   - NPM (via `npm publish`)
   - Cloudflare R2 (AWS S3-compatible storage)
-- Go version: 1.24.9 (specified in go.mod and CI)
+- Go version: 1.25.4 (specified in go.mod and CI)
 
 ## Related Repositories
 

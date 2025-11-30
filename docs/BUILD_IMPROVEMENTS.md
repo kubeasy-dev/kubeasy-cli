@@ -185,7 +185,7 @@ Tag pushed (v1.4.0)
    - name: Set up Go
      uses: actions/setup-go@v6
      with:
-       go-version: "1.24.9"
+       go-version: "1.25.4"
        cache: true # Saves ~2-3 min
    ```
 

@@ -194,6 +194,8 @@ func (e *TestEnvironment) WaitForPod(podName string, timeout time.Duration) *cor
 	defer cancel()
 
 	// Use 50ms polling interval for faster test execution
+	// This is safe for envtest (local API server) without causing flakiness
+	// For real clusters, consider using watch API or longer intervals
 	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
 

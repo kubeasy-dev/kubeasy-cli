@@ -11,6 +11,9 @@ kubeasy-cli.log
 kubeasy
 kubeasy-cli
 
+# Task artifacts
+*.task/
+
 # Test coverage
 coverage.out
 coverage-*.out
@@ -21,4 +24,3 @@ coverage.html
 .idea/
 *.swp
 *.swo
-*~.task/

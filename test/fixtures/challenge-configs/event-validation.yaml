@@ -1,0 +1,29 @@
+validations:
+  - key: no-oom-events
+    title: "No OOM Events"
+    description: "Pod should not have OOMKilled events"
+    order: 1
+    type: event
+    spec:
+      target:
+        kind: Pod
+        labelSelector:
+          app: test-app
+      forbiddenReasons:
+        - "OOMKilled"
+        - "Evicted"
+      sinceSeconds: 300
+
+  - key: no-crash-events
+    title: "No Crash Events"
+    description: "Pod should not have crash-related events"
+    order: 2
+    type: event
+    spec:
+      target:
+        kind: Pod
+        name: test-pod
+      forbiddenReasons:
+        - "BackOff"
+        - "Failed"
+      sinceSeconds: 60

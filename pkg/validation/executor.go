@@ -37,14 +37,14 @@ const (
 
 // Executor executes validations against a Kubernetes cluster
 type Executor struct {
-	clientset     *kubernetes.Clientset
+	clientset     kubernetes.Interface
 	dynamicClient dynamic.Interface
 	restConfig    *rest.Config
 	namespace     string
 }
 
 // NewExecutor creates a new validation executor
-func NewExecutor(clientset *kubernetes.Clientset, dynamicClient dynamic.Interface, restConfig *rest.Config, namespace string) *Executor {
+func NewExecutor(clientset kubernetes.Interface, dynamicClient dynamic.Interface, restConfig *rest.Config, namespace string) *Executor {
 	return &Executor{
 		clientset:     clientset,
 		dynamicClient: dynamicClient,
@@ -120,13 +120,19 @@ func (e *Executor) executeStatus(ctx context.Context, spec StatusSpec) (bool, st
 	for _, pod := range pods {
 		for _, condition := range spec.Conditions {
 			passed := false
+			conditionFound := false
 			for _, podCond := range pod.Status.Conditions {
 				if string(podCond.Type) == condition.Type {
+					conditionFound = true
 					passed = string(podCond.Status) == condition.Status
 					break
 				}
 			}
-			if !passed {
+			if !conditionFound {
+				logger.Debug("Pod %s: condition type %s not found (available: %v)", pod.Name, condition.Type, getPodConditionTypes(&pod))
+				allPassed = false
+				messages = append(messages, fmt.Sprintf("Pod %s: condition %s not found", pod.Name, condition.Type))
+			} else if !passed {
 				allPassed = false
 				messages = append(messages, fmt.Sprintf("Pod %s: condition %s is not %s", pod.Name, condition.Type, condition.Status))
 			}
@@ -454,6 +460,16 @@ func (e *Executor) getTargetPods(ctx context.Context, target Target) ([]corev1.P
 		return e.getPodsForResource(ctx, target)
 	}
 
+	// If a specific pod name is provided, get that pod
+	if target.Name != "" {
+		pod, err := e.clientset.CoreV1().Pods(e.namespace).Get(ctx, target.Name, metav1.GetOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to get pod %s: %w", target.Name, err)
+		}
+		return []corev1.Pod{*pod}, nil
+	}
+
+	// Otherwise list pods by label selector
 	opts := metav1.ListOptions{}
 	if len(target.LabelSelector) > 0 {
 		opts.LabelSelector = labels.SelectorFromSet(target.LabelSelector).String()
@@ -561,4 +577,13 @@ func compareValues(actual int64, operator string, expected int64) bool {
 	default:
 		return actual == expected
 	}
+}
+
+// getPodConditionTypes returns a list of condition types present on a pod (for debugging)
+func getPodConditionTypes(pod *corev1.Pod) []string {
+	types := make([]string, len(pod.Status.Conditions))
+	for i, cond := range pod.Status.Conditions {
+		types[i] = string(cond.Type)
+	}
+	return types
 }

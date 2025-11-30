@@ -1,0 +1,30 @@
+validations:
+  - key: log-check-simple
+    title: "Application Started"
+    description: "Application should log startup message"
+    order: 1
+    type: log
+    spec:
+      target:
+        kind: Pod
+        labelSelector:
+          app: test-app
+      expectedStrings:
+        - "Server started"
+        - "Ready to accept connections"
+      sinceSeconds: 60
+
+  - key: log-check-container
+    title: "Specific Container Log"
+    description: "Check logs in specific container"
+    order: 2
+    type: log
+    spec:
+      target:
+        kind: Pod
+        labelSelector:
+          app: test-app
+      container: nginx
+      expectedStrings:
+        - "nginx: the configuration file"
+      sinceSeconds: 30

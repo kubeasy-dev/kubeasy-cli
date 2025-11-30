@@ -1,6 +1,10 @@
 # Makefile for kubeasy-cli
 .PHONY: help build test lint clean install-tools deps vendor dev release-check build-all
 
+# Setup Go PATH
+export GOPATH ?= $(shell go env GOPATH)
+export PATH := $(PATH):$(GOPATH)/bin
+
 # Variables
 BINARY_NAME=kubeasy
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -11,6 +15,9 @@ LDFLAGS=-s -w \
 	-X 'github.com/kubeasy-dev/kubeasy-cli/pkg/constants.LogFilePath=/tmp/kubeasy-cli.log' \
 	-X 'github.com/kubeasy-dev/kubeasy-cli/pkg/constants.WebsiteURL=https://kubeasy.dev' \
 	-X 'github.com/kubeasy-dev/kubeasy-cli/pkg/constants.ExercicesRepoBranch=main'
+# Extract Kubernetes version from go.mod (e.g., v0.34.2 -> 1.34.2)
+K8S_GO_VERSION=$(shell grep 'k8s.io/client-go' go.mod | grep -v '//' | awk '{print $$2}' | sed 's/v0\.\([0-9]*\)\.\([0-9]*\)/1.\1.\2/')
+KUBERNETES_VERSION=$(or $(K8S_GO_VERSION),1.34.2)
 
 # Colors for output
 RED=\033[0;31m
@@ -30,7 +37,16 @@ install-tools: ## Install development tools
 		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $$(go env GOPATH)/bin latest)
 	@command -v goreleaser >/dev/null 2>&1 || \
 		(echo "Installing goreleaser..." && go install github.com/goreleaser/goreleaser/v2@latest)
+	@command -v setup-envtest >/dev/null 2>&1 || \
+		(echo "Installing setup-envtest..." && go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest)
+	@command -v gocovmerge >/dev/null 2>&1 || \
+		(echo "Installing gocovmerge..." && go install github.com/wadey/gocovmerge@latest)
 	@echo "$(GREEN)✓ Tools installed$(NC)"
+
+setup-envtest: install-tools ## Setup envtest Kubernetes assets
+	@echo "$(YELLOW)Setting up envtest assets...$(NC)"
+	@$(GOPATH)/bin/setup-envtest use $(KUBERNETES_VERSION) --bin-dir ./bin/k8s
+	@echo "$(GREEN)✓ Envtest assets ready$(NC)"
 
 deps: ## Download and tidy Go dependencies
 	@echo "$(YELLOW)Downloading dependencies...$(NC)"
@@ -66,17 +82,83 @@ build-all: clean ## Build binaries for all platforms
 	@GOOS=windows GOARCH=arm64 go build -ldflags "$(LDFLAGS)" -o $(DIST_DIR)/$(BINARY_NAME)-windows-arm64.exe .
 	@echo "$(GREEN)✓ All binaries built in $(DIST_DIR)/$(NC)"
 
-test: ## Run tests with coverage
-	@echo "$(YELLOW)Running tests...$(NC)"
-	@go test -v -race -coverprofile=coverage.out ./...
-	@go tool cover -func=coverage.out | tail -1
-	@echo "$(GREEN)✓ Tests passed$(NC)"
-	@echo "$(BLUE)ℹ  Coverage report: coverage.out$(NC)"
+test: test-all ## Run all tests (unit + integration)
 
-test-coverage: test ## Generate HTML coverage report
-	@echo "$(YELLOW)Generating HTML coverage report...$(NC)"
+test-unit: ## Run unit tests only
+	@echo "$(YELLOW)Running unit tests...$(NC)"
+	@go test -v -race -coverprofile=coverage-unit.out -covermode=atomic \
+		-coverpkg=./pkg/... $$(go list ./... | grep -v /test/integration)
+	@if [ -s coverage-unit.out ]; then \
+		go tool cover -func=coverage-unit.out | tail -1; \
+	else \
+		echo "$(YELLOW)ℹ  No unit test coverage data$(NC)"; \
+	fi
+	@echo "$(GREEN)✓ Unit tests passed$(NC)"
+
+test-integration: setup-envtest ## Run integration tests
+	@echo "$(YELLOW)Running integration tests...$(NC)"
+	@echo "$(BLUE)ℹ  This will start a local Kubernetes API server$(NC)"
+	@KUBEBUILDER_ASSETS=$$($(GOPATH)/bin/setup-envtest use -p path $(KUBERNETES_VERSION)) \
+		go test -v -tags=integration -coverprofile=coverage-integration.out \
+		-covermode=atomic -coverpkg=./pkg/... ./test/integration/... -timeout 15m
+	@if [ -s coverage-integration.out ]; then \
+		echo "$(GREEN)✓ Integration tests passed$(NC)"; \
+		go tool cover -func=coverage-integration.out | tail -1; \
+	else \
+		echo "$(GREEN)✓ Integration tests passed$(NC)"; \
+		echo "$(YELLOW)ℹ  No coverage data generated (normal for external-only tests)$(NC)"; \
+	fi
+
+test-all: test-unit test-integration ## Run all tests (unit + integration)
+	@echo "$(GREEN)✓ All tests passed$(NC)"
+
+test-verbose: setup-envtest ## Run integration tests with verbose output
+	@echo "$(YELLOW)Running integration tests (verbose)...$(NC)"
+	@KUBEBUILDER_ASSETS=$$(setup-envtest use -p path $(KUBERNETES_VERSION)) \
+		go test -v -tags=integration ./test/integration/... -timeout 15m -v
+
+test-coverage: test-all ## Generate combined coverage report
+	@echo "$(YELLOW)Generating combined coverage report...$(NC)"
+	@mkdir -p coverage
+	@if [ -s coverage-unit.out ] && [ -s coverage-integration.out ]; then \
+		echo "$(BLUE)ℹ  Merging unit and integration coverage...$(NC)"; \
+		$(GOPATH)/bin/gocovmerge coverage-unit.out coverage-integration.out > coverage.out; \
+	elif [ -s coverage-integration.out ]; then \
+		echo "$(BLUE)ℹ  Using integration coverage only$(NC)"; \
+		cp coverage-integration.out coverage.out; \
+	elif [ -s coverage-unit.out ]; then \
+		echo "$(BLUE)ℹ  Using unit coverage only$(NC)"; \
+		cp coverage-unit.out coverage.out; \
+	else \
+		echo "$(RED)✗ No coverage data found$(NC)"; \
+		exit 1; \
+	fi
 	@go tool cover -html=coverage.out -o coverage.html
-	@echo "$(GREEN)✓ Coverage report: coverage.html$(NC)"
+	@go tool cover -func=coverage.out | tail -1
+	@echo "$(GREEN)✓ Coverage report generated: coverage.html$(NC)"
+
+ci-test: setup-envtest ## Run tests in CI environment
+	@echo "$(YELLOW)Running CI tests...$(NC)"
+	@# Unit tests
+	@go test -v -race -coverprofile=coverage-unit.out -covermode=atomic \
+		$$(go list ./... | grep -v /test/integration)
+	@# Integration tests
+	@KUBEBUILDER_ASSETS=$$(setup-envtest use -p path $(KUBERNETES_VERSION) --bin-dir ./bin/k8s) \
+		go test -v -tags=integration -coverprofile=coverage-integration.out \
+		-covermode=atomic ./test/integration/... -timeout 15m
+	@# Combine coverage using gocovmerge for reliable merging
+	@mkdir -p coverage
+	@if [ -s coverage-unit.out ] && [ -s coverage-integration.out ]; then \
+		echo "$(BLUE)ℹ  Merging unit and integration coverage...$(NC)"; \
+		$(GOPATH)/bin/gocovmerge coverage-unit.out coverage-integration.out > coverage.out; \
+	elif [ -s coverage-integration.out ]; then \
+		echo "$(BLUE)ℹ  Using integration coverage only...$(NC)"; \
+		cp coverage-integration.out coverage.out; \
+	elif [ -s coverage-unit.out ]; then \
+		echo "$(BLUE)ℹ  Using unit coverage only...$(NC)"; \
+		cp coverage-unit.out coverage.out; \
+	fi
+	@echo "$(GREEN)✓ CI tests complete$(NC)"
 
 lint: ## Run golangci-lint
 	@echo "$(YELLOW)Running linters...$(NC)"
@@ -110,59 +192,12 @@ fmt: ## Format Go code
 
 clean: ## Clean build artifacts
 	@echo "$(YELLOW)Cleaning...$(NC)"
-	@rm -rf $(BUILD_DIR) $(DIST_DIR) vendor coverage.out coverage.html
+	@rm -rf $(BUILD_DIR) $(DIST_DIR) vendor coverage*.out coverage.html coverage/
+	@go clean -testcache
 	@echo "$(GREEN)✓ Cleaned$(NC)"
 
 dev: build ## Build and run in development mode
 	@echo "$(BLUE)Running in development mode...$(NC)"
 	@./$(BUILD_DIR)/$(BINARY_NAME)
-
-release-check: ## Pre-release validation checks
-	@echo "$(BLUE)========================================$(NC)"
-	@echo "$(BLUE)  Pre-Release Validation$(NC)"
-	@echo "$(BLUE)========================================$(NC)"
-	@echo ""
-	@echo "$(YELLOW)1. Checking git status...$(NC)"
-	@if [ -n "$$(git status --porcelain)" ]; then \
-		echo "$(RED)✗ Uncommitted changes detected$(NC)"; \
-		git status --short; \
-		exit 1; \
-	fi
-	@echo "$(GREEN)✓ Working directory clean$(NC)"
-	@echo ""
-	@echo "$(YELLOW)2. Checking current branch...$(NC)"
-	@if [ "$$(git rev-parse --abbrev-ref HEAD)" != "main" ]; then \
-		echo "$(RED)✗ You must be on main branch$(NC)"; \
-		exit 1; \
-	fi
-	@echo "$(GREEN)✓ On main branch$(NC)"
-	@echo ""
-	@echo "$(YELLOW)3. Checking branch is up to date...$(NC)"
-	@git fetch origin main --quiet
-	@if [ $$(git rev-parse HEAD) != $$(git rev-parse @{u}) ]; then \
-		echo "$(RED)✗ Branch is not up to date with origin/main$(NC)"; \
-		exit 1; \
-	fi
-	@echo "$(GREEN)✓ Branch up to date$(NC)"
-	@echo ""
-	@echo "$(YELLOW)4. Running tests...$(NC)"
-	@$(MAKE) test --no-print-directory
-	@echo ""
-	@echo "$(YELLOW)5. Running linters...$(NC)"
-	@$(MAKE) lint --no-print-directory
-	@echo ""
-	@echo "$(YELLOW)6. Testing build...$(NC)"
-	@$(MAKE) build --no-print-directory
-	@echo ""
-	@echo "$(GREEN)========================================$(NC)"
-	@echo "$(GREEN)  ✓ All checks passed!$(NC)"
-	@echo "$(GREEN)  Ready for release$(NC)"
-	@echo "$(GREEN)========================================$(NC)"
-
-release-local: clean ## Test release process locally (snapshot mode)
-	@echo "$(YELLOW)Testing release locally...$(NC)"
-	@goreleaser release --snapshot --clean --skip=publish
-	@echo "$(GREEN)✓ Local release test completed$(NC)"
-	@echo "$(BLUE)ℹ  Check dist/ directory for artifacts$(NC)"
 
 .DEFAULT_GOAL := help

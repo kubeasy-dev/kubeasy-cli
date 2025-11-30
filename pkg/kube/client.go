@@ -123,7 +123,7 @@ func GetDynamicClient() (dynamic.Interface, error) {
 }
 
 // CreateNamespace creates a namespace if it doesn't exist
-func CreateNamespace(ctx context.Context, clientset *kubernetes.Clientset, namespace string) error {
+func CreateNamespace(ctx context.Context, clientset kubernetes.Interface, namespace string) error {
 	logger.Debug("Checking if namespace '%s' exists...", namespace)
 	// Check if namespace already exists
 	_, err := clientset.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
@@ -162,7 +162,7 @@ func CreateNamespace(ctx context.Context, clientset *kubernetes.Clientset, names
 }
 
 // DeleteNamespace deletes a namespace if it exists
-func DeleteNamespace(ctx context.Context, clientset *kubernetes.Clientset, namespace string) error {
+func DeleteNamespace(ctx context.Context, clientset kubernetes.Interface, namespace string) error {
 	logger.Debug("Checking if namespace '%s' exists for deletion...", namespace)
 
 	// Check if namespace exists

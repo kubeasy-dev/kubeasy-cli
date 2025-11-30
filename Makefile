@@ -15,9 +15,8 @@ LDFLAGS=-s -w \
 	-X 'github.com/kubeasy-dev/kubeasy-cli/pkg/constants.LogFilePath=/tmp/kubeasy-cli.log' \
 	-X 'github.com/kubeasy-dev/kubeasy-cli/pkg/constants.WebsiteURL=https://kubeasy.dev' \
 	-X 'github.com/kubeasy-dev/kubeasy-cli/pkg/constants.ExercicesRepoBranch=main'
-# Extract Kubernetes version from go.mod (e.g., v0.34.2 -> 1.34.2)
-K8S_GO_VERSION=$(shell grep 'k8s.io/client-go' go.mod | grep -v '//' | awk '{print $$2}' | sed 's/v0\.\([0-9]*\)\.\([0-9]*\)/1.\1.\2/')
-KUBERNETES_VERSION=$(or $(K8S_GO_VERSION),1.34.2)
+
+KUBERNETES_VERSION=1.34.1
 
 # Colors for output
 RED=\033[0;31m

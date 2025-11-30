@@ -64,17 +64,9 @@ jobs:
 
       - name: Download dependencies
         run: go mod download
-
-      - name: Install setup-envtest
-        run: |
-          go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
-          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
       - name: Run integration tests
         run: |
-          make setup-envtest
-          export KUBEBUILDER_ASSETS="$(pwd)/$(setup-envtest use -p path 1.34.x --bin-dir ./bin/k8s)"
-          go test -v -tags=integration -coverprofile=coverage-integration.out \
-            -covermode=atomic ./test/integration/... -timeout 15m
+          make test-integration
 
       - name: Upload integration test coverage
         uses: codecov/codecov-action@f32b3a3741e1053eb607407145bc9619351dc93b # v5.0.2

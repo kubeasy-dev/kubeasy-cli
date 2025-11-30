@@ -25,13 +25,13 @@ Integration tests use [controller-runtime/envtest](https://pkg.go.dev/sigs.k8s.i
 To install envtest binaries (along with other dev tools):
 
 ```bash
-make install-tools
+task install:tools
 ```
 
 Or to install only envtest:
 
 ```bash
-make setup-envtest
+task setup:envtest
 ```
 
 This will download and install the Kubernetes control plane binaries (etcd, kube-apiserver, kubectl) to `./bin/k8s/`.
@@ -43,9 +43,7 @@ This will download and install the Kubernetes control plane binaries (etcd, kube
 Run all unit and integration tests:
 
 ```bash
-make test
-# or
-make test-all
+task test
 ```
 
 ### Unit Tests Only
@@ -53,7 +51,7 @@ make test-all
 Run only unit tests (fast, no K8s cluster needed):
 
 ```bash
-make test-unit
+task test:unit
 ```
 
 ### Integration Tests Only
@@ -61,15 +59,15 @@ make test-unit
 Run only integration tests (starts ephemeral K8s API server):
 
 ```bash
-make test-integration
+task test:integration
 ```
 
 ### Verbose Output
 
-For detailed test output:
+For detailed test output, use Go's test flags directly:
 
 ```bash
-make test-verbose
+go test -v ./...
 ```
 
 ### With Coverage Report
@@ -77,7 +75,7 @@ make test-verbose
 Generate HTML coverage report:
 
 ```bash
-make test-coverage
+task test:coverage
 ```
 
 This creates `coverage.html` with visual coverage data.
@@ -152,7 +150,7 @@ See `.github/workflows/test.yml` for the full CI configuration.
 The CI uses a specialized target that combines coverage from unit and integration tests:
 
 ```bash
-make ci-test
+task test:coverage
 ```
 
 ## Test Coverage
@@ -164,7 +162,7 @@ Current coverage targets:
 View coverage report:
 
 ```bash
-make test-coverage
+task test:coverage
 open coverage.html
 ```
 
@@ -184,7 +182,7 @@ export PATH=$PATH:$(go env GOPATH)/bin
 Ensure envtest binaries are installed:
 
 ```bash
-make setup-envtest
+task setup:envtest
 ```
 
 ### Tests Timeout

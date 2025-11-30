@@ -229,7 +229,7 @@ golangci-lint run --config .github/linters/.golangci.yml
 **Problem:** Build fails for specific platform
 
 **Solutions:**
-- Test locally: `make release-local`
+- Test locally: `goreleaser release --snapshot --clean`
 - Check `.goreleaser.yaml` configuration
 - Verify LDFLAGS and build tags
 
@@ -321,7 +321,7 @@ Test the full release process without publishing:
 brew install goreleaser
 
 # Run snapshot build
-make release-local
+goreleaser release --snapshot --clean
 
 # Check artifacts
 ls -lh dist/
@@ -335,7 +335,7 @@ Test the NPM package installation:
 
 ```bash
 # Build binaries
-make build
+task build
 
 # Test NPM package
 npm pack

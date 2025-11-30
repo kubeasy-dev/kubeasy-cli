@@ -29,7 +29,7 @@ This phase focused on automating and optimizing the build and release process to
 ✅ **100% reliable npm publishing** (eliminated 403 errors)
 ✅ **2-3 minutes faster builds** (Go modules cache)
 ✅ **Automated prerelease validation** (tests, lint, build)
-✅ **Standardized build commands** (Makefile with 15 targets)
+✅ **Standardized build commands** (Taskfile with organized targets)
 ✅ **Secure release process** (automated validation script)
 
 ---
@@ -70,9 +70,9 @@ Error: Error downloading binary. HTTP Status Code: 403
 
 **Problem**: Developers used different commands, no clear documentation.
 
-**Solution**: Comprehensive Makefile with self-documenting targets.
+**Solution**: Comprehensive Taskfile with self-documenting targets.
 
-**Result**: ✅ `make help` shows all available commands
+**Result**: ✅ `task` shows all available commands
 
 ### 4. ❌ Manual, Error-Prone Release Process
 
@@ -102,28 +102,28 @@ Error: Error downloading binary. HTTP Status Code: 403
 
 ## Implementation Details
 
-### 1. Makefile - Build Automation
+### 1. Taskfile - Build Automation
 
-**File**: `Makefile`
+**File**: `Taskfile.yml`
 
-A comprehensive build tool with 15 targets:
+A comprehensive build tool with organized targets:
 
 ```bash
-make help           # Display all available commands
-make build          # Build binary for current platform
-make build-all      # Build for all platforms (Linux, macOS, Windows)
-make test           # Run tests with coverage
-make test-coverage  # Generate HTML coverage report
-make lint           # Run golangci-lint
-make lint-fix       # Auto-fix linting issues
-make fmt            # Format Go code
-make deps           # Download and tidy dependencies
-make vendor         # Generate vendor directory
-make clean          # Clean build artifacts
-make dev            # Build and run in development mode
-make release-check  # Pre-release validation checks
-make release-local  # Test release locally (snapshot mode)
-make install-tools  # Install development tools
+task                  # Display all available commands
+task build            # Build binary for current platform
+task build:all        # Build for all platforms (Linux, macOS, Windows)
+task test             # Run all tests (unit + integration)
+task test:unit        # Run unit tests only
+task test:integration # Run integration tests
+task test:coverage    # Generate combined coverage report
+task lint             # Run golangci-lint
+task lint:fix         # Auto-fix linting issues
+task fmt              # Format Go code
+task deps             # Download and tidy dependencies
+task vendor           # Generate vendor directory
+task clean            # Clean build artifacts
+task dev              # Build and run in development mode
+task install:tools    # Install all development tools
 ```
 
 **Key Features**:
@@ -131,19 +131,19 @@ make install-tools  # Install development tools
 - Colored output for better readability
 - Self-documenting with descriptions
 - Version information automatically injected via ldflags
-- Comprehensive validation in `release-check` target
+- Task grouping (build:*, test:*, install:*)
 
 **Example Usage**:
 
 ```bash
 # Quick development workflow
-make build && ./bin/kubeasy version
+task build && ./bin/kubeasy version
 
 # Before committing
-make lint fmt
+task lint fmt
 
-# Before releasing
-make release-check
+# Run all tests
+task test
 ```
 
 ### 2. Release Workflow Optimization
@@ -560,7 +560,7 @@ async function waitForBinary(url, maxAttempts = 30) {
 
 | File                                      | Description                           |
 | ----------------------------------------- | ------------------------------------- |
-| `Makefile`                                | Build automation with 15 targets      |
+| `Taskfile.yml`                            | Build automation with organized targets |
 | `.github/workflows/release-dispatch.yml`  | Manual release workflow               |
 | `.github/workflows/README.md`             | Workflows documentation               |
 | `CONTRIBUTING.md`                         | Developer contribution guide          |
@@ -601,7 +601,7 @@ async function waitForBinary(url, maxAttempts = 30) {
 
 | Aspect                 | Before    | After                      |
 | ---------------------- | --------- | -------------------------- |
-| Commands to remember   | ~10+      | `make help`                |
+| Commands to remember   | ~10+      | `task` (shows all)         |
 | Pre-release validation | Manual    | GitHub Actions UI          |
 | Error clarity          | Poor      | Excellent                  |
 | Documentation          | Scattered | Centralized                |
@@ -615,32 +615,32 @@ async function waitForBinary(url, maxAttempts = 30) {
 
 ```bash
 # View all available commands
-make help
+task
 
 # Standard development workflow
-make deps           # Download dependencies
-make build          # Build binary
-make test           # Run tests
-make lint           # Check code quality
+task deps           # Download dependencies
+task build          # Build binary
+task test           # Run tests
+task lint           # Check code quality
 
 # Quick iteration
-make dev            # Build and run
+task dev            # Build and run
 
 # Formatting
-make fmt            # Format all Go files
-make lint-fix       # Auto-fix linting issues
+task fmt            # Format all Go files
+task lint:fix       # Auto-fix linting issues
 
 # Cleanup
-make clean          # Remove build artifacts
+task clean          # Remove build artifacts
 ```
 
 ### Before Committing
 
 ```bash
 # Pre-commit checklist (automated by Husky)
-make fmt            # Format code
-make lint           # Check linting
-make test           # Ensure tests pass
+task fmt            # Format code
+task lint           # Check linting
+task test           # Ensure tests pass
 ```
 
 ### Release Process
@@ -689,11 +689,8 @@ Check manually:
 ### Testing Releases Locally
 
 ```bash
-# Test GoReleaser without publishing
-make release-local
-
 # Build for all platforms
-make build-all
+task build:all
 
 # Check artifacts
 ls -lh dist/
@@ -705,37 +702,27 @@ ls -lh dist/
 
 ```bash
 # Clean and rebuild
-make clean
-make deps
-make build
+task clean
+task deps
+task build
 ```
 
 #### Linting errors
 
 ```bash
 # Auto-fix what's possible
-make lint-fix
+task lint:fix
 
 # Manual fixes required for remaining issues
-make lint
+task lint
 ```
 
 #### Vendor Issues
 
 ```bash
 # Regenerate vendor directory
-go mod tidy
-go mod vendor
-```
-
-#### Release Validation Fails
-
-```bash
-# Check what's failing
-make release-check
-
-# Fix issues, then retry
-./scripts/release.sh patch
+task deps
+task vendor
 ```
 
 ---
@@ -817,13 +804,13 @@ After:  █░░░░░░░ 1 step
 
 ```bash
 # Install dev tools once
-make install-tools
+task install:tools
 
 # Daily development
-make build test lint
+task build test lint
 
 # Pre-commit (automated by Husky)
-make fmt lint
+task fmt lint
 ```
 
 ### For Release Managers
@@ -847,7 +834,7 @@ git push --follow-tags
 
 If issues arise, you can revert to the old process:
 
-1. **Builds**: Use `go build` directly or Makefile targets
+1. **Builds**: Use `go build` directly or Taskfile targets
 2. **Releases**: Use `npm version` + `git push --follow-tags`
 3. **Linting**: Run `golangci-lint` directly
 

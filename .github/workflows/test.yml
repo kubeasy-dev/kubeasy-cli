@@ -31,7 +31,7 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Install Task
-        uses: go-task/setup-task@v1
+        uses: go-task/setup-task@0ab1b2a65bc55236a3bc64cde78f80e20e8885c2 # v1
 
       - name: Run unit tests
         run: task test:unit
@@ -61,7 +61,7 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Install Task
-        uses: go-task/setup-task@v1
+        uses: go-task/setup-task@0ab1b2a65bc55236a3bc64cde78f80e20e8885c2 # v1
 
       - name: Run integration tests
         run: task test:integration

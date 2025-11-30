@@ -27,7 +27,7 @@ jobs:
       current_version: ${{ steps.version.outputs.current_version }}
     steps:
       - name: Generate GitHub App token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@7e473efe3cb98aa54f8d4bac15400b15fad77d94 # v2.2.0
         id: app-token
         with:
           app-id: ${{ vars.APP_ID }}
@@ -48,7 +48,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
         with:
-          node-version: '24.10.0'
+          node-version: '24.11.1'
 
       - name: Configure git
         run: |

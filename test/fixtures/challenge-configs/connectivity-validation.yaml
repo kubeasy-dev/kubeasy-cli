@@ -1,0 +1,30 @@
+validations:
+  - key: service-reachable
+    title: "Service Connectivity"
+    description: "Application should be able to reach the service"
+    order: 1
+    type: connectivity
+    spec:
+      sourcePod:
+        labelSelector:
+          app: test-app
+      targets:
+        - url: "http://test-service:8080/health"
+          expectedStatusCode: 200
+          timeoutSeconds: 5
+        - url: "http://test-service:8080/ready"
+          expectedStatusCode: 200
+          timeoutSeconds: 3
+
+  - key: external-connectivity
+    title: "External Connectivity"
+    description: "Pod should reach external services"
+    order: 2
+    type: connectivity
+    spec:
+      sourcePod:
+        name: test-pod
+      targets:
+        - url: "https://httpbin.org/status/200"
+          expectedStatusCode: 200
+          timeoutSeconds: 10

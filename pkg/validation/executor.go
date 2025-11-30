@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/logger"
@@ -37,14 +38,14 @@ const (
 
 // Executor executes validations against a Kubernetes cluster
 type Executor struct {
-	clientset     *kubernetes.Clientset
+	clientset     kubernetes.Interface
 	dynamicClient dynamic.Interface
 	restConfig    *rest.Config
 	namespace     string
 }
 
 // NewExecutor creates a new validation executor
-func NewExecutor(clientset *kubernetes.Clientset, dynamicClient dynamic.Interface, restConfig *rest.Config, namespace string) *Executor {
+func NewExecutor(clientset kubernetes.Interface, dynamicClient dynamic.Interface, restConfig *rest.Config, namespace string) *Executor {
 	return &Executor{
 		clientset:     clientset,
 		dynamicClient: dynamicClient,
@@ -91,13 +92,21 @@ func (e *Executor) Execute(ctx context.Context, v Validation) Result {
 	return result
 }
 
-// ExecuteAll runs all validations and returns results
+// ExecuteAll runs all validations in parallel and returns results
+// Results are returned in the same order as the input validations
 func (e *Executor) ExecuteAll(ctx context.Context, validations []Validation) []Result {
-	results := make([]Result, 0, len(validations))
-	for _, v := range validations {
-		result := e.Execute(ctx, v)
-		results = append(results, result)
+	results := make([]Result, len(validations))
+	var wg sync.WaitGroup
+
+	for i, v := range validations {
+		wg.Add(1)
+		go func(idx int, val Validation) {
+			defer wg.Done()
+			results[idx] = e.Execute(ctx, val)
+		}(i, v)
 	}
+
+	wg.Wait()
 	return results
 }
 
@@ -120,13 +129,19 @@ func (e *Executor) executeStatus(ctx context.Context, spec StatusSpec) (bool, st
 	for _, pod := range pods {
 		for _, condition := range spec.Conditions {
 			passed := false
+			conditionFound := false
 			for _, podCond := range pod.Status.Conditions {
 				if string(podCond.Type) == condition.Type {
+					conditionFound = true
 					passed = string(podCond.Status) == condition.Status
 					break
 				}
 			}
-			if !passed {
+			if !conditionFound {
+				logger.Debug("Pod %s: condition type %s not found (available: %v)", pod.Name, condition.Type, getPodConditionTypes(&pod))
+				allPassed = false
+				messages = append(messages, fmt.Sprintf("Pod %s: condition %s not found", pod.Name, condition.Type))
+			} else if !passed {
 				allPassed = false
 				messages = append(messages, fmt.Sprintf("Pod %s: condition %s is not %s", pod.Name, condition.Type, condition.Status))
 			}
@@ -153,37 +168,42 @@ func (e *Executor) executeLog(ctx context.Context, spec LogSpec) (bool, string, 
 	}
 
 	sinceSeconds := int64(spec.SinceSeconds)
-	var missingStrings []string
 	var logErrors []string
 
+	// Fetch logs once per pod for efficiency (instead of per expected string)
+	podLogs := make(map[string]string)
+	for _, pod := range pods {
+		container := spec.Container
+		if container == "" && len(pod.Spec.Containers) > 0 {
+			container = pod.Spec.Containers[0].Name
+		}
+
+		opts := &corev1.PodLogOptions{
+			Container:    container,
+			SinceSeconds: &sinceSeconds,
+		}
+
+		req := e.clientset.CoreV1().Pods(e.namespace).GetLogs(pod.Name, opts)
+		logs, err := req.Do(ctx).Raw()
+		if err != nil {
+			errMsg := fmt.Sprintf("pod %s: %v", pod.Name, err)
+			logger.Debug("Failed to get logs for %s", errMsg)
+			logErrors = append(logErrors, errMsg)
+			continue
+		}
+		podLogs[pod.Name] = string(logs)
+	}
+
+	// Check all expected strings against the fetched logs
+	var missingStrings []string
 	for _, expected := range spec.ExpectedStrings {
 		found := false
-		for _, pod := range pods {
-			container := spec.Container
-			if container == "" && len(pod.Spec.Containers) > 0 {
-				container = pod.Spec.Containers[0].Name
-			}
-
-			opts := &corev1.PodLogOptions{
-				Container:    container,
-				SinceSeconds: &sinceSeconds,
-			}
-
-			req := e.clientset.CoreV1().Pods(e.namespace).GetLogs(pod.Name, opts)
-			logs, err := req.Do(ctx).Raw()
-			if err != nil {
-				errMsg := fmt.Sprintf("pod %s: %v", pod.Name, err)
-				logger.Debug("Failed to get logs for %s", errMsg)
-				logErrors = append(logErrors, errMsg)
-				continue
-			}
-
-			if strings.Contains(string(logs), expected) {
+		for _, logs := range podLogs {
+			if strings.Contains(logs, expected) {
 				found = true
 				break
 			}
 		}
-
 		if !found {
 			missingStrings = append(missingStrings, expected)
 		}
@@ -367,6 +387,14 @@ func (e *Executor) executeConnectivity(ctx context.Context, spec ConnectivitySpe
 	return false, strings.Join(messages, "; "), nil
 }
 
+// escapeShellArg escapes a string for safe use in shell single-quoted context
+// This prevents command injection by properly handling embedded single quotes
+func escapeShellArg(arg string) string {
+	// In single quotes, the only special char is single quote itself
+	// We close the single quote, add an escaped single quote, then reopen
+	return strings.ReplaceAll(arg, "'", "'\"'\"'")
+}
+
 // checkConnectivity performs a curl request from a pod
 func (e *Executor) checkConnectivity(ctx context.Context, pod *corev1.Pod, target ConnectivityCheck) (bool, string) {
 	timeout := target.TimeoutSeconds
@@ -374,10 +402,13 @@ func (e *Executor) checkConnectivity(ctx context.Context, pod *corev1.Pod, targe
 		timeout = 5
 	}
 
+	// Escape URL to prevent command injection
+	escapedURL := escapeShellArg(target.URL)
+
 	// Build curl command
 	cmd := []string{
 		"sh", "-c",
-		fmt.Sprintf("curl -s -o /dev/null -w '%%{http_code}' --connect-timeout %d '%s'", timeout, target.URL),
+		fmt.Sprintf("curl -s -o /dev/null -w '%%{http_code}' --connect-timeout %d '%s'", timeout, escapedURL),
 	}
 
 	req := e.clientset.CoreV1().RESTClient().Post().
@@ -404,9 +435,10 @@ func (e *Executor) checkConnectivity(ctx context.Context, pod *corev1.Pod, targe
 
 	if err != nil {
 		// Try with wget as fallback
+		logger.Debug("curl failed for %s: %v, trying wget", target.URL, err)
 		cmd = []string{
 			"sh", "-c",
-			fmt.Sprintf("wget -q -O /dev/null -T %d '%s' && echo 200 || echo 000", timeout, target.URL),
+			fmt.Sprintf("wget -q -O /dev/null -T %d '%s' && echo 200 || echo 000", timeout, escapedURL),
 		}
 		req = e.clientset.CoreV1().RESTClient().Post().
 			Resource("pods").
@@ -454,6 +486,16 @@ func (e *Executor) getTargetPods(ctx context.Context, target Target) ([]corev1.P
 		return e.getPodsForResource(ctx, target)
 	}
 
+	// If a specific pod name is provided, get that pod
+	if target.Name != "" {
+		pod, err := e.clientset.CoreV1().Pods(e.namespace).Get(ctx, target.Name, metav1.GetOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to get pod %s: %w", target.Name, err)
+		}
+		return []corev1.Pod{*pod}, nil
+	}
+
+	// Otherwise list pods by label selector
 	opts := metav1.ListOptions{}
 	if len(target.LabelSelector) > 0 {
 		opts.LabelSelector = labels.SelectorFromSet(target.LabelSelector).String()
@@ -561,4 +603,13 @@ func compareValues(actual int64, operator string, expected int64) bool {
 	default:
 		return actual == expected
 	}
+}
+
+// getPodConditionTypes returns a list of condition types present on a pod (for debugging)
+func getPodConditionTypes(pod *corev1.Pod) []string {
+	types := make([]string, len(pod.Status.Conditions))
+	for i, cond := range pod.Status.Conditions {
+		types[i] = string(cond.Type)
+	}
+	return types
 }

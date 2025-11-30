@@ -1,0 +1,27 @@
+validations:
+  - key: pod-ready
+    title: "Pod Ready Check"
+    description: "Pod must be in Ready state"
+    order: 1
+    type: status
+    spec:
+      target:
+        kind: Pod
+        labelSelector:
+          app: test-app
+      conditions:
+        - type: Ready
+          status: "True"
+
+  - key: deployment-available
+    title: "Deployment Available"
+    description: "Deployment must be available"
+    order: 2
+    type: status
+    spec:
+      target:
+        kind: Deployment
+        name: test-deployment
+      conditions:
+        - type: Available
+          status: "True"

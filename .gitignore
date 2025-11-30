@@ -4,14 +4,19 @@ node_modules
 vendor
 
 # Logs
+logs
 kubeasy-cli.log
 
 # Build artifacts
 kubeasy
 kubeasy-cli
 
+# Task artifacts
+*.task/
+
 # Test coverage
 coverage.out
+coverage-*.out
 coverage.html
 
 # IDE
@@ -19,4 +24,3 @@ coverage.html
 .idea/
 *.swp
 *.swo
-*~

@@ -120,13 +120,19 @@ func (e *Executor) executeStatus(ctx context.Context, spec StatusSpec) (bool, st
 	for _, pod := range pods {
 		for _, condition := range spec.Conditions {
 			passed := false
+			conditionFound := false
 			for _, podCond := range pod.Status.Conditions {
 				if string(podCond.Type) == condition.Type {
+					conditionFound = true
 					passed = string(podCond.Status) == condition.Status
 					break
 				}
 			}
-			if !passed {
+			if !conditionFound {
+				logger.Debug("Pod %s: condition type %s not found (available: %v)", pod.Name, condition.Type, getPodConditionTypes(&pod))
+				allPassed = false
+				messages = append(messages, fmt.Sprintf("Pod %s: condition %s not found", pod.Name, condition.Type))
+			} else if !passed {
 				allPassed = false
 				messages = append(messages, fmt.Sprintf("Pod %s: condition %s is not %s", pod.Name, condition.Type, condition.Status))
 			}
@@ -571,4 +577,13 @@ func compareValues(actual int64, operator string, expected int64) bool {
 	default:
 		return actual == expected
 	}
+}
+
+// getPodConditionTypes returns a list of condition types present on a pod (for debugging)
+func getPodConditionTypes(pod *corev1.Pod) []string {
+	types := make([]string, len(pod.Status.Conditions))
+	for i, cond := range pod.Status.Conditions {
+		types[i] = string(cond.Type)
+	}
+	return types
 }

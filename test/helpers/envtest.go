@@ -52,7 +52,8 @@ func SetupEnvTest(t *testing.T) *TestEnvironment {
 
 	// Create a test namespace
 	// Convert test name to lowercase and replace underscores with hyphens for K8s compliance
-	namespace := "test-" + strings.ToLower(strings.ReplaceAll(t.Name(), "_", "-"))
+	// Truncate to 63 chars (K8s limit) and trim trailing hyphens
+	namespace := sanitizeNamespaceName("test-" + strings.ToLower(strings.ReplaceAll(t.Name(), "_", "-")))
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: namespace,
@@ -192,7 +193,8 @@ func (e *TestEnvironment) WaitForPod(podName string, timeout time.Duration) *cor
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	ticker := time.NewTicker(100 * time.Millisecond)
+	// Use 50ms polling interval for faster test execution
+	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
@@ -211,4 +213,17 @@ func (e *TestEnvironment) WaitForPod(podName string, timeout time.Duration) *cor
 			}
 		}
 	}
+}
+
+// sanitizeNamespaceName ensures namespace name is valid for Kubernetes
+// Limits to 63 chars and removes trailing hyphens
+func sanitizeNamespaceName(name string) string {
+	// Kubernetes resource names have a 63 character limit
+	const maxLen = 63
+	if len(name) > maxLen {
+		name = name[:maxLen]
+	}
+	// Remove trailing hyphens (invalid in K8s names)
+	name = strings.TrimRight(name, "-")
+	return name
 }

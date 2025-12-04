@@ -5,7 +5,7 @@ go 1.25.4
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/pterm/pterm v0.12.82
-	github.com/spf13/cobra v1.10.1
+	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	github.com/zalando/go-keyring v0.2.6
 	golang.org/x/term v0.37.0

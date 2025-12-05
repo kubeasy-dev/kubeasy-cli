@@ -3,14 +3,15 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/api"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/ui"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/logger"
+	"github.com/kubeasy-dev/kubeasy-cli/pkg/ui"
 	"github.com/spf13/cobra"
 	"github.com/zalando/go-keyring"
 	"golang.org/x/term"
@@ -58,7 +59,7 @@ After successful login, you will be able to use commands requiring authenticatio
 					if profile.LastName != nil {
 						lastName = *profile.LastName
 					}
-					fullName := strings.TrimSpace(profile.FirstName  " "  lastName)
+					fullName := strings.TrimSpace(profile.FirstName + " " + lastName)
 					if fullName != "" {
 						ui.KeyValue("Profile", fullName)
 					}
@@ -98,7 +99,8 @@ After successful login, you will be able to use commands requiring authenticatio
 			ui.Println()
 
 			// Provide platform-specific guidance
-			if runtime.GOOS == "linux" {
+			switch runtime.GOOS {
+			case "linux":
 				ui.Info("This error typically occurs when the keyring service is not available.")
 				ui.Println()
 				ui.Info("To fix this on Linux:")
@@ -112,16 +114,15 @@ After successful login, you will be able to use commands requiring authenticatio
 				ui.Println()
 				ui.Info("  3. If you're using SSH, make sure to enable X11 forwarding or")
 				ui.Info("     set up D-Bus properly for headless operation")
-			} else if runtime.GOOS == "darwin" {
+			case "darwin":
 				ui.Info("On macOS, the keychain should be available by default.")
 				ui.Info("Please check that you have access to the system keychain.")
-			} else if runtime.GOOS == "windows" {
+			case "windows":
 				ui.Info("On Windows, credential storage should be available by default.")
 				ui.Info("Please check your Windows Credential Manager settings.")
 			}
 
 			ui.Println()
-			ui.Info("For more details, check the logs at: %s", constants.LogFilePath)
 			return nil
 		}
 
@@ -136,7 +137,7 @@ After successful login, you will be able to use commands requiring authenticatio
 			if profile.LastName != nil {
 				lastName = *profile.LastName
 			}
-			fullName := strings.TrimSpace(profile.FirstName  " "  lastName)
+			fullName := strings.TrimSpace(profile.FirstName + " " + lastName)
 			if fullName != "" {
 				ui.KeyValue("Welcome", fullName)
 			}

@@ -54,7 +54,8 @@ func TestGetArgoCDAppManifest(t *testing.T) {
 		require.True(t, ok, "Source should be a map")
 
 		assert.Contains(t, source["repoURL"], "argoproj/argo-cd")
-		assert.Equal(t, "stable", source["targetRevision"])
+		// Version should be a semver tag (e.g., v3.0.2) managed by Renovate
+		assert.Regexp(t, `^v\d+\.\d+\.\d+$`, source["targetRevision"])
 	})
 
 	t.Run("has automated sync policy", func(t *testing.T) {

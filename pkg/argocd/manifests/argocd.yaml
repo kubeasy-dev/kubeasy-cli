@@ -12,7 +12,8 @@ spec:
   project: default
   source:
     repoURL: https://github.com/argoproj/argo-cd.git
-    targetRevision: stable
+    # renovate: depName=argoproj/argo-cd datasource=github-releases
+    targetRevision: v3.0.2
     path: manifests
     directory:
       include: install.yaml

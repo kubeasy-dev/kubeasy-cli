@@ -51,9 +51,12 @@ func SetupEnvTest(t *testing.T) *TestEnvironment {
 	require.NoError(t, err, "Failed to create dynamic client")
 
 	// Create a test namespace
-	// Convert test name to lowercase and replace underscores with hyphens for K8s compliance
+	// Convert test name to lowercase and replace underscores and slashes with hyphens for K8s compliance
 	// Truncate to 63 chars (K8s limit) and trim trailing hyphens
-	namespace := sanitizeNamespaceName("test-" + strings.ToLower(strings.ReplaceAll(t.Name(), "_", "-")))
+	testName := strings.ToLower(t.Name())
+	testName = strings.ReplaceAll(testName, "_", "-")
+	testName = strings.ReplaceAll(testName, "/", "-")
+	namespace := sanitizeNamespaceName("test-" + testName)
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: namespace,

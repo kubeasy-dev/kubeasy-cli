@@ -13,10 +13,6 @@ var ExercisesRepoURL = GithubRootURL + "/challenges"
 
 var ExercicesRepoBranch = "main"
 
-var CliSetupAppsURL = GithubRootURL + "/cli-setup"
-
-var CliSetupAppsBranch = "main"
-
 var Version = "dev"
 
 var KubeasyClusterContext = "kind-kubeasy"

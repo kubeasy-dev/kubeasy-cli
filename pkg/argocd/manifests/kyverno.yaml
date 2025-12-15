@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kyverno
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  destination:
+    name: in-cluster
+    namespace: kyverno
+  project: default
+  source:
+    repoURL: https://kyverno.github.io/kyverno
+    # renovate: depName=kyverno registryUrl=https://kyverno.github.io/kyverno
+    targetRevision: 3.6.1
+    chart: kyverno
+    helm:
+      releaseName: kyverno
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

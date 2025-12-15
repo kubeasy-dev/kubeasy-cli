@@ -8,6 +8,25 @@
     ":assignAndReview(pbrissaud)",
     ":automergeLinters"
   ],
+  "customManagers": [
+    {
+      "description": "Update Helm chart versions in embedded ArgoCD manifests",
+      "customType": "regex",
+      "fileMatch": ["^pkg/argocd/manifests/.*\\.yaml$"],
+      "matchStrings": [
+        "#\\s*renovate:\\s*depName=(?<depName>\\S+)\\s+registryUrl=(?<registryUrl>\\S+)\\n\\s*targetRevision:\\s*(?<currentValue>\\S+)"
+      ],
+      "datasourceTemplate": "helm"
+    },
+    {
+      "description": "Update GitHub releases versions in embedded ArgoCD manifests",
+      "customType": "regex",
+      "fileMatch": ["^pkg/argocd/manifests/.*\\.yaml$"],
+      "matchStrings": [
+        "#\\s*renovate:\\s*depName=(?<depName>\\S+)\\s+datasource=(?<datasource>\\S+)\\n\\s*targetRevision:\\s*(?<currentValue>\\S+)"
+      ]
+    }
+  ],
   "packageRules": [
     {
       "description": "Keep Go version in sync between all files",
@@ -46,6 +65,15 @@
       "matchPackageNames": ["anthropics/claude-code-action"],
       "matchManagers": ["github-actions"],
       "pinDigests": false
+    },
+    {
+      "description": "Group all embedded ArgoCD manifests updates into a single PR",
+      "matchManagers": ["custom.regex"],
+      "matchFileNames": ["pkg/argocd/manifests/**"],
+      "groupName": "Embedded ArgoCD manifests",
+      "groupSlug": "argocd-manifests",
+      "separateMajorMinor": false,
+      "separateMinorPatch": false
     }
   ],
   "separateMajorMinor": true

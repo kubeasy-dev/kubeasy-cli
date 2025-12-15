@@ -33,6 +33,15 @@ func GetKyvernoAppManifest() ([]byte, error) {
 	return data, nil
 }
 
+// GetLocalPathProvisionerAppManifest returns the embedded Local Path Provisioner application manifest
+func GetLocalPathProvisionerAppManifest() ([]byte, error) {
+	data, err := EmbeddedManifests.ReadFile("manifests/local-path-provisioner.yaml")
+	if err != nil {
+		return nil, fmt.Errorf("%w: local-path-provisioner.yaml: %v", ErrManifestNotFound, err)
+	}
+	return data, nil
+}
+
 // GetAllAppManifests returns all embedded application manifests.
 // This function is useful for future extensibility when more apps are added.
 func GetAllAppManifests() (map[string][]byte, error) {
@@ -49,6 +58,12 @@ func GetAllAppManifests() (map[string][]byte, error) {
 		return nil, fmt.Errorf("failed to load Kyverno manifest: %w", err)
 	}
 	manifests["kyverno"] = kyvernoManifest
+
+	localPathProvisionerManifest, err := GetLocalPathProvisionerAppManifest()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load Local Path Provisioner manifest: %w", err)
+	}
+	manifests["local-path-provisioner"] = localPathProvisionerManifest
 
 	return manifests, nil
 }

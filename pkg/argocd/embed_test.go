@@ -166,6 +166,92 @@ func TestGetKyvernoAppManifest(t *testing.T) {
 	})
 }
 
+// TestGetLocalPathProvisionerAppManifest tests that the Local Path Provisioner application manifest is properly embedded
+func TestGetLocalPathProvisionerAppManifest(t *testing.T) {
+	t.Run("returns valid YAML content", func(t *testing.T) {
+		manifest, err := GetLocalPathProvisionerAppManifest()
+		require.NoError(t, err)
+		require.NotEmpty(t, manifest)
+
+		// Verify it's valid YAML
+		var parsed map[string]interface{}
+		err = yaml.Unmarshal(manifest, &parsed)
+		require.NoError(t, err, "Manifest should be valid YAML")
+	})
+
+	t.Run("contains Local Path Provisioner Application resource", func(t *testing.T) {
+		manifest, err := GetLocalPathProvisionerAppManifest()
+		require.NoError(t, err)
+
+		var app map[string]interface{}
+		err = yaml.Unmarshal(manifest, &app)
+		require.NoError(t, err)
+
+		assert.Equal(t, "argoproj.io/v1alpha1", app["apiVersion"])
+		assert.Equal(t, "Application", app["kind"])
+
+		metadata, ok := app["metadata"].(map[string]interface{})
+		require.True(t, ok, "Metadata should be a map")
+		assert.Equal(t, "local-path-provisioner", metadata["name"])
+		assert.Equal(t, "argocd", metadata["namespace"])
+	})
+
+	t.Run("has correct source configuration", func(t *testing.T) {
+		manifest, err := GetLocalPathProvisionerAppManifest()
+		require.NoError(t, err)
+
+		var app map[string]interface{}
+		err = yaml.Unmarshal(manifest, &app)
+		require.NoError(t, err)
+
+		spec, ok := app["spec"].(map[string]interface{})
+		require.True(t, ok, "Spec should be a map")
+
+		source, ok := spec["source"].(map[string]interface{})
+		require.True(t, ok, "Source should be a map")
+
+		assert.Contains(t, source["repoURL"], "rancher/local-path-provisioner")
+		// Version should be a semver tag (e.g., v0.0.32) managed by Renovate
+		assert.Regexp(t, `^v\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$`, source["targetRevision"])
+	})
+
+	t.Run("targets local-path-storage namespace", func(t *testing.T) {
+		manifest, err := GetLocalPathProvisionerAppManifest()
+		require.NoError(t, err)
+
+		var app map[string]interface{}
+		err = yaml.Unmarshal(manifest, &app)
+		require.NoError(t, err)
+
+		spec, ok := app["spec"].(map[string]interface{})
+		require.True(t, ok)
+
+		destination, ok := spec["destination"].(map[string]interface{})
+		require.True(t, ok, "Destination should be present")
+		assert.Equal(t, "local-path-storage", destination["namespace"])
+	})
+
+	t.Run("has automated sync policy", func(t *testing.T) {
+		manifest, err := GetLocalPathProvisionerAppManifest()
+		require.NoError(t, err)
+
+		var app map[string]interface{}
+		err = yaml.Unmarshal(manifest, &app)
+		require.NoError(t, err)
+
+		spec, ok := app["spec"].(map[string]interface{})
+		require.True(t, ok)
+
+		syncPolicy, ok := spec["syncPolicy"].(map[string]interface{})
+		require.True(t, ok, "SyncPolicy should be present")
+
+		automated, ok := syncPolicy["automated"].(map[string]interface{})
+		require.True(t, ok, "Automated sync should be configured")
+		assert.Equal(t, true, automated["prune"])
+		assert.Equal(t, true, automated["selfHeal"])
+	})
+}
+
 // TestGetAllAppManifests tests that all manifests are returned correctly
 func TestGetAllAppManifests(t *testing.T) {
 	t.Run("returns all expected manifests", func(t *testing.T) {
@@ -173,9 +259,10 @@ func TestGetAllAppManifests(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, manifests)
 
-		assert.Len(t, manifests, 2, "Should return 2 manifests")
+		assert.Len(t, manifests, 3, "Should return 3 manifests")
 		assert.Contains(t, manifests, "argocd")
 		assert.Contains(t, manifests, "kyverno")
+		assert.Contains(t, manifests, "local-path-provisioner")
 	})
 
 	t.Run("argocd manifest matches GetArgoCDAppManifest", func(t *testing.T) {
@@ -196,6 +283,16 @@ func TestGetAllAppManifests(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, kyvernoDirect, manifests["kyverno"])
+	})
+
+	t.Run("local-path-provisioner manifest matches GetLocalPathProvisionerAppManifest", func(t *testing.T) {
+		manifests, err := GetAllAppManifests()
+		require.NoError(t, err)
+
+		localPathProvisionerDirect, err := GetLocalPathProvisionerAppManifest()
+		require.NoError(t, err)
+
+		assert.Equal(t, localPathProvisionerDirect, manifests["local-path-provisioner"])
 	})
 
 	t.Run("all manifests are valid YAML", func(t *testing.T) {
@@ -223,6 +320,7 @@ func TestEmbeddedManifests(t *testing.T) {
 
 		assert.Contains(t, fileNames, "argocd.yaml")
 		assert.Contains(t, fileNames, "kyverno.yaml")
+		assert.Contains(t, fileNames, "local-path-provisioner.yaml")
 	})
 
 	t.Run("manifests have non-zero size", func(t *testing.T) {

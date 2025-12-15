@@ -79,8 +79,8 @@ var setupCmd = &cobra.Command{
 			}
 		}
 
-		// Step 3: Wait for apps (kyverno and argocd are applied directly from embedded manifests)
-		apps := []string{"kyverno", "argocd"}
+		// Step 3: Wait for apps (kyverno, argocd, and local-path-provisioner are applied directly from embedded manifests)
+		apps := []string{"kyverno", "argocd", "local-path-provisioner"}
 		err = ui.TimedSpinner("Waiting for ArgoCD applications to be ready", func() error {
 			return argocd.WaitForArgoCDAppsReadyCore(apps, 8*time.Minute)
 		})

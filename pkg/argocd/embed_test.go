@@ -54,8 +54,9 @@ func TestGetArgoCDAppManifest(t *testing.T) {
 		require.True(t, ok, "Source should be a map")
 
 		assert.Contains(t, source["repoURL"], "argoproj/argo-cd")
-		// Version should be a semver tag (e.g., v3.0.2) managed by Renovate
-		assert.Regexp(t, `^v\d+\.\d+\.\d+$`, source["targetRevision"])
+		// Version should be a semver tag (e.g., v3.0.2 or v3.0.2-rc1) managed by Renovate
+		// Regex allows for optional pre-release suffix like -alpha, -beta, -rc1
+		assert.Regexp(t, `^v\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$`, source["targetRevision"])
 	})
 
 	t.Run("has automated sync policy", func(t *testing.T) {
@@ -234,5 +235,15 @@ func TestEmbeddedManifests(t *testing.T) {
 				assert.True(t, info.Size() > 0, "File %s should have non-zero size", entry.Name())
 			}
 		}
+	})
+
+	t.Run("handles missing file gracefully", func(t *testing.T) {
+		_, err := EmbeddedManifests.ReadFile("manifests/nonexistent.yaml")
+		assert.Error(t, err, "Reading a non-existent file should return an error")
+	})
+
+	t.Run("handles missing directory gracefully", func(t *testing.T) {
+		_, err := EmbeddedManifests.ReadDir("nonexistent")
+		assert.Error(t, err, "Reading a non-existent directory should return an error")
 	})
 }

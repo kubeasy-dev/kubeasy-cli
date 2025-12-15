@@ -2,12 +2,15 @@ package argocd
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors" // Add alias
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/kube"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/logger"
@@ -38,6 +41,74 @@ func DefaultInstallOptions() *InstallOptions {
 		InstallTimeout: DefaultInstallTimeout,
 		WaitForReady:   true,
 	}
+}
+
+// generateSecretKey generates a cryptographically secure random secret key
+func generateSecretKey() ([]byte, error) {
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		return nil, fmt.Errorf("failed to generate random secret key: %w", err)
+	}
+	// Encode to hex string for readability in the secret
+	return []byte(hex.EncodeToString(key)), nil
+}
+
+// ensureServerSecretKey ensures the server.secretkey exists in argocd-secret
+// and restarts the application controller if it was added.
+// See: https://github.com/argoproj/argo-cd/issues/22931
+func ensureServerSecretKey(ctx context.Context, clientset kubernetes.Interface) error {
+	logger.Info("Checking server.secretkey in argocd-secret...")
+	secret, err := clientset.CoreV1().Secrets(ArgoCDNamespace).Get(ctx, "argocd-secret", metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get argocd-secret: %w", err)
+	}
+
+	if secret.Data == nil {
+		secret.Data = make(map[string][]byte)
+	}
+
+	// Add server.secretkey if it doesn't exist
+	if _, exists := secret.Data["server.secretkey"]; !exists {
+		logger.Info("Adding server.secretkey to argocd-secret...")
+		secretKey, err := generateSecretKey()
+		if err != nil {
+			return err
+		}
+		secret.Data["server.secretkey"] = secretKey
+		if _, err = clientset.CoreV1().Secrets(ArgoCDNamespace).Update(ctx, secret, metav1.UpdateOptions{}); err != nil {
+			return fmt.Errorf("failed to update argocd-secret with server.secretkey: %w", err)
+		}
+		logger.Info("server.secretkey added to argocd-secret")
+
+		// Restart application controller to pick up the new secret
+		if err = restartApplicationController(ctx, clientset); err != nil {
+			return err
+		}
+	} else {
+		logger.Debug("server.secretkey already exists in argocd-secret")
+	}
+
+	return nil
+}
+
+// restartApplicationController triggers a restart of the ArgoCD application controller
+func restartApplicationController(ctx context.Context, clientset kubernetes.Interface) error {
+	logger.Info("Restarting ArgoCD application controller...")
+	sts, err := clientset.AppsV1().StatefulSets(ArgoCDNamespace).Get(ctx, "argocd-application-controller", metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get argocd-application-controller StatefulSet: %w", err)
+	}
+
+	if sts.Spec.Template.Annotations == nil {
+		sts.Spec.Template.Annotations = make(map[string]string)
+	}
+	sts.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
+
+	if _, err = clientset.AppsV1().StatefulSets(ArgoCDNamespace).Update(ctx, sts, metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("failed to restart argocd-application-controller: %w", err)
+	}
+	logger.Info("ArgoCD application controller restarted")
+	return nil
 }
 
 // InstallArgoCD installs ArgoCD into the cluster
@@ -119,47 +190,10 @@ func InstallArgoCD(options *InstallOptions) error {
 	}
 
 	// Fix ArgoCD Core v3.0.0+ bug: add server.secretkey to argocd-secret
-	// See: https://github.com/argoproj/argo-cd/issues/22931
-	logger.Info("Adding server.secretkey to argocd-secret (ArgoCD Core v3.0.0+ requirement)...")
-	secret, err := clientset.CoreV1().Secrets(ArgoCDNamespace).Get(ctx, "argocd-secret", metav1.GetOptions{})
-	if err != nil {
-		logger.Error("Failed to get argocd-secret: %v", err)
+	if err = ensureServerSecretKey(ctx, clientset); err != nil {
+		logger.Error("Failed to ensure server.secretkey: %v", err)
 		return err
 	}
-	if secret.Data == nil {
-		secret.Data = make(map[string][]byte)
-	}
-	// Add server.secretkey if it doesn't exist (any value works, ArgoCD Core just checks for presence)
-	if _, exists := secret.Data["server.secretkey"]; !exists {
-		secret.Data["server.secretkey"] = []byte("kubeasy-argocd-core-secret")
-		_, err = clientset.CoreV1().Secrets(ArgoCDNamespace).Update(ctx, secret, metav1.UpdateOptions{})
-		if err != nil {
-			logger.Error("Failed to update argocd-secret with server.secretkey: %v", err)
-			return err
-		}
-		logger.Info("server.secretkey added to argocd-secret")
-	} else {
-		logger.Debug("server.secretkey already exists in argocd-secret")
-	}
-
-	// Restart application controller to pick up the new secret
-	logger.Info("Restarting ArgoCD application controller to apply changes...")
-	sts, err := clientset.AppsV1().StatefulSets(ArgoCDNamespace).Get(ctx, "argocd-application-controller", metav1.GetOptions{})
-	if err != nil {
-		logger.Error("Failed to get argocd-application-controller StatefulSet: %v", err)
-		return err
-	}
-	// Trigger restart by updating an annotation
-	if sts.Spec.Template.Annotations == nil {
-		sts.Spec.Template.Annotations = make(map[string]string)
-	}
-	sts.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
-	_, err = clientset.AppsV1().StatefulSets(ArgoCDNamespace).Update(ctx, sts, metav1.UpdateOptions{})
-	if err != nil {
-		logger.Error("Failed to restart argocd-application-controller: %v", err)
-		return err
-	}
-	logger.Info("ArgoCD application controller restarted")
 
 	// Create default AppProject FIRST (ArgoCD Core doesn't create it automatically)
 	logger.Info("Creating default ArgoCD AppProject...")
@@ -244,46 +278,9 @@ func EnsureArgoCDResources() error {
 	}
 
 	// Fix ArgoCD Core v3.0.0+ bug: add server.secretkey to argocd-secret if missing
-	// See: https://github.com/argoproj/argo-cd/issues/22931
-	logger.Info("Checking server.secretkey in argocd-secret...")
-	secret, err := clientset.CoreV1().Secrets(ArgoCDNamespace).Get(ctx, "argocd-secret", metav1.GetOptions{})
-	if err != nil {
-		logger.Error("Failed to get argocd-secret: %v", err)
+	if err = ensureServerSecretKey(ctx, clientset); err != nil {
+		logger.Error("Failed to ensure server.secretkey: %v", err)
 		return err
-	}
-	if secret.Data == nil {
-		secret.Data = make(map[string][]byte)
-	}
-	// Add server.secretkey if it doesn't exist
-	if _, exists := secret.Data["server.secretkey"]; !exists {
-		logger.Info("Adding missing server.secretkey to argocd-secret...")
-		secret.Data["server.secretkey"] = []byte("kubeasy-argocd-core-secret")
-		_, err = clientset.CoreV1().Secrets(ArgoCDNamespace).Update(ctx, secret, metav1.UpdateOptions{})
-		if err != nil {
-			logger.Error("Failed to update argocd-secret with server.secretkey: %v", err)
-			return err
-		}
-		logger.Info("server.secretkey added to argocd-secret")
-
-		// Restart application controller to pick up the new secret
-		logger.Info("Restarting ArgoCD application controller...")
-		sts, err := clientset.AppsV1().StatefulSets(ArgoCDNamespace).Get(ctx, "argocd-application-controller", metav1.GetOptions{})
-		if err != nil {
-			logger.Error("Failed to get argocd-application-controller StatefulSet: %v", err)
-			return err
-		}
-		if sts.Spec.Template.Annotations == nil {
-			sts.Spec.Template.Annotations = make(map[string]string)
-		}
-		sts.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
-		_, err = clientset.AppsV1().StatefulSets(ArgoCDNamespace).Update(ctx, sts, metav1.UpdateOptions{})
-		if err != nil {
-			logger.Error("Failed to restart argocd-application-controller: %v", err)
-			return err
-		}
-		logger.Info("ArgoCD application controller restarted")
-	} else {
-		logger.Debug("server.secretkey already exists in argocd-secret")
 	}
 
 	// Create default AppProject

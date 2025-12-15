@@ -158,7 +158,54 @@ func CreateNamespace(ctx context.Context, clientset kubernetes.Interface, namesp
 	}
 
 	logger.Info("Namespace '%s' created successfully.", namespace)
-	return nil
+
+	// Wait for namespace to become Active before returning
+	return WaitForNamespaceActive(ctx, clientset, namespace)
+}
+
+// WaitForNamespaceActive waits for a namespace to reach the Active phase.
+// This is important to avoid race conditions when ArgoCD tries to sync resources
+// to a namespace that isn't fully ready yet.
+func WaitForNamespaceActive(ctx context.Context, clientset kubernetes.Interface, namespace string) error {
+	logger.Debug("Waiting for namespace '%s' to become Active...", namespace)
+
+	// Use a default timeout if context has no deadline
+	waitCtx := ctx
+	var cancel context.CancelFunc
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		waitCtx, cancel = context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+	}
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-waitCtx.Done():
+			logger.Error("Timeout waiting for namespace '%s' to become Active", namespace)
+			return fmt.Errorf("timeout waiting for namespace '%s' to become Active: %w", namespace, waitCtx.Err())
+		case <-ticker.C:
+			ns, err := clientset.CoreV1().Namespaces().Get(waitCtx, namespace, metav1.GetOptions{})
+			if err != nil {
+				logger.Warning("Error checking namespace '%s' status: %v (retrying...)", namespace, err)
+				continue
+			}
+
+			logger.Debug("Namespace '%s' phase: %s", namespace, ns.Status.Phase)
+
+			if ns.Status.Phase == corev1.NamespaceActive {
+				logger.Info("Namespace '%s' is now Active", namespace)
+				return nil
+			}
+
+			// If namespace is terminating, something is wrong
+			if ns.Status.Phase == corev1.NamespaceTerminating {
+				logger.Error("Namespace '%s' is Terminating unexpectedly", namespace)
+				return fmt.Errorf("namespace '%s' is Terminating", namespace)
+			}
+		}
+	}
 }
 
 // DeleteNamespace deletes a namespace if it exists

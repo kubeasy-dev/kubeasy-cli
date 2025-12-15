@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -11,8 +12,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 )
 
 // TestCreateNamespace_Logic tests namespace creation logic
@@ -75,6 +78,14 @@ func TestCreateNamespace(t *testing.T) {
 		clientset := fake.NewSimpleClientset()
 		ctx := context.Background()
 
+		// Add a reactor to set namespace status to Active on creation
+		clientset.PrependReactor("create", "namespaces", func(action k8stesting.Action) (bool, runtime.Object, error) {
+			createAction := action.(k8stesting.CreateAction)
+			ns := createAction.GetObject().(*corev1.Namespace)
+			ns.Status.Phase = corev1.NamespaceActive
+			return false, ns, nil // Return false to let the fake clientset handle the actual creation
+		})
+
 		err := CreateNamespace(ctx, clientset, "test-namespace")
 		require.NoError(t, err)
 
@@ -84,10 +95,13 @@ func TestCreateNamespace(t *testing.T) {
 		assert.Equal(t, "test-namespace", created.Name)
 	})
 
-	t.Run("idempotent - namespace already exists", func(t *testing.T) {
+	t.Run("idempotent - namespace already exists with Active status", func(t *testing.T) {
 		ns := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "existing-namespace",
+			},
+			Status: corev1.NamespaceStatus{
+				Phase: corev1.NamespaceActive,
 			},
 		}
 		clientset := fake.NewSimpleClientset(ns)
@@ -138,6 +152,70 @@ func TestDeleteNamespace_Logic(t *testing.T) {
 		// DeleteNamespace should handle this gracefully (check first)
 		_, err = clientset.CoreV1().Namespaces().Get(ctx, "nonexistent", metav1.GetOptions{})
 		assert.True(t, apierrors.IsNotFound(err))
+	})
+}
+
+func TestWaitForNamespaceActive(t *testing.T) {
+	t.Run("returns immediately when namespace is already Active", func(t *testing.T) {
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "active-namespace",
+			},
+			Status: corev1.NamespaceStatus{
+				Phase: corev1.NamespaceActive,
+			},
+		}
+		clientset := fake.NewSimpleClientset(ns)
+		ctx := context.Background()
+
+		err := WaitForNamespaceActive(ctx, clientset, "active-namespace")
+		require.NoError(t, err)
+	})
+
+	t.Run("returns error when namespace is Terminating", func(t *testing.T) {
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "terminating-namespace",
+			},
+			Status: corev1.NamespaceStatus{
+				Phase: corev1.NamespaceTerminating,
+			},
+		}
+		clientset := fake.NewSimpleClientset(ns)
+		ctx := context.Background()
+
+		err := WaitForNamespaceActive(ctx, clientset, "terminating-namespace")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Terminating")
+	})
+
+	t.Run("times out when context is cancelled", func(t *testing.T) {
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "pending-namespace",
+			},
+			Status: corev1.NamespaceStatus{
+				Phase: "", // Empty phase - not Active
+			},
+		}
+		clientset := fake.NewSimpleClientset(ns)
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+
+		err := WaitForNamespaceActive(ctx, clientset, "pending-namespace")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "timeout")
+	})
+
+	t.Run("returns error when namespace does not exist", func(t *testing.T) {
+		clientset := fake.NewSimpleClientset()
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+
+		err := WaitForNamespaceActive(ctx, clientset, "nonexistent")
+		require.Error(t, err)
+		// Should timeout since namespace doesn't exist
+		assert.Contains(t, err.Error(), "timeout")
 	})
 }
 

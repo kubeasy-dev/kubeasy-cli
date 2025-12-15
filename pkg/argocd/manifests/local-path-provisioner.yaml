@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: local-path-provisioner
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  destination:
+    name: in-cluster
+    namespace: local-path-storage
+  project: default
+  source:
+    repoURL: https://github.com/rancher/local-path-provisioner.git
+    # renovate: depName=rancher/local-path-provisioner datasource=github-releases
+    targetRevision: v0.0.32
+    path: deploy
+    directory:
+      include: local-path-storage.yaml
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

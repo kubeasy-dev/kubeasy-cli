@@ -255,6 +255,22 @@ spec:
 	}
 	logger.Info("Kyverno application manifest applied successfully.")
 
+	// Apply Local Path Provisioner application
+	logger.Debug("Loading embedded Local Path Provisioner application manifest...")
+	localPathProvisionerAppManifest, err := GetLocalPathProvisionerAppManifest()
+	if err != nil {
+		logger.Error("Failed to load embedded Local Path Provisioner application manifest: %v", err)
+		return err
+	}
+	logger.Debug("Local Path Provisioner application manifest loaded (%d bytes).", len(localPathProvisionerAppManifest))
+
+	logger.Info("Applying Local Path Provisioner application manifest to namespace '%s'...", ArgoCDNamespace)
+	if err = kube.ApplyManifest(ctx, localPathProvisionerAppManifest, ArgoCDNamespace, clientset, dynamicClient); err != nil {
+		logger.Error("Failed to apply Local Path Provisioner application manifest: %v", err)
+		return err
+	}
+	logger.Info("Local Path Provisioner application manifest applied successfully.")
+
 	logger.Info("ArgoCD installation process completed.")
 	return nil
 }
@@ -333,6 +349,18 @@ spec:
 		return err
 	}
 	logger.Info("Kyverno application manifest ensured.")
+
+	// Apply Local Path Provisioner application
+	localPathProvisionerAppManifest, err := GetLocalPathProvisionerAppManifest()
+	if err != nil {
+		logger.Error("Failed to load embedded Local Path Provisioner application manifest: %v", err)
+		return err
+	}
+	if err = kube.ApplyManifest(ctx, localPathProvisionerAppManifest, ArgoCDNamespace, clientset, dynamicClient); err != nil {
+		logger.Error("Failed to apply Local Path Provisioner application manifest: %v", err)
+		return err
+	}
+	logger.Info("Local Path Provisioner application manifest ensured.")
 
 	logger.Info("ArgoCD resources ensured successfully.")
 	return nil

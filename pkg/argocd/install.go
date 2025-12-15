@@ -388,10 +388,14 @@ func IsArgoCDInstalled() (bool, error) {
 		return false, err
 	}
 
-	ctx := context.Background()
+	return IsArgoCDInstalledWithClient(context.Background(), clientset)
+}
 
+// IsArgoCDInstalledWithClient checks if ArgoCD is already installed using the provided client.
+// This function is useful for testing with mock clients.
+func IsArgoCDInstalledWithClient(ctx context.Context, clientset kubernetes.Interface) (bool, error) {
 	// Check if ArgoCD namespace exists
-	_, err = clientset.CoreV1().Namespaces().Get(ctx, ArgoCDNamespace, metav1.GetOptions{})
+	_, err := clientset.CoreV1().Namespaces().Get(ctx, ArgoCDNamespace, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.Debug("ArgoCD namespace '%s' does not exist", ArgoCDNamespace)

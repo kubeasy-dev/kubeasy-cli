@@ -2,8 +2,12 @@ package argocd
 
 import (
 	"embed"
+	"errors"
 	"fmt"
 )
+
+// ErrManifestNotFound is returned when a manifest file is not found in the embedded filesystem.
+var ErrManifestNotFound = errors.New("manifest file not found in embedded filesystem")
 
 // EmbeddedManifests contains the ArgoCD application manifests embedded at compile time.
 // This eliminates the need to fetch manifests from GitHub during installation.
@@ -15,7 +19,7 @@ var EmbeddedManifests embed.FS
 func GetArgoCDAppManifest() ([]byte, error) {
 	data, err := EmbeddedManifests.ReadFile("manifests/argocd.yaml")
 	if err != nil {
-		return nil, fmt.Errorf("failed to read embedded ArgoCD manifest: %w", err)
+		return nil, fmt.Errorf("%w: argocd.yaml: %v", ErrManifestNotFound, err)
 	}
 	return data, nil
 }
@@ -24,7 +28,7 @@ func GetArgoCDAppManifest() ([]byte, error) {
 func GetKyvernoAppManifest() ([]byte, error) {
 	data, err := EmbeddedManifests.ReadFile("manifests/kyverno.yaml")
 	if err != nil {
-		return nil, fmt.Errorf("failed to read embedded Kyverno manifest: %w", err)
+		return nil, fmt.Errorf("%w: kyverno.yaml: %v", ErrManifestNotFound, err)
 	}
 	return data, nil
 }

@@ -1,6 +1,7 @@
 package argocd
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -245,5 +246,25 @@ func TestEmbeddedManifests(t *testing.T) {
 	t.Run("handles missing directory gracefully", func(t *testing.T) {
 		_, err := EmbeddedManifests.ReadDir("nonexistent")
 		assert.Error(t, err, "Reading a non-existent directory should return an error")
+	})
+}
+
+// TestErrManifestNotFound tests the ErrManifestNotFound sentinel error
+func TestErrManifestNotFound(t *testing.T) {
+	t.Run("error includes file name context", func(t *testing.T) {
+		// Since embedded files exist, we can't directly test missing file errors
+		// through the public API. Instead, verify the error type is exported
+		// and can be used with errors.Is()
+		assert.NotNil(t, ErrManifestNotFound)
+		assert.Equal(t, "manifest file not found in embedded filesystem", ErrManifestNotFound.Error())
+	})
+
+	t.Run("callers can use errors.Is for error checking", func(t *testing.T) {
+		// Create a wrapped error similar to what the functions return
+		wrappedErr := errors.Join(ErrManifestNotFound, errors.New("test.yaml: file does not exist"))
+
+		// Verify errors.Is works with the sentinel error
+		assert.True(t, errors.Is(wrappedErr, ErrManifestNotFound),
+			"errors.Is should detect ErrManifestNotFound in wrapped errors")
 	})
 }

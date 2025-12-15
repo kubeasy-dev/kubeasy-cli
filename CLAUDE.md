@@ -236,9 +236,10 @@ The CLI now uses a **self-contained validation executor** that loads validation 
 
 ### ArgoCD Integration
 
-- App-of-Apps pattern: `cli-setup` repository contains bootstrap manifests
-- Main bootstrap app: `kubeasy-cli-setup` (installs Kyverno and ArgoCD itself)
+- **Embedded manifests**: ArgoCD and Kyverno application manifests are embedded at compile time via `pkg/argocd/embed.go`
+- Manifest versions are managed by Renovate using custom regex managers (see `renovate.json`)
 - Challenge apps created in `argocd` namespace, deploy to challenge-specific namespaces
+- `cli-setup` repository is no longer used for manifest distribution (historical reference only)
 
 ### Error Handling
 

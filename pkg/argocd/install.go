@@ -9,7 +9,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors" // Add alias
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/kube"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/logger"
 )
@@ -187,23 +186,40 @@ spec:
 	}
 	logger.Info("Default AppProject created successfully.")
 
-	// Install ArgoCD application (App of Apps) AFTER core components are ready
-	logger.Info("Applying App-of-Apps manifest (kubeasy-cli-setup)...")
-	appManifestURL := fmt.Sprintf("%s/raw/refs/heads/%s/app-of-apps.yaml", constants.CliSetupAppsURL, constants.CliSetupAppsBranch)
-	logger.Debug("Fetching App-of-Apps manifest from %s...", appManifestURL)
-	appManifestBytes, err := kube.FetchManifest(appManifestURL)
-	if err != nil {
-		logger.Error("Failed to fetch App-of-Apps manifest: %v", err)
-		return err
-	}
-	logger.Debug("App-of-Apps manifest fetched successfully (%d bytes).", len(appManifestBytes))
+	// Install ArgoCD applications from embedded manifests
+	logger.Info("Applying embedded ArgoCD application manifests...")
 
-	logger.Info("Applying App-of-Apps manifest to namespace '%s'...", ArgoCDNamespace)
-	if err = kube.ApplyManifest(ctx, appManifestBytes, ArgoCDNamespace, clientset, dynamicClient); err != nil {
-		logger.Error("Failed to apply App-of-Apps manifest: %v", err)
+	// Apply ArgoCD self-management application
+	logger.Debug("Loading embedded ArgoCD application manifest...")
+	argocdAppManifest, err := GetArgoCDAppManifest()
+	if err != nil {
+		logger.Error("Failed to load embedded ArgoCD application manifest: %v", err)
 		return err
 	}
-	logger.Info("App-of-Apps manifest applied successfully.")
+	logger.Debug("ArgoCD application manifest loaded (%d bytes).", len(argocdAppManifest))
+
+	logger.Info("Applying ArgoCD application manifest to namespace '%s'...", ArgoCDNamespace)
+	if err = kube.ApplyManifest(ctx, argocdAppManifest, ArgoCDNamespace, clientset, dynamicClient); err != nil {
+		logger.Error("Failed to apply ArgoCD application manifest: %v", err)
+		return err
+	}
+	logger.Info("ArgoCD application manifest applied successfully.")
+
+	// Apply Kyverno application
+	logger.Debug("Loading embedded Kyverno application manifest...")
+	kyvernoAppManifest, err := GetKyvernoAppManifest()
+	if err != nil {
+		logger.Error("Failed to load embedded Kyverno application manifest: %v", err)
+		return err
+	}
+	logger.Debug("Kyverno application manifest loaded (%d bytes).", len(kyvernoAppManifest))
+
+	logger.Info("Applying Kyverno application manifest to namespace '%s'...", ArgoCDNamespace)
+	if err = kube.ApplyManifest(ctx, kyvernoAppManifest, ArgoCDNamespace, clientset, dynamicClient); err != nil {
+		logger.Error("Failed to apply Kyverno application manifest: %v", err)
+		return err
+	}
+	logger.Info("Kyverno application manifest applied successfully.")
 
 	logger.Info("ArgoCD installation process completed.")
 	return nil
@@ -294,20 +310,32 @@ spec:
 	}
 	logger.Info("Default AppProject ensured.")
 
-	// Apply App-of-Apps
-	logger.Info("Creating/updating App-of-Apps manifest (kubeasy-cli-setup)...")
-	appManifestURL := fmt.Sprintf("%s/raw/refs/heads/%s/app-of-apps.yaml", constants.CliSetupAppsURL, constants.CliSetupAppsBranch)
-	appManifestBytes, err := kube.FetchManifest(appManifestURL)
-	if err != nil {
-		logger.Error("Failed to fetch App-of-Apps manifest: %v", err)
-		return err
-	}
+	// Apply embedded ArgoCD applications
+	logger.Info("Creating/updating ArgoCD application manifests...")
 
-	if err = kube.ApplyManifest(ctx, appManifestBytes, ArgoCDNamespace, clientset, dynamicClient); err != nil {
-		logger.Error("Failed to apply App-of-Apps manifest: %v", err)
+	// Apply ArgoCD self-management application
+	argocdAppManifest, err := GetArgoCDAppManifest()
+	if err != nil {
+		logger.Error("Failed to load embedded ArgoCD application manifest: %v", err)
 		return err
 	}
-	logger.Info("App-of-Apps manifest ensured.")
+	if err = kube.ApplyManifest(ctx, argocdAppManifest, ArgoCDNamespace, clientset, dynamicClient); err != nil {
+		logger.Error("Failed to apply ArgoCD application manifest: %v", err)
+		return err
+	}
+	logger.Info("ArgoCD application manifest ensured.")
+
+	// Apply Kyverno application
+	kyvernoAppManifest, err := GetKyvernoAppManifest()
+	if err != nil {
+		logger.Error("Failed to load embedded Kyverno application manifest: %v", err)
+		return err
+	}
+	if err = kube.ApplyManifest(ctx, kyvernoAppManifest, ArgoCDNamespace, clientset, dynamicClient); err != nil {
+		logger.Error("Failed to apply Kyverno application manifest: %v", err)
+		return err
+	}
+	logger.Info("Kyverno application manifest ensured.")
 
 	logger.Info("ArgoCD resources ensured successfully.")
 	return nil

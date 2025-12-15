@@ -3,6 +3,7 @@ package validation
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -913,4 +914,1251 @@ func TestNewExecutor_NilValues(t *testing.T) {
 
 	assert.NotNil(t, executor)
 	assert.Equal(t, "", executor.namespace)
+}
+
+// =============================================================================
+// Log Validator Tests
+// =============================================================================
+
+func TestExecuteLog_NoMatchingPods(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	executor := NewExecutor(clientset, nil, nil, "test-ns")
+
+	spec := LogSpec{
+		Target: Target{
+			Kind: "Pod",
+			Name: "nonexistent-pod",
+		},
+		ExpectedStrings: []string{"test string"},
+		SinceSeconds:    300,
+	}
+
+	passed, _, err := executor.executeLog(context.Background(), spec)
+
+	// When a specific pod name is provided and it doesn't exist, an error is returned
+	assert.Error(t, err)
+	assert.False(t, passed)
+}
+
+func TestExecuteLog_NoMatchingPodsWithLabelSelector(t *testing.T) {
+	// Create a pod with different labels
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod",
+			Namespace: "test-ns",
+			Labels:    map[string]string{"app": "other"},
+		},
+	}
+
+	clientset := fake.NewSimpleClientset(pod)
+	executor := NewExecutor(clientset, nil, nil, "test-ns")
+
+	spec := LogSpec{
+		Target: Target{
+			Kind:          "Pod",
+			LabelSelector: map[string]string{"app": "test"},
+		},
+		ExpectedStrings: []string{"test string"},
+		SinceSeconds:    300,
+	}
+
+	passed, msg, err := executor.executeLog(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Equal(t, errNoMatchingPods, msg)
+}
+
+func TestExecuteLog_ByLabelSelector(t *testing.T) {
+	pod1 := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod-1",
+			Namespace: "test-ns",
+			Labels:    map[string]string{"app": "test"},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{Name: "main"},
+			},
+		},
+	}
+
+	pod2 := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod-2",
+			Namespace: "test-ns",
+			Labels:    map[string]string{"app": "test"},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{Name: "main"},
+			},
+		},
+	}
+
+	clientset := fake.NewSimpleClientset(pod1, pod2)
+	executor := NewExecutor(clientset, nil, nil, "test-ns")
+
+	spec := LogSpec{
+		Target: Target{
+			Kind:          "Pod",
+			LabelSelector: map[string]string{"app": "test"},
+		},
+		ExpectedStrings: []string{"test string"},
+		SinceSeconds:    300,
+	}
+
+	// This will fail because fake client doesn't support GetLogs
+	// but it proves the label selector logic works
+	passed, msg, err := executor.executeLog(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.False(t, passed)
+	// Should contain "Missing strings" since logs can't be fetched
+	assert.Contains(t, msg, "Missing strings")
+}
+
+func TestExecuteLog_WithSpecificContainer(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod",
+			Namespace: "test-ns",
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{Name: "sidecar"},
+				{Name: "main"},
+			},
+		},
+	}
+
+	clientset := fake.NewSimpleClientset(pod)
+	executor := NewExecutor(clientset, nil, nil, "test-ns")
+
+	spec := LogSpec{
+		Target: Target{
+			Kind: "Pod",
+			Name: "test-pod",
+		},
+		Container:       "main",
+		ExpectedStrings: []string{"test string"},
+		SinceSeconds:    300,
+	}
+
+	// Fake client doesn't support GetLogs, but this tests the container selection path
+	passed, msg, err := executor.executeLog(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "Missing strings")
+}
+
+func TestExecuteLog_MultipleExpectedStrings(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod",
+			Namespace: "test-ns",
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{Name: "main"},
+			},
+		},
+	}
+
+	clientset := fake.NewSimpleClientset(pod)
+	executor := NewExecutor(clientset, nil, nil, "test-ns")
+
+	spec := LogSpec{
+		Target: Target{
+			Kind: "Pod",
+			Name: "test-pod",
+		},
+		ExpectedStrings: []string{"string1", "string2", "string3"},
+		SinceSeconds:    300,
+	}
+
+	passed, msg, err := executor.executeLog(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.False(t, passed)
+	// All strings should be missing
+	assert.Contains(t, msg, "string1")
+	assert.Contains(t, msg, "string2")
+	assert.Contains(t, msg, "string3")
+}
+
+func TestExecuteLog_DefaultContainer(t *testing.T) {
+	// Test that the first container is used when none specified
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod",
+			Namespace: "test-ns",
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{Name: "first-container"},
+				{Name: "second-container"},
+			},
+		},
+	}
+
+	clientset := fake.NewSimpleClientset(pod)
+	executor := NewExecutor(clientset, nil, nil, "test-ns")
+
+	spec := LogSpec{
+		Target: Target{
+			Kind: "Pod",
+			Name: "test-pod",
+		},
+		// No container specified - should use first
+		ExpectedStrings: []string{"test"},
+		SinceSeconds:    300,
+	}
+
+	// This exercises the default container selection code path
+	passed, msg, err := executor.executeLog(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "Missing strings")
+}
+
+// =============================================================================
+// Event Validator Tests
+// =============================================================================
+
+func TestExecuteEvent_ByLabelSelector(t *testing.T) {
+	pod1 := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod-1",
+			Namespace: "test-ns",
+			Labels:    map[string]string{"app": "test"},
+			UID:       "uid-1",
+		},
+	}
+
+	pod2 := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod-2",
+			Namespace: "test-ns",
+			Labels:    map[string]string{"app": "test"},
+			UID:       "uid-2",
+		},
+	}
+
+	clientset := fake.NewSimpleClientset(pod1, pod2)
+	executor := NewExecutor(clientset, nil, nil, "test-ns")
+
+	spec := EventSpec{
+		Target: Target{
+			Kind:          "Pod",
+			LabelSelector: map[string]string{"app": "test"},
+		},
+		ForbiddenReasons: []string{"OOMKilled", "Evicted"},
+		SinceSeconds:     300,
+	}
+
+	passed, msg, err := executor.executeEvent(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Equal(t, errNoForbiddenEvents, msg)
+}
+
+func TestExecuteEvent_MultipleForbiddenReasons(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod",
+			Namespace: "test-ns",
+			UID:       "test-uid",
+		},
+	}
+
+	// Create events with different forbidden reasons
+	event1 := &corev1.Event{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "event-1",
+			Namespace: "test-ns",
+		},
+		InvolvedObject: corev1.ObjectReference{
+			Kind: "Pod",
+			Name: "test-pod",
+			UID:  "test-uid",
+		},
+		Reason:        "OOMKilled",
+		LastTimestamp: metav1.Now(),
+		EventTime:     metav1.NowMicro(),
+	}
+
+	event2 := &corev1.Event{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "event-2",
+			Namespace: "test-ns",
+		},
+		InvolvedObject: corev1.ObjectReference{
+			Kind: "Pod",
+			Name: "test-pod",
+			UID:  "test-uid",
+		},
+		Reason:        "Evicted",
+		LastTimestamp: metav1.Now(),
+		EventTime:     metav1.NowMicro(),
+	}
+
+	clientset := fake.NewSimpleClientset(pod, event1, event2)
+	executor := NewExecutor(clientset, nil, nil, "test-ns")
+
+	spec := EventSpec{
+		Target: Target{
+			Kind: "Pod",
+			Name: "test-pod",
+		},
+		ForbiddenReasons: []string{"OOMKilled", "Evicted", "BackOff"},
+		SinceSeconds:     300,
+	}
+
+	passed, msg, err := executor.executeEvent(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "Forbidden events detected")
+	assert.Contains(t, msg, "OOMKilled")
+	assert.Contains(t, msg, "Evicted")
+}
+
+func TestExecuteEvent_EventsOnMultiplePods(t *testing.T) {
+	pod1 := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod-1",
+			Namespace: "test-ns",
+			Labels:    map[string]string{"app": "test"},
+			UID:       "uid-1",
+		},
+	}
+
+	pod2 := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod-2",
+			Namespace: "test-ns",
+			Labels:    map[string]string{"app": "test"},
+			UID:       "uid-2",
+		},
+	}
+
+	// Event on first pod
+	event1 := &corev1.Event{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "event-1",
+			Namespace: "test-ns",
+		},
+		InvolvedObject: corev1.ObjectReference{
+			Kind: "Pod",
+			Name: "test-pod-1",
+			UID:  "uid-1",
+		},
+		Reason:        "BackOff",
+		LastTimestamp: metav1.Now(),
+		EventTime:     metav1.NowMicro(),
+	}
+
+	clientset := fake.NewSimpleClientset(pod1, pod2, event1)
+	executor := NewExecutor(clientset, nil, nil, "test-ns")
+
+	spec := EventSpec{
+		Target: Target{
+			Kind:          "Pod",
+			LabelSelector: map[string]string{"app": "test"},
+		},
+		ForbiddenReasons: []string{"BackOff"},
+		SinceSeconds:     300,
+	}
+
+	passed, msg, err := executor.executeEvent(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "BackOff on test-pod-1")
+}
+
+func TestExecuteEvent_OldEventsIgnored(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod",
+			Namespace: "test-ns",
+			UID:       "test-uid",
+		},
+	}
+
+	// Create an old event (older than sinceSeconds)
+	oldTime := metav1.NewTime(time.Now().Add(-1 * time.Hour))
+	event := &corev1.Event{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "old-event",
+			Namespace: "test-ns",
+		},
+		InvolvedObject: corev1.ObjectReference{
+			Kind: "Pod",
+			Name: "test-pod",
+			UID:  "test-uid",
+		},
+		Reason:        "OOMKilled",
+		LastTimestamp: oldTime,
+		EventTime:     metav1.NewMicroTime(oldTime.Time),
+	}
+
+	clientset := fake.NewSimpleClientset(pod, event)
+	executor := NewExecutor(clientset, nil, nil, "test-ns")
+
+	spec := EventSpec{
+		Target: Target{
+			Kind: "Pod",
+			Name: "test-pod",
+		},
+		ForbiddenReasons: []string{"OOMKilled"},
+		SinceSeconds:     300, // Only check last 5 minutes
+	}
+
+	passed, msg, err := executor.executeEvent(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Equal(t, errNoForbiddenEvents, msg)
+}
+
+func TestExecuteEvent_NoMatchingPods(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	executor := NewExecutor(clientset, nil, nil, "test-ns")
+
+	spec := EventSpec{
+		Target: Target{
+			Kind: "Pod",
+			Name: "nonexistent-pod",
+		},
+		ForbiddenReasons: []string{"OOMKilled"},
+		SinceSeconds:     300,
+	}
+
+	passed, _, err := executor.executeEvent(context.Background(), spec)
+
+	assert.Error(t, err)
+	assert.False(t, passed)
+}
+
+func TestExecuteEvent_NonPodEventsIgnored(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod",
+			Namespace: "test-ns",
+			UID:       "test-uid",
+		},
+	}
+
+	// Event on a non-Pod resource
+	event := &corev1.Event{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "deployment-event",
+			Namespace: "test-ns",
+		},
+		InvolvedObject: corev1.ObjectReference{
+			Kind: "Deployment",
+			Name: "test-deployment",
+		},
+		Reason:        "OOMKilled",
+		LastTimestamp: metav1.Now(),
+		EventTime:     metav1.NowMicro(),
+	}
+
+	clientset := fake.NewSimpleClientset(pod, event)
+	executor := NewExecutor(clientset, nil, nil, "test-ns")
+
+	spec := EventSpec{
+		Target: Target{
+			Kind: "Pod",
+			Name: "test-pod",
+		},
+		ForbiddenReasons: []string{"OOMKilled"},
+		SinceSeconds:     300,
+	}
+
+	passed, msg, err := executor.executeEvent(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Equal(t, errNoForbiddenEvents, msg)
+}
+
+// =============================================================================
+// Status Validator Tests
+// =============================================================================
+
+func TestExecuteStatus_MultipleConditions(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod",
+			Namespace: "test-ns",
+		},
+		Status: corev1.PodStatus{
+			Conditions: []corev1.PodCondition{
+				{Type: corev1.PodReady, Status: corev1.ConditionTrue},
+				{Type: corev1.PodScheduled, Status: corev1.ConditionTrue},
+				{Type: corev1.ContainersReady, Status: corev1.ConditionTrue},
+			},
+		},
+	}
+
+	clientset := fake.NewSimpleClientset(pod)
+	executor := NewExecutor(clientset, nil, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{
+			Kind: "Pod",
+			Name: "test-pod",
+		},
+		Conditions: []StatusCondition{
+			{Type: "Ready", Status: "True"},
+			{Type: "PodScheduled", Status: "True"},
+			{Type: "ContainersReady", Status: "True"},
+		},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Contains(t, msg, "All 1 pod(s) meet the required conditions")
+}
+
+func TestExecuteStatus_PartialConditionsMet(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod",
+			Namespace: "test-ns",
+		},
+		Status: corev1.PodStatus{
+			Conditions: []corev1.PodCondition{
+				{Type: corev1.PodReady, Status: corev1.ConditionTrue},
+				{Type: corev1.PodScheduled, Status: corev1.ConditionFalse},
+			},
+		},
+	}
+
+	clientset := fake.NewSimpleClientset(pod)
+	executor := NewExecutor(clientset, nil, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{
+			Kind: "Pod",
+			Name: "test-pod",
+		},
+		Conditions: []StatusCondition{
+			{Type: "Ready", Status: "True"},
+			{Type: "PodScheduled", Status: "True"},
+		},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "PodScheduled is not True")
+}
+
+func TestExecuteStatus_ConditionNotFound(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod",
+			Namespace: "test-ns",
+		},
+		Status: corev1.PodStatus{
+			Conditions: []corev1.PodCondition{
+				{Type: corev1.PodReady, Status: corev1.ConditionTrue},
+			},
+		},
+	}
+
+	clientset := fake.NewSimpleClientset(pod)
+	executor := NewExecutor(clientset, nil, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{
+			Kind: "Pod",
+			Name: "test-pod",
+		},
+		Conditions: []StatusCondition{
+			{Type: "NonExistentCondition", Status: "True"},
+		},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "condition NonExistentCondition not found")
+}
+
+func TestExecuteStatus_MultiplePodsMixedResults(t *testing.T) {
+	pod1 := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod-1",
+			Namespace: "test-ns",
+			Labels:    map[string]string{"app": "test"},
+		},
+		Status: corev1.PodStatus{
+			Conditions: []corev1.PodCondition{
+				{Type: corev1.PodReady, Status: corev1.ConditionTrue},
+			},
+		},
+	}
+
+	pod2 := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod-2",
+			Namespace: "test-ns",
+			Labels:    map[string]string{"app": "test"},
+		},
+		Status: corev1.PodStatus{
+			Conditions: []corev1.PodCondition{
+				{Type: corev1.PodReady, Status: corev1.ConditionFalse},
+			},
+		},
+	}
+
+	clientset := fake.NewSimpleClientset(pod1, pod2)
+	executor := NewExecutor(clientset, nil, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{
+			Kind:          "Pod",
+			LabelSelector: map[string]string{"app": "test"},
+		},
+		Conditions: []StatusCondition{
+			{Type: "Ready", Status: "True"},
+		},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "test-pod-2")
+	assert.Contains(t, msg, "Ready is not True")
+}
+
+func TestExecuteStatus_ForDeployment(t *testing.T) {
+	deployment := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      "test-deployment",
+				"namespace": "test-ns",
+			},
+			"spec": map[string]interface{}{
+				"selector": map[string]interface{}{
+					"matchLabels": map[string]interface{}{
+						"app": "test",
+					},
+				},
+			},
+		},
+	}
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod",
+			Namespace: "test-ns",
+			Labels:    map[string]string{"app": "test"},
+		},
+		Status: corev1.PodStatus{
+			Conditions: []corev1.PodCondition{
+				{Type: corev1.PodReady, Status: corev1.ConditionTrue},
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, deployment)
+	clientset := fake.NewSimpleClientset(pod)
+	executor := NewExecutor(clientset, dynamicClient, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{
+			Kind: "Deployment",
+			Name: "test-deployment",
+		},
+		Conditions: []StatusCondition{
+			{Type: "Ready", Status: "True"},
+		},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Contains(t, msg, "All 1 pod(s) meet the required conditions")
+}
+
+// =============================================================================
+// Connectivity Validator Tests
+// =============================================================================
+
+func TestExecuteConnectivity_NoMatchingSourcePods(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	executor := NewExecutor(clientset, nil, &rest.Config{}, "test-ns")
+
+	spec := ConnectivitySpec{
+		SourcePod: SourcePod{
+			LabelSelector: map[string]string{"app": "nonexistent"},
+		},
+		Targets: []ConnectivityCheck{
+			{URL: "http://test-service", ExpectedStatusCode: 200},
+		},
+	}
+
+	passed, msg, err := executor.executeConnectivity(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Equal(t, errNoMatchingSourcePods, msg)
+}
+
+func TestExecuteConnectivity_NoRunningSourcePods(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod",
+			Namespace: "test-ns",
+			Labels:    map[string]string{"app": "test"},
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodPending, // Not running
+		},
+	}
+
+	clientset := fake.NewSimpleClientset(pod)
+	executor := NewExecutor(clientset, nil, &rest.Config{}, "test-ns")
+
+	spec := ConnectivitySpec{
+		SourcePod: SourcePod{
+			LabelSelector: map[string]string{"app": "test"},
+		},
+		Targets: []ConnectivityCheck{
+			{URL: "http://test-service", ExpectedStatusCode: 200},
+		},
+	}
+
+	passed, msg, err := executor.executeConnectivity(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Equal(t, errNoRunningSourcePods, msg)
+}
+
+func TestExecuteConnectivity_NoSourcePodSpecified(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	executor := NewExecutor(clientset, nil, &rest.Config{}, "test-ns")
+
+	spec := ConnectivitySpec{
+		SourcePod: SourcePod{
+			// Neither name nor labelSelector specified
+		},
+		Targets: []ConnectivityCheck{
+			{URL: "http://test-service", ExpectedStatusCode: 200},
+		},
+	}
+
+	passed, msg, err := executor.executeConnectivity(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Equal(t, errNoSourcePodSpecified, msg)
+}
+
+// Note: TestExecuteConnectivity_SourcePodByName and TestExecuteConnectivity_SourcePodByLabelSelectorRunning
+// cannot be fully tested with fake clientset because fake.NewSimpleClientset() does not provide
+// a real RESTClient for pod exec operations. These scenarios are tested through integration tests.
+// The core logic of source pod lookup by name is implicitly tested in TestExecuteConnectivity_SourcePodNotFound
+// and the label selector logic is tested in TestExecuteConnectivity_NoRunningSourcePods.
+
+func TestExecuteConnectivity_SourcePodNotFound(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	executor := NewExecutor(clientset, nil, &rest.Config{}, "test-ns")
+
+	spec := ConnectivitySpec{
+		SourcePod: SourcePod{
+			Name: "nonexistent-pod",
+		},
+		Targets: []ConnectivityCheck{
+			{URL: "http://test-service", ExpectedStatusCode: 200},
+		},
+	}
+
+	passed, _, err := executor.executeConnectivity(context.Background(), spec)
+
+	assert.False(t, passed)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to get source pod")
+}
+
+// =============================================================================
+// Metrics Validator Tests
+// =============================================================================
+
+func TestExecuteMetrics_MultipleChecks(t *testing.T) {
+	deployment := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      "test-deployment",
+				"namespace": "test-ns",
+			},
+			"spec": map[string]interface{}{
+				"replicas": int64(3),
+			},
+			"status": map[string]interface{}{
+				"readyReplicas":     int64(3),
+				"availableReplicas": int64(3),
+				"replicas":          int64(3),
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, deployment)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := MetricsSpec{
+		Target: Target{
+			Kind: "Deployment",
+			Name: "test-deployment",
+		},
+		Checks: []MetricCheck{
+			{Field: "status.readyReplicas", Operator: "==", Value: 3},
+			{Field: "status.availableReplicas", Operator: ">=", Value: 3},
+			{Field: "spec.replicas", Operator: "<=", Value: 5},
+		},
+	}
+
+	passed, msg, err := executor.executeMetrics(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Equal(t, errAllMetricsChecksPassed, msg)
+}
+
+func TestExecuteMetrics_MultipleChecksMixedResults(t *testing.T) {
+	deployment := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      "test-deployment",
+				"namespace": "test-ns",
+			},
+			"status": map[string]interface{}{
+				"readyReplicas":     int64(2),
+				"availableReplicas": int64(1),
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, deployment)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := MetricsSpec{
+		Target: Target{
+			Kind: "Deployment",
+			Name: "test-deployment",
+		},
+		Checks: []MetricCheck{
+			{Field: "status.readyReplicas", Operator: "==", Value: 3},
+			{Field: "status.availableReplicas", Operator: ">=", Value: 3},
+		},
+	}
+
+	passed, msg, err := executor.executeMetrics(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "status.readyReplicas")
+	assert.Contains(t, msg, "status.availableReplicas")
+}
+
+func TestExecuteMetrics_ByLabelSelector(t *testing.T) {
+	deployment := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      "test-deployment",
+				"namespace": "test-ns",
+				"labels": map[string]interface{}{
+					"app": "test",
+				},
+			},
+			"status": map[string]interface{}{
+				"readyReplicas": int64(3),
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, deployment)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := MetricsSpec{
+		Target: Target{
+			Kind:          "Deployment",
+			LabelSelector: map[string]string{"app": "test"},
+		},
+		Checks: []MetricCheck{
+			{Field: "status.readyReplicas", Operator: "==", Value: 3},
+		},
+	}
+
+	passed, msg, err := executor.executeMetrics(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Equal(t, errAllMetricsChecksPassed, msg)
+}
+
+func TestExecuteMetrics_FieldNotFound(t *testing.T) {
+	deployment := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      "test-deployment",
+				"namespace": "test-ns",
+			},
+			"status": map[string]interface{}{},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, deployment)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := MetricsSpec{
+		Target: Target{
+			Kind: "Deployment",
+			Name: "test-deployment",
+		},
+		Checks: []MetricCheck{
+			{Field: "status.nonexistent", Operator: "==", Value: 3},
+		},
+	}
+
+	passed, msg, err := executor.executeMetrics(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "Field status.nonexistent not found")
+}
+
+func TestExecuteMetrics_StatefulSet(t *testing.T) {
+	statefulset := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "StatefulSet",
+			"metadata": map[string]interface{}{
+				"name":      "test-statefulset",
+				"namespace": "test-ns",
+			},
+			"status": map[string]interface{}{
+				"readyReplicas":   int64(3),
+				"currentReplicas": int64(3),
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, statefulset)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := MetricsSpec{
+		Target: Target{
+			Kind: "StatefulSet",
+			Name: "test-statefulset",
+		},
+		Checks: []MetricCheck{
+			{Field: "status.readyReplicas", Operator: "==", Value: 3},
+		},
+	}
+
+	passed, msg, err := executor.executeMetrics(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Equal(t, errAllMetricsChecksPassed, msg)
+}
+
+func TestExecuteMetrics_DaemonSet(t *testing.T) {
+	daemonset := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "DaemonSet",
+			"metadata": map[string]interface{}{
+				"name":      "test-daemonset",
+				"namespace": "test-ns",
+			},
+			"status": map[string]interface{}{
+				"numberReady":            int64(3),
+				"desiredNumberScheduled": int64(3),
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, daemonset)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := MetricsSpec{
+		Target: Target{
+			Kind: "DaemonSet",
+			Name: "test-daemonset",
+		},
+		Checks: []MetricCheck{
+			{Field: "status.numberReady", Operator: "==", Value: 3},
+		},
+	}
+
+	passed, msg, err := executor.executeMetrics(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Equal(t, errAllMetricsChecksPassed, msg)
+}
+
+func TestExecuteMetrics_ResourceNotFound(t *testing.T) {
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := MetricsSpec{
+		Target: Target{
+			Kind: "Deployment",
+			Name: "nonexistent",
+		},
+		Checks: []MetricCheck{
+			{Field: "status.readyReplicas", Operator: "==", Value: 3},
+		},
+	}
+
+	passed, _, err := executor.executeMetrics(context.Background(), spec)
+
+	assert.False(t, passed)
+	assert.Error(t, err)
+}
+
+func TestExecuteMetrics_AllOperators(t *testing.T) {
+	// In these tests:
+	// - "actual" is the value in the resource (status.readyReplicas)
+	// - "value" is the expected value to compare against in the check
+	// The comparison is: actual <operator> value
+	tests := []struct {
+		name     string
+		operator string
+		value    int64 // expected value in the MetricCheck
+		actual   int64 // actual value from the resource
+		expected bool  // expected test result
+	}{
+		{"equals ==", "==", 5, 5, true},
+		{"equals = ", "=", 5, 5, true},
+		{"not equals", "!=", 5, 3, true},                 // 3 != 5 = true
+		{"greater than - pass", ">", 3, 5, true},         // 5 > 3 = true
+		{"greater than - fail", ">", 10, 5, false},       // 5 > 10 = false
+		{"less than - pass", "<", 10, 5, true},           // 5 < 10 = true
+		{"less than - fail", "<", 3, 5, false},           // 5 < 3 = false
+		{"greater or equal - equal", ">=", 5, 5, true},   // 5 >= 5 = true
+		{"greater or equal - greater", ">=", 3, 5, true}, // 5 >= 3 = true
+		{"less or equal - equal", "<=", 5, 5, true},      // 5 <= 5 = true
+		{"less or equal - less", "<=", 10, 5, true},      // 5 <= 10 = true
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			deployment := &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apps/v1",
+					"kind":       "Deployment",
+					"metadata": map[string]interface{}{
+						"name":      "test-deployment",
+						"namespace": "test-ns",
+					},
+					"status": map[string]interface{}{
+						"readyReplicas": tt.actual,
+					},
+				},
+			}
+
+			scheme := runtime.NewScheme()
+			dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, deployment)
+			executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+			spec := MetricsSpec{
+				Target: Target{
+					Kind: "Deployment",
+					Name: "test-deployment",
+				},
+				Checks: []MetricCheck{
+					{Field: "status.readyReplicas", Operator: tt.operator, Value: tt.value},
+				},
+			}
+
+			passed, _, err := executor.executeMetrics(context.Background(), spec)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, passed)
+		})
+	}
+}
+
+// =============================================================================
+// Shell Escape Tests
+// =============================================================================
+
+func TestEscapeShellArg(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"simple string", "http://example.com", "http://example.com"},
+		{"string with single quote", "it's a test", "it'\"'\"'s a test"},
+		{"multiple single quotes", "don't won't can't", "don'\"'\"'t won'\"'\"'t can'\"'\"'t"},
+		{"empty string", "", ""},
+		{"string with special chars", "http://test?a=1&b=2", "http://test?a=1&b=2"},
+		{"string with spaces", "hello world", "hello world"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := escapeShellArg(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// =============================================================================
+// getPodConditionTypes Tests
+// =============================================================================
+
+func TestGetPodConditionTypes(t *testing.T) {
+	tests := []struct {
+		name       string
+		conditions []corev1.PodCondition
+		expected   []string
+	}{
+		{
+			name: "multiple conditions",
+			conditions: []corev1.PodCondition{
+				{Type: corev1.PodReady},
+				{Type: corev1.PodScheduled},
+				{Type: corev1.ContainersReady},
+			},
+			expected: []string{"Ready", "PodScheduled", "ContainersReady"},
+		},
+		{
+			name:       "empty conditions",
+			conditions: []corev1.PodCondition{},
+			expected:   []string{},
+		},
+		{
+			name: "single condition",
+			conditions: []corev1.PodCondition{
+				{Type: corev1.PodReady},
+			},
+			expected: []string{"Ready"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := &corev1.Pod{
+				Status: corev1.PodStatus{
+					Conditions: tt.conditions,
+				},
+			}
+			result := getPodConditionTypes(pod)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// =============================================================================
+// GVR Tests for all resource types
+// =============================================================================
+
+func TestGetGVRForKind_AllSupportedKinds(t *testing.T) {
+	tests := []struct {
+		kind     string
+		expected schema.GroupVersionResource
+	}{
+		{
+			kind: "Deployment",
+			expected: schema.GroupVersionResource{
+				Group: "apps", Version: "v1", Resource: "deployments",
+			},
+		},
+		{
+			kind: "StatefulSet",
+			expected: schema.GroupVersionResource{
+				Group: "apps", Version: "v1", Resource: "statefulsets",
+			},
+		},
+		{
+			kind: "DaemonSet",
+			expected: schema.GroupVersionResource{
+				Group: "apps", Version: "v1", Resource: "daemonsets",
+			},
+		},
+		{
+			kind: "ReplicaSet",
+			expected: schema.GroupVersionResource{
+				Group: "apps", Version: "v1", Resource: "replicasets",
+			},
+		},
+		{
+			kind: "Job",
+			expected: schema.GroupVersionResource{
+				Group: "batch", Version: "v1", Resource: "jobs",
+			},
+		},
+		{
+			kind: "Pod",
+			expected: schema.GroupVersionResource{
+				Group: "", Version: "v1", Resource: "pods",
+			},
+		},
+		{
+			kind: "Service",
+			expected: schema.GroupVersionResource{
+				Group: "", Version: "v1", Resource: "services",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.kind, func(t *testing.T) {
+			gvr, err := getGVRForKind(tt.kind)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, gvr)
+		})
+	}
+}
+
+func TestGetGVRForKind_CaseInsensitive(t *testing.T) {
+	tests := []string{"deployment", "DEPLOYMENT", "Deployment", "dEpLoYmEnT"}
+
+	for _, kind := range tests {
+		t.Run(kind, func(t *testing.T) {
+			gvr, err := getGVRForKind(kind)
+			require.NoError(t, err)
+			assert.Equal(t, "deployments", gvr.Resource)
+		})
+	}
 }

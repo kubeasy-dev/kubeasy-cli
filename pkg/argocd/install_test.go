@@ -438,6 +438,257 @@ func TestArgoCDGVR(t *testing.T) {
 	assert.Equal(t, "applications", expectedGVR.Resource)
 }
 
+// TestGenerateSecretKey tests the cryptographic secret key generation
+func TestGenerateSecretKey(t *testing.T) {
+	t.Run("generates non-empty key", func(t *testing.T) {
+		key, err := generateSecretKey()
+		require.NoError(t, err)
+		assert.NotEmpty(t, key)
+	})
+
+	t.Run("generates hex-encoded key of correct length", func(t *testing.T) {
+		key, err := generateSecretKey()
+		require.NoError(t, err)
+		// 32 bytes encoded as hex = 64 characters
+		assert.Len(t, key, 64, "Key should be 64 hex characters (32 bytes)")
+	})
+
+	t.Run("generates unique keys on each call", func(t *testing.T) {
+		key1, err := generateSecretKey()
+		require.NoError(t, err)
+
+		key2, err := generateSecretKey()
+		require.NoError(t, err)
+
+		assert.NotEqual(t, key1, key2, "Each generated key should be unique")
+	})
+
+	t.Run("generates valid hex string", func(t *testing.T) {
+		key, err := generateSecretKey()
+		require.NoError(t, err)
+
+		// Verify all characters are valid hex
+		for _, c := range string(key) {
+			isHex := (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')
+			assert.True(t, isHex, "Character %c should be valid hex", c)
+		}
+	})
+}
+
+// TestEnsureServerSecretKey tests the ensureServerSecretKey helper function
+func TestEnsureServerSecretKey(t *testing.T) {
+	t.Run("adds secret key when missing", func(t *testing.T) {
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "argocd-secret",
+				Namespace: ArgoCDNamespace,
+			},
+			Data: make(map[string][]byte),
+		}
+		sts := &appsv1.StatefulSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "argocd-application-controller",
+				Namespace: ArgoCDNamespace,
+			},
+			Spec: appsv1.StatefulSetSpec{
+				Replicas: int32Ptr(1),
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Annotations: make(map[string]string),
+					},
+				},
+			},
+		}
+		clientset := fake.NewSimpleClientset(secret, sts)
+		ctx := context.Background()
+
+		err := ensureServerSecretKey(ctx, clientset)
+		require.NoError(t, err)
+
+		// Verify secret was updated
+		updatedSecret, err := clientset.CoreV1().Secrets(ArgoCDNamespace).Get(ctx, "argocd-secret", metav1.GetOptions{})
+		require.NoError(t, err)
+		assert.Contains(t, updatedSecret.Data, "server.secretkey")
+		assert.Len(t, updatedSecret.Data["server.secretkey"], 64, "Secret key should be 64 hex chars")
+	})
+
+	t.Run("skips when secret key already exists", func(t *testing.T) {
+		existingKey := []byte("existing-secret-key-value")
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "argocd-secret",
+				Namespace: ArgoCDNamespace,
+			},
+			Data: map[string][]byte{
+				"server.secretkey": existingKey,
+			},
+		}
+		sts := &appsv1.StatefulSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "argocd-application-controller",
+				Namespace: ArgoCDNamespace,
+			},
+			Spec: appsv1.StatefulSetSpec{
+				Replicas: int32Ptr(1),
+			},
+		}
+		clientset := fake.NewSimpleClientset(secret, sts)
+		ctx := context.Background()
+
+		err := ensureServerSecretKey(ctx, clientset)
+		require.NoError(t, err)
+
+		// Verify secret was NOT changed
+		updatedSecret, err := clientset.CoreV1().Secrets(ArgoCDNamespace).Get(ctx, "argocd-secret", metav1.GetOptions{})
+		require.NoError(t, err)
+		assert.Equal(t, existingKey, updatedSecret.Data["server.secretkey"], "Existing key should not be changed")
+	})
+
+	t.Run("initializes nil Data map", func(t *testing.T) {
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "argocd-secret",
+				Namespace: ArgoCDNamespace,
+			},
+			Data: nil, // Explicitly nil
+		}
+		sts := &appsv1.StatefulSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "argocd-application-controller",
+				Namespace: ArgoCDNamespace,
+			},
+			Spec: appsv1.StatefulSetSpec{
+				Replicas: int32Ptr(1),
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Annotations: make(map[string]string),
+					},
+				},
+			},
+		}
+		clientset := fake.NewSimpleClientset(secret, sts)
+		ctx := context.Background()
+
+		err := ensureServerSecretKey(ctx, clientset)
+		require.NoError(t, err)
+
+		updatedSecret, err := clientset.CoreV1().Secrets(ArgoCDNamespace).Get(ctx, "argocd-secret", metav1.GetOptions{})
+		require.NoError(t, err)
+		assert.NotNil(t, updatedSecret.Data)
+		assert.Contains(t, updatedSecret.Data, "server.secretkey")
+	})
+
+	t.Run("returns error when secret not found", func(t *testing.T) {
+		clientset := fake.NewSimpleClientset() // No secret created
+		ctx := context.Background()
+
+		err := ensureServerSecretKey(ctx, clientset)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "argocd-secret")
+	})
+}
+
+// TestRestartApplicationController tests the restartApplicationController helper function
+func TestRestartApplicationController(t *testing.T) {
+	t.Run("adds restart annotation", func(t *testing.T) {
+		sts := &appsv1.StatefulSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "argocd-application-controller",
+				Namespace: ArgoCDNamespace,
+			},
+			Spec: appsv1.StatefulSetSpec{
+				Replicas: int32Ptr(1),
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Annotations: make(map[string]string),
+					},
+				},
+			},
+		}
+		clientset := fake.NewSimpleClientset(sts)
+		ctx := context.Background()
+
+		err := restartApplicationController(ctx, clientset)
+		require.NoError(t, err)
+
+		// Verify annotation was added
+		updatedSts, err := clientset.AppsV1().StatefulSets(ArgoCDNamespace).Get(ctx, "argocd-application-controller", metav1.GetOptions{})
+		require.NoError(t, err)
+		assert.Contains(t, updatedSts.Spec.Template.Annotations, "kubectl.kubernetes.io/restartedAt")
+
+		// Verify timestamp is valid RFC3339
+		timestamp := updatedSts.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"]
+		_, err = time.Parse(time.RFC3339, timestamp)
+		assert.NoError(t, err, "Timestamp should be valid RFC3339")
+	})
+
+	t.Run("initializes nil annotations map", func(t *testing.T) {
+		sts := &appsv1.StatefulSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "argocd-application-controller",
+				Namespace: ArgoCDNamespace,
+			},
+			Spec: appsv1.StatefulSetSpec{
+				Replicas: int32Ptr(1),
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Annotations: nil, // Explicitly nil
+					},
+				},
+			},
+		}
+		clientset := fake.NewSimpleClientset(sts)
+		ctx := context.Background()
+
+		err := restartApplicationController(ctx, clientset)
+		require.NoError(t, err)
+
+		updatedSts, err := clientset.AppsV1().StatefulSets(ArgoCDNamespace).Get(ctx, "argocd-application-controller", metav1.GetOptions{})
+		require.NoError(t, err)
+		assert.NotNil(t, updatedSts.Spec.Template.Annotations)
+		assert.Contains(t, updatedSts.Spec.Template.Annotations, "kubectl.kubernetes.io/restartedAt")
+	})
+
+	t.Run("updates existing restart annotation", func(t *testing.T) {
+		oldTimestamp := "2020-01-01T00:00:00Z"
+		sts := &appsv1.StatefulSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "argocd-application-controller",
+				Namespace: ArgoCDNamespace,
+			},
+			Spec: appsv1.StatefulSetSpec{
+				Replicas: int32Ptr(1),
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Annotations: map[string]string{
+							"kubectl.kubernetes.io/restartedAt": oldTimestamp,
+						},
+					},
+				},
+			},
+		}
+		clientset := fake.NewSimpleClientset(sts)
+		ctx := context.Background()
+
+		err := restartApplicationController(ctx, clientset)
+		require.NoError(t, err)
+
+		updatedSts, err := clientset.AppsV1().StatefulSets(ArgoCDNamespace).Get(ctx, "argocd-application-controller", metav1.GetOptions{})
+		require.NoError(t, err)
+		newTimestamp := updatedSts.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"]
+		assert.NotEqual(t, oldTimestamp, newTimestamp, "Timestamp should be updated")
+	})
+
+	t.Run("returns error when StatefulSet not found", func(t *testing.T) {
+		clientset := fake.NewSimpleClientset() // No StatefulSet created
+		ctx := context.Background()
+
+		err := restartApplicationController(ctx, clientset)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "argocd-application-controller")
+	})
+}
+
 // Helper functions
 func int32Ptr(i int32) *int32 {
 	return &i

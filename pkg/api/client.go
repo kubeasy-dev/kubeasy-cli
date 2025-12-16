@@ -9,14 +9,14 @@ import (
 	"time"
 
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
-	"github.com/zalando/go-keyring"
+	"github.com/kubeasy-dev/kubeasy-cli/pkg/keystore"
 )
 
-// getAuthToken retrieves the API token from the keyring
+// getAuthToken retrieves the API token from available storage
 func getAuthToken() (string, error) {
-	token, err := keyring.Get(constants.KeyringServiceName, "api_key")
+	token, err := keystore.Get()
 	if err != nil {
-		return "", fmt.Errorf("failed to get API key from keyring: %w. Please run 'kubeasy login'", err)
+		return "", err
 	}
 	return token, nil
 }

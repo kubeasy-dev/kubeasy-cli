@@ -1,3 +1,5 @@
+[![codecov](https://codecov.io/gh/kubeasy-dev/kubeasy-cli/graph/badge.svg?token=7M8PHNZAM6)](https://codecov.io/gh/kubeasy-dev/kubeasy-cli)
+
 # kubeasy-cli
 
 A command-line tool to learn Kubernetes through practical challenges. Create local Kind clusters, deploy challenges via ArgoCD, and validate solutions using a Kubernetes operator.
@@ -14,9 +16,7 @@ A command-line tool to learn Kubernetes through practical challenges. Create loc
 
 ```bash
 # Via npm
-npm install -g kubeasy-cli
-
-# Or download binary from releases
+npm install -g @kubeasy-dev/kubeasy-cli
 ```
 
 ## Usage
@@ -44,26 +44,11 @@ kubeasy challenge reset <challenge-slug>
 kubeasy challenge clean <challenge-slug>
 ```
 
-## Validation System
-
-Challenges are validated using 6 specialized Custom Resource Definitions (CRDs):
-
-- **LogValidation** - Checks container logs for expected strings
-- **StatusValidation** - Validates resource status conditions (Pod Ready, Deployment Available, etc.)
-- **EventValidation** - Detects forbidden Kubernetes events (BackOff, Evicted, etc.)
-- **MetricsValidation** - Verifies pod/deployment metrics (restart count, replicas, etc.)
-- **RBACValidation** - Tests ServiceAccount permissions using SubjectAccessReview
-- **ConnectivityValidation** - Validates network connectivity between pods
-
-The `submit` command automatically discovers all validation CRDs, evaluates their status, and sends structured results to the backend for progress tracking.
-
-## Development
-
-See [CLAUDE.md](./CLAUDE.md) for detailed architecture and development guidance.
-
-## Contributing
+## Documentation
 
 See [online docs](https://docs.kubeasy.dev/developer/contributing) for contribution guidelines, setup instructions, and development workflow.
+
+See [CLAUDE.md](./CLAUDE.md) for detailed architecture and development guidance.
 
 ## License
 

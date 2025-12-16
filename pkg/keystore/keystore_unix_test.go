@@ -57,7 +57,7 @@ func TestGetConfigDir_Unix_Default(t *testing.T) {
 func TestRestrictFilePermissions_Unix_NoOp(t *testing.T) {
 	// Create a test file
 	tempFile := filepath.Join(t.TempDir(), "test-restrict")
-	err := os.WriteFile(tempFile, []byte("test"), 0644)
+	err := os.WriteFile(tempFile, []byte("test"), 0600)
 	require.NoError(t, err)
 
 	// restrictFilePermissions is a no-op on Unix

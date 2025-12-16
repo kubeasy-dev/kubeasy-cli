@@ -30,7 +30,7 @@ import (
 const (
 	// EnvVarName is the name of the environment variable used to provide the API key.
 	// This is NOT a credential itself, just the variable name to look up.
-	EnvVarName = "KUBEASY_API_KEY" //nolint:gosec // G101: This is the env var name, not a credential
+	EnvVarName = "KUBEASY_API_KEY"
 
 	// credentialsFileName is the name of the file used for file-based storage
 	credentialsFileName = "credentials"

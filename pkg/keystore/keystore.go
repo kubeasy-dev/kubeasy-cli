@@ -8,10 +8,20 @@
 //     - Linux/macOS: ~/.config/kubeasy-cli/credentials (XDG spec)
 //     - Windows: %APPDATA%/kubeasy-cli/credentials
 //
-// Security Notes:
-//   - File permissions are restricted to owner-only access (0600) on Unix systems
-//   - On Windows, the file is stored in the user's APPDATA directory
-//   - The keyring is always preferred when available for maximum security
+// # Security Notes
+//
+// Unix/Linux/macOS:
+//   - File permissions are restricted to owner-only access (0600 for files, 0700 for directories)
+//   - The system keyring (GNOME Keyring, KDE Wallet, etc.) is preferred when available
+//
+// Windows:
+//   - Windows Credential Manager is the preferred storage backend
+//   - File-based fallback uses %APPDATA% which is user-protected by Windows
+//   - IMPORTANT: File-based storage on Windows does not have explicit ACL restrictions.
+//     The file inherits permissions from the APPDATA directory. For maximum security,
+//     ensure Windows Credential Manager is available.
+//
+// The keyring is always preferred when available for maximum security.
 package keystore
 
 import (
@@ -78,8 +88,8 @@ func Get() (string, error) {
 	}
 
 	// Log keyring error for debugging (but don't fail yet)
-	if err != nil && !errors.Is(err, keyring.ErrNotFound) {
-		logger.Debug("Keyring access failed: %v", err)
+	if err != nil {
+		logger.Debug("Keyring access failed (will try file): %v", err)
 	}
 
 	// 3. Fall back to file-based storage
@@ -138,6 +148,7 @@ func Delete() error {
 }
 
 // GetStorageType returns which storage backend currently holds the API key.
+// This function is thread-safe and provides a point-in-time snapshot.
 func GetStorageType() StorageType {
 	if os.Getenv(EnvVarName) != "" {
 		return StorageEnv
@@ -147,6 +158,7 @@ func GetStorageType() StorageType {
 		return StorageKeyring
 	}
 
+	// Use mutex-protected read for file storage check
 	if key, err := getFromFile(); err == nil && key != "" {
 		return StorageFile
 	}
@@ -161,6 +173,12 @@ func IsKeyringAvailable() bool {
 	// ErrNotFound means keyring is available but key doesn't exist
 	// Other errors mean keyring is not available
 	return err == nil || errors.Is(err, keyring.ErrNotFound)
+}
+
+// GetConfigDirPath returns the path to the config directory.
+// This is useful for displaying to users where credentials are stored.
+func GetConfigDirPath() (string, error) {
+	return getConfigDir()
 }
 
 // getCredentialsPath returns the full path to the credentials file

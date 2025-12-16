@@ -480,3 +480,15 @@ func TestGet_KeyringErrorLogged(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "file-after-keyring-miss", token)
 }
+
+func TestGetConfigDirPath(t *testing.T) {
+	// GetConfigDirPath should return the same value as internal getConfigDir
+	publicPath, err := GetConfigDirPath()
+	require.NoError(t, err)
+
+	internalPath, err := getConfigDir()
+	require.NoError(t, err)
+
+	assert.Equal(t, internalPath, publicPath)
+	assert.Contains(t, publicPath, configDirName)
+}

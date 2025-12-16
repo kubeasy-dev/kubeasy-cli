@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -103,7 +104,11 @@ After successful login, you will be able to use commands requiring authenticatio
 			logger.Error("Failed to store API key: %v", err)
 			ui.Error("Failed to store API key")
 			ui.Println()
-			ui.Info("Please check that you have write access to ~/.config/kubeasy-cli/")
+			if configDir, dirErr := keystore.GetConfigDirPath(); dirErr == nil {
+				ui.Info(fmt.Sprintf("Please check that you have write access to: %s", configDir))
+			} else {
+				ui.Info("Please check that you have write access to the config directory")
+			}
 			ui.Println()
 			return nil
 		}
@@ -114,6 +119,10 @@ After successful login, you will be able to use commands requiring authenticatio
 		case keystore.StorageFile:
 			ui.Success("API key stored in local config file")
 			ui.Info("(System keyring not available, using file-based storage)")
+			if runtime.GOOS == "windows" {
+				ui.Warning("Note: File-based storage on Windows has limited access controls.")
+				ui.Info("For better security, consider enabling Windows Credential Manager.")
+			}
 		}
 
 		// Verify by fetching profile

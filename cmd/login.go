@@ -3,17 +3,15 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"runtime"
 	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/api"
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
+	"github.com/kubeasy-dev/kubeasy-cli/pkg/keystore"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/logger"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/ui"
 	"github.com/spf13/cobra"
-	"github.com/zalando/go-keyring"
 	"golang.org/x/term"
 )
 
@@ -30,7 +28,7 @@ After successful login, you will be able to use commands requiring authenticatio
 		ui.Section("Login to Kubeasy")
 
 		// Check if token already exists
-		existingToken, err := keyring.Get(constants.KeyringServiceName, "api_key")
+		existingToken, err := keystore.Get()
 		if err == nil && strings.TrimSpace(existingToken) != "" {
 			// Build expiration info from JWT
 			expInfo := ""
@@ -92,41 +90,23 @@ After successful login, you will be able to use commands requiring authenticatio
 		}
 
 		// Store the key
-		err = keyring.Set(constants.KeyringServiceName, "api_key", apiKey)
+		storageType, err := keystore.Set(apiKey)
 		if err != nil {
-			logger.Error("Failed to store API key in keyring: %v", err)
-			ui.Error("Failed to store API key in keyring")
+			logger.Error("Failed to store API key: %v", err)
+			ui.Error("Failed to store API key")
 			ui.Println()
-
-			// Provide platform-specific guidance
-			switch runtime.GOOS {
-			case "linux":
-				ui.Info("This error typically occurs when the keyring service is not available.")
-				ui.Println()
-				ui.Info("To fix this on Linux:")
-				ui.Info("  1. Install the required packages:")
-				ui.Info("     • Ubuntu/Debian: sudo apt-get install gnome-keyring")
-				ui.Info("     • Fedora/RHEL: sudo dnf install gnome-keyring")
-				ui.Println()
-				ui.Info("  2. For headless/server environments, you may need to:")
-				ui.Info("     • Start the keyring daemon: dbus-run-session -- sh")
-				ui.Info("     • Or use a keyring alternative like pass or encrypted config files")
-				ui.Println()
-				ui.Info("  3. If you're using SSH, make sure to enable X11 forwarding or")
-				ui.Info("     set up D-Bus properly for headless operation")
-			case "darwin":
-				ui.Info("On macOS, the keychain should be available by default.")
-				ui.Info("Please check that you have access to the system keychain.")
-			case "windows":
-				ui.Info("On Windows, credential storage should be available by default.")
-				ui.Info("Please check your Windows Credential Manager settings.")
-			}
-
+			ui.Info("Please check that you have write access to ~/.config/kubeasy-cli/")
 			ui.Println()
 			return nil
 		}
 
-		ui.Success("API key stored successfully")
+		switch storageType {
+		case keystore.StorageKeyring:
+			ui.Success("API key stored in system keyring")
+		case keystore.StorageFile:
+			ui.Success("API key stored in local config file")
+			ui.Info("(System keyring not available, using file-based storage)")
+		}
 
 		// Verify by fetching profile
 		profile, err := api.GetProfile()

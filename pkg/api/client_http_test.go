@@ -581,8 +581,7 @@ func TestGetAuthToken_NoKeyring(t *testing.T) {
 
 	_, err := GetProfile()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to get API key from keyring")
-	assert.Contains(t, err.Error(), "Please run 'kubeasy login'")
+	assert.Contains(t, err.Error(), "please run 'kubeasy login'")
 }
 
 // Helper function for string pointers

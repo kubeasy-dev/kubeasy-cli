@@ -76,9 +76,12 @@ const (
 // Note: If KUBEASY_API_KEY environment variable is set, it takes precedence
 // over any stored credentials.
 func Get() (string, error) {
-	// 1. Check environment variable first (highest priority)
+	// 1. Check environment variable first (highest priority).
+	// Environment variables take precedence to support CI/CD pipelines
+	// and containerized environments where keyring/file storage may not
+	// be appropriate or available.
 	if envKey := os.Getenv(EnvVarName); envKey != "" {
-		logger.Info("Using API key from %s environment variable", EnvVarName)
+		logger.Debug("Using API key from %s environment variable", EnvVarName)
 		return envKey, nil
 	}
 
@@ -150,9 +153,12 @@ func Delete() error {
 }
 
 // GetStorageType returns which storage backend currently holds the API key.
-// Note: This provides a point-in-time snapshot. The result may be stale
-// immediately after return if credentials are modified concurrently.
 // This function is intended for informational/display purposes only.
+//
+// Note: This provides a best-effort point-in-time snapshot. Results may be
+// inconsistent if credentials are modified concurrently, as environment
+// variable and keyring checks are not mutex-protected. Only file storage
+// access is protected by the mutex.
 func GetStorageType() StorageType {
 	if os.Getenv(EnvVarName) != "" {
 		return StorageEnv
@@ -162,7 +168,6 @@ func GetStorageType() StorageType {
 		return StorageKeyring
 	}
 
-	// Use mutex-protected read for file storage check
 	if key, err := getFromFile(); err == nil && key != "" {
 		return StorageFile
 	}
@@ -224,7 +229,9 @@ func getFromFile() (string, error) {
 	return creds.APIKey, nil
 }
 
-// setToFile stores the API key in file-based storage
+// setToFile stores the API key in file-based storage using atomic writes.
+// The file is first written to a temporary location, then renamed to the
+// final path to prevent corruption if the process is interrupted.
 func setToFile(apiKey string) error {
 	mu.Lock()
 	defer mu.Unlock()
@@ -240,6 +247,7 @@ func setToFile(apiKey string) error {
 	}
 
 	credPath := filepath.Join(configDir, credentialsFileName)
+	tmpPath := credPath + ".tmp"
 
 	creds := credentials{
 		APIKey: apiKey,
@@ -250,17 +258,24 @@ func setToFile(apiKey string) error {
 		return fmt.Errorf("failed to marshal credentials: %w", err)
 	}
 
-	// Write with restricted permissions (owner read/write only)
-	if err := os.WriteFile(credPath, data, 0600); err != nil {
+	// Write to temporary file first with restricted permissions
+	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write credentials file: %w", err)
 	}
 
-	// Apply platform-specific permission restrictions.
+	// Apply platform-specific permission restrictions to temp file.
 	// On Unix, this is a no-op since os.WriteFile already applies the mode.
 	// On Windows, this is currently a no-op but kept as a hook for future
 	// ACL implementation. See keystore_windows.go for details.
-	if err := restrictFilePermissions(credPath); err != nil {
+	if err := restrictFilePermissions(tmpPath); err != nil {
+		os.Remove(tmpPath)
 		return fmt.Errorf("failed to restrict file permissions: %w", err)
+	}
+
+	// Atomically rename temp file to final path
+	if err := os.Rename(tmpPath, credPath); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to save credentials file: %w", err)
 	}
 
 	return nil

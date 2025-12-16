@@ -26,11 +26,16 @@ func getConfigDir() (string, error) {
 
 // restrictFilePermissions ensures the file has proper restricted permissions.
 // On Windows, POSIX file permissions don't apply. The file inherits permissions
-// from the parent directory. For production use, consider implementing proper
-// Windows ACL restrictions using golang.org/x/sys/windows.
+// from the parent directory.
+//
+// TODO(security): Implement Windows ACL restrictions using golang.org/x/sys/windows
+// to properly restrict file access beyond APPDATA directory permissions.
+// This would involve setting an ACL that grants access only to the current user.
+// See: https://pkg.go.dev/golang.org/x/sys/windows for ACL APIs.
 //
 // Note: The Windows Credential Manager (used by go-keyring) is the preferred
-// storage method on Windows and provides proper security isolation.
+// storage method on Windows and provides proper security isolation. File-based
+// storage should only be used as a fallback when Credential Manager is unavailable.
 func restrictFilePermissions(_ string) error {
 	// On Windows, file permissions work differently than Unix.
 	// The 0600 mode passed to os.WriteFile is essentially ignored.

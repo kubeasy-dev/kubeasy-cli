@@ -73,10 +73,12 @@ const (
 
 // Get retrieves the API key from available storage backends.
 // It checks in order: environment variable, keyring, file-based storage.
+// Note: If KUBEASY_API_KEY environment variable is set, it takes precedence
+// over any stored credentials.
 func Get() (string, error) {
-	// 1. Check environment variable first
+	// 1. Check environment variable first (highest priority)
 	if envKey := os.Getenv(EnvVarName); envKey != "" {
-		logger.Debug("API key found in environment variable")
+		logger.Info("Using API key from %s environment variable", EnvVarName)
 		return envKey, nil
 	}
 
@@ -99,7 +101,7 @@ func Get() (string, error) {
 		return key, nil
 	}
 
-	return "", fmt.Errorf("%w: please run 'kubeasy login'", ErrNotFound)
+	return "", fmt.Errorf("no API key found, please run 'kubeasy login': %w", ErrNotFound)
 }
 
 // Set stores the API key in the best available storage backend.
@@ -148,7 +150,9 @@ func Delete() error {
 }
 
 // GetStorageType returns which storage backend currently holds the API key.
-// This function is thread-safe and provides a point-in-time snapshot.
+// Note: This provides a point-in-time snapshot. The result may be stale
+// immediately after return if credentials are modified concurrently.
+// This function is intended for informational/display purposes only.
 func GetStorageType() StorageType {
 	if os.Getenv(EnvVarName) != "" {
 		return StorageEnv
@@ -251,7 +255,10 @@ func setToFile(apiKey string) error {
 		return fmt.Errorf("failed to write credentials file: %w", err)
 	}
 
-	// Apply platform-specific permission restrictions
+	// Apply platform-specific permission restrictions.
+	// On Unix, this is a no-op since os.WriteFile already applies the mode.
+	// On Windows, this is currently a no-op but kept as a hook for future
+	// ACL implementation. See keystore_windows.go for details.
 	if err := restrictFilePermissions(credPath); err != nil {
 		return fmt.Errorf("failed to restrict file permissions: %w", err)
 	}

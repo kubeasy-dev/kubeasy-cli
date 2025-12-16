@@ -217,6 +217,123 @@ func TestWaitForNamespaceActive(t *testing.T) {
 		// Should timeout since namespace doesn't exist
 		assert.Contains(t, err.Error(), "timeout")
 	})
+
+	t.Run("waits for namespace to become Active after creation", func(t *testing.T) {
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "transitioning-namespace",
+			},
+			Status: corev1.NamespaceStatus{
+				Phase: "", // Start with empty phase
+			},
+		}
+		clientset := fake.NewSimpleClientset(ns)
+		ctx := context.Background()
+
+		// Track get attempts and transition to Active after 2 attempts
+		attempts := 0
+		clientset.PrependReactor("get", "namespaces", func(action k8stesting.Action) (bool, runtime.Object, error) {
+			getAction := action.(k8stesting.GetAction)
+			if getAction.GetName() == "transitioning-namespace" {
+				attempts++
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "transitioning-namespace",
+					},
+				}
+				// First 2 attempts: not Active, third attempt: Active
+				if attempts >= 3 {
+					ns.Status.Phase = corev1.NamespaceActive
+				}
+				return true, ns, nil
+			}
+			return false, nil, nil
+		})
+
+		err := WaitForNamespaceActive(ctx, clientset, "transitioning-namespace")
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, attempts, 3, "Should have polled multiple times before becoming Active")
+	})
+}
+
+func TestCreateNamespace_WaitsForActive(t *testing.T) {
+	t.Run("waits for existing namespace to become Active", func(t *testing.T) {
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "existing-not-active",
+			},
+			Status: corev1.NamespaceStatus{
+				Phase: "", // Start with empty phase
+			},
+		}
+		clientset := fake.NewSimpleClientset(ns)
+		ctx := context.Background()
+
+		// Track get attempts and transition to Active after 2 attempts
+		attempts := 0
+		clientset.PrependReactor("get", "namespaces", func(action k8stesting.Action) (bool, runtime.Object, error) {
+			getAction := action.(k8stesting.GetAction)
+			if getAction.GetName() == "existing-not-active" {
+				attempts++
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "existing-not-active",
+					},
+				}
+				// First 2 attempts: not Active, third attempt: Active
+				if attempts >= 3 {
+					ns.Status.Phase = corev1.NamespaceActive
+				}
+				return true, ns, nil
+			}
+			return false, nil, nil
+		})
+
+		err := CreateNamespace(ctx, clientset, "existing-not-active")
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, attempts, 3, "Should have polled multiple times waiting for Active status")
+	})
+
+	t.Run("handles race condition and waits for Active", func(t *testing.T) {
+		clientset := fake.NewSimpleClientset()
+		ctx := context.Background()
+
+		// Simulate race condition: Get returns NotFound, but Create returns AlreadyExists
+		firstGet := true
+		clientset.PrependReactor("get", "namespaces", func(action k8stesting.Action) (bool, runtime.Object, error) {
+			getAction := action.(k8stesting.GetAction)
+			if getAction.GetName() == "race-condition-ns" {
+				if firstGet {
+					firstGet = false
+					return true, nil, apierrors.NewNotFound(schema.GroupResource{Resource: "namespaces"}, "race-condition-ns")
+				}
+				// Subsequent gets return the namespace as Active
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "race-condition-ns",
+					},
+					Status: corev1.NamespaceStatus{
+						Phase: corev1.NamespaceActive,
+					},
+				}
+				return true, ns, nil
+			}
+			return false, nil, nil
+		})
+
+		clientset.PrependReactor("create", "namespaces", func(action k8stesting.Action) (bool, runtime.Object, error) {
+			createAction := action.(k8stesting.CreateAction)
+			ns := createAction.GetObject().(*corev1.Namespace)
+			if ns.Name == "race-condition-ns" {
+				// Simulate race condition: another process already created it
+				return true, nil, apierrors.NewAlreadyExists(schema.GroupResource{Resource: "namespaces"}, "race-condition-ns")
+			}
+			return false, nil, nil
+		})
+
+		err := CreateNamespace(ctx, clientset, "race-condition-ns")
+		require.NoError(t, err)
+	})
 }
 
 func TestDeleteNamespace(t *testing.T) {

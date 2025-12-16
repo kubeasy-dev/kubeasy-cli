@@ -128,9 +128,9 @@ func CreateNamespace(ctx context.Context, clientset kubernetes.Interface, namesp
 	// Check if namespace already exists
 	_, err := clientset.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
 	if err == nil {
-		// Namespace already exists
+		// Namespace already exists, but wait for it to be Active
 		logger.Info("Namespace '%s' already exists.", namespace)
-		return nil
+		return WaitForNamespaceActive(ctx, clientset, namespace)
 	}
 
 	if !apierrors.IsNotFound(err) {
@@ -151,7 +151,7 @@ func CreateNamespace(ctx context.Context, clientset kubernetes.Interface, namesp
 		if apierrors.IsAlreadyExists(err) {
 			// Race condition: namespace was created between Get and Create
 			logger.Info("Namespace '%s' created concurrently.", namespace)
-			return nil
+			return WaitForNamespaceActive(ctx, clientset, namespace)
 		}
 		logger.Error("Error creating namespace %s: %v", namespace, err)
 		return fmt.Errorf("error creating namespace %s: %w", namespace, err)

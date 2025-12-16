@@ -18,7 +18,15 @@ import (
 var loginCmd = &cobra.Command{
 	Use:   "login",
 	Short: "Login to Kubeasy by storing your API key",
-	Long: `Login to Kubeasy by securely storing your API key in the system keychain.
+	Long: `Login to Kubeasy by securely storing your API key.
+
+The API key is stored in the most secure available location:
+  - System keychain (macOS Keychain, Windows Credential Manager, or
+    Linux Secret Service) when available
+  - Local config file (~/.config/kubeasy-cli/credentials) as fallback
+    for headless environments
+
+You can also set the KUBEASY_API_KEY environment variable for CI/CD use.
 
 This command will prompt you for your API key.
 If you don't have an API key or forgot it, visit https://kubeasy.dev/profile

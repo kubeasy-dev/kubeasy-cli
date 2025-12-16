@@ -4,7 +4,14 @@
 // The storage priority is:
 //  1. Environment variable (KUBEASY_API_KEY) - read only, useful for CI/CD
 //  2. System keyring (go-keyring) - preferred for GUI environments
-//  3. File-based storage (~/.config/kubeasy-cli/credentials) - fallback for headless
+//  3. File-based storage - fallback for headless environments:
+//     - Linux/macOS: ~/.config/kubeasy-cli/credentials (XDG spec)
+//     - Windows: %APPDATA%/kubeasy-cli/credentials
+//
+// Security Notes:
+//   - File permissions are restricted to owner-only access (0600) on Unix systems
+//   - On Windows, the file is stored in the user's APPDATA directory
+//   - The keyring is always preferred when available for maximum security
 package keystore
 
 import (
@@ -21,8 +28,9 @@ import (
 )
 
 const (
-	// EnvAPIKey is the environment variable name for the API key
-	EnvAPIKey = "KUBEASY_API_KEY"
+	// EnvVarName is the name of the environment variable used to provide the API key.
+	// This is NOT a credential itself, just the variable name to look up.
+	EnvVarName = "KUBEASY_API_KEY" //nolint:gosec // G101: This is the env var name, not a credential
 
 	// credentialsFileName is the name of the file used for file-based storage
 	credentialsFileName = "credentials"
@@ -57,7 +65,7 @@ const (
 // It checks in order: environment variable, keyring, file-based storage.
 func Get() (string, error) {
 	// 1. Check environment variable first
-	if envKey := os.Getenv(EnvAPIKey); envKey != "" {
+	if envKey := os.Getenv(EnvVarName); envKey != "" {
 		logger.Debug("API key found in environment variable")
 		return envKey, nil
 	}
@@ -107,27 +115,31 @@ func Set(apiKey string) (StorageType, error) {
 }
 
 // Delete removes the API key from all storage backends.
+// Returns a combined error if multiple backends fail.
 func Delete() error {
-	var lastErr error
+	var errs []error
 
 	// Delete from keyring
 	if err := keyring.Delete(constants.KeyringServiceName, "api_key"); err != nil && !errors.Is(err, keyring.ErrNotFound) {
 		logger.Debug("Failed to delete from keyring: %v", err)
-		lastErr = err
+		errs = append(errs, fmt.Errorf("keyring: %w", err))
 	}
 
 	// Delete from file-based storage
 	if err := deleteFromFile(); err != nil {
 		logger.Debug("Failed to delete from file: %v", err)
-		lastErr = err
+		errs = append(errs, fmt.Errorf("file: %w", err))
 	}
 
-	return lastErr
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
 }
 
 // GetStorageType returns which storage backend currently holds the API key.
 func GetStorageType() StorageType {
-	if os.Getenv(EnvAPIKey) != "" {
+	if os.Getenv(EnvVarName) != "" {
 		return StorageEnv
 	}
 
@@ -149,21 +161,6 @@ func IsKeyringAvailable() bool {
 	// ErrNotFound means keyring is available but key doesn't exist
 	// Other errors mean keyring is not available
 	return err == nil || errors.Is(err, keyring.ErrNotFound)
-}
-
-// getConfigDir returns the path to the config directory
-func getConfigDir() (string, error) {
-	// Use XDG_CONFIG_HOME if set, otherwise use ~/.config
-	configHome := os.Getenv("XDG_CONFIG_HOME")
-	if configHome == "" {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("failed to get home directory: %w", err)
-		}
-		configHome = filepath.Join(homeDir, ".config")
-	}
-
-	return filepath.Join(configHome, configDirName), nil
 }
 
 // getCredentialsPath returns the full path to the credentials file
@@ -234,6 +231,11 @@ func setToFile(apiKey string) error {
 	// Write with restricted permissions (owner read/write only)
 	if err := os.WriteFile(credPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write credentials file: %w", err)
+	}
+
+	// Apply platform-specific permission restrictions
+	if err := restrictFilePermissions(credPath); err != nil {
+		return fmt.Errorf("failed to restrict file permissions: %w", err)
 	}
 
 	return nil

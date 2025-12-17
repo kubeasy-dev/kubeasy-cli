@@ -12,7 +12,6 @@ spec:
   project: default
   source:
     repoURL: https://kyverno.github.io/kyverno
-    # renovate: depName=kyverno registryUrl=https://kyverno.github.io/kyverno
     targetRevision: 3.6.1
     chart: kyverno
     helm:

@@ -8,40 +8,10 @@
     ":assignAndReview(pbrissaud)",
     ":automergeLinters"
   ],
-  "customManagers": [
-    {
-      "description": "Update Helm chart versions in embedded ArgoCD manifests",
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/^pkg/argocd/manifests/.*\\.yaml$/"
-      ],
-      "matchStrings": [
-        "#\\s*renovate:\\s*depName=(?<depName>\\S+)\\s+registryUrl=(?<registryUrl>\\S+)\\n\\s*targetRevision:\\s*(?<currentValue>\\S+)"
-      ],
-      "datasourceTemplate": "helm"
-    },
-    {
-      "description": "Update GitHub releases versions in embedded ArgoCD manifests",
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/^pkg/argocd/manifests/.*\\.yaml$/"
-      ],
-      "matchStrings": [
-        "#\\s*renovate:\\s*depName=(?<depName>\\S+)\\s+datasource=(?<datasource>\\S+)\\n\\s*targetRevision:\\s*(?<currentValue>\\S+)"
-      ]
-    }
-  ],
+  "argocd": {
+    "managerFilePatterns": ["/pkg/argocd/manifests/.*\\.yaml$/"]
+  },
   "packageRules": [
-    {
-      "description": "Keep Go version in sync between all files",
-      "matchPackageNames": [
-        "golang",
-        "go"
-      ],
-      "groupName": "Go version",
-      "groupSlug": "go-version",
-      "automerge": false
-    },
     {
       "description": "Group all GitHub Actions non-major updates (including digests)",
       "matchManagers": [
@@ -51,9 +21,6 @@
         "minor",
         "patch",
         "digest"
-      ],
-      "matchPackageNames": [
-        "!golang"
       ],
       "groupName": "GitHub Actions non-major dependencies",
       "groupSlug": "github-actions-non-major",
@@ -98,15 +65,11 @@
       "pinDigests": false
     },
     {
-      "description": "Group all embedded ArgoCD manifests updates into a single PR",
+      "description": "Group all embedded ArgoCD manifests updates",
       "matchManagers": [
-        "custom.regex"
-      ],
-      "matchFileNames": [
-        "pkg/argocd/manifests/**"
+        "argocd"
       ],
       "groupName": "Embedded ArgoCD manifests",
-      "groupSlug": "argocd-manifests",
       "separateMajorMinor": false,
       "separateMinorPatch": false
     }

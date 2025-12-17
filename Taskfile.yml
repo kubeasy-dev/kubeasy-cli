@@ -224,3 +224,12 @@ tasks:
     deps: [build]
     cmds:
       - ./{{.BUILD_DIR}}/{{.BINARY_NAME}}
+
+  # ===========================================================================
+  # Renovate
+  # ===========================================================================
+  renovate:dry-run:
+    desc: Run renovate in debug mode
+    cmds:
+      - echo "Running renovate in debug mode..."
+      - docker run --rm -v $(pwd):/usr/src/app/renovate renovate/renovate --platform=local

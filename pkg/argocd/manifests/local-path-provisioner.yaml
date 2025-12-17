@@ -12,7 +12,6 @@ spec:
   project: default
   source:
     repoURL: https://github.com/rancher/local-path-provisioner.git
-    # renovate: depName=rancher/local-path-provisioner datasource=github-releases
     targetRevision: v0.0.32
     path: deploy
     directory:

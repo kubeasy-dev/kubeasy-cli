@@ -66,7 +66,7 @@ func TestInstallOptions_CustomValues(t *testing.T) {
 // TestIsArgoCDInstalled_Logic tests ArgoCD installation detection logic
 func TestIsArgoCDInstalled_Logic(t *testing.T) {
 	t.Run("detects missing namespace", func(t *testing.T) {
-		clientset := fake.NewSimpleClientset()
+		clientset := fake.NewClientset()
 		ctx := context.Background()
 
 		// Try to get ArgoCD namespace (should not exist)
@@ -81,7 +81,7 @@ func TestIsArgoCDInstalled_Logic(t *testing.T) {
 				Name: ArgoCDNamespace,
 			},
 		}
-		clientset := fake.NewSimpleClientset(ns)
+		clientset := fake.NewClientset(ns)
 		ctx := context.Background()
 
 		// Verify namespace exists
@@ -97,7 +97,7 @@ func TestIsArgoCDInstalled_Logic(t *testing.T) {
 				Name: ArgoCDNamespace,
 			},
 		}
-		clientset := fake.NewSimpleClientset(ns)
+		clientset := fake.NewClientset(ns)
 		ctx := context.Background()
 
 		// Check for core deployments (should not exist)
@@ -133,7 +133,7 @@ func TestIsArgoCDInstalled_Logic(t *testing.T) {
 				ReadyReplicas: 0, // Not ready
 			},
 		}
-		clientset := fake.NewSimpleClientset(ns, deployment)
+		clientset := fake.NewClientset(ns, deployment)
 		ctx := context.Background()
 
 		dep, err := clientset.AppsV1().Deployments(ArgoCDNamespace).Get(ctx, "argocd-redis", metav1.GetOptions{})
@@ -162,7 +162,7 @@ func TestIsArgoCDInstalled_Logic(t *testing.T) {
 				ReadyReplicas: 1, // All ready
 			},
 		}
-		clientset := fake.NewSimpleClientset(ns, deployment)
+		clientset := fake.NewClientset(ns, deployment)
 		ctx := context.Background()
 
 		dep, err := clientset.AppsV1().Deployments(ArgoCDNamespace).Get(ctx, "argocd-redis", metav1.GetOptions{})
@@ -178,7 +178,7 @@ func TestIsArgoCDInstalled_Logic(t *testing.T) {
 				Name: ArgoCDNamespace,
 			},
 		}
-		clientset := fake.NewSimpleClientset(ns)
+		clientset := fake.NewClientset(ns)
 		ctx := context.Background()
 
 		// Check for application controller StatefulSet (should not exist)
@@ -206,7 +206,7 @@ func TestIsArgoCDInstalled_Logic(t *testing.T) {
 				ReadyReplicas: 0, // Not ready
 			},
 		}
-		clientset := fake.NewSimpleClientset(ns, statefulset)
+		clientset := fake.NewClientset(ns, statefulset)
 		ctx := context.Background()
 
 		sts, err := clientset.AppsV1().StatefulSets(ArgoCDNamespace).Get(ctx, "argocd-application-controller", metav1.GetOptions{})
@@ -235,7 +235,7 @@ func TestIsArgoCDInstalled_Logic(t *testing.T) {
 				ReadyReplicas: 1, // All ready
 			},
 		}
-		clientset := fake.NewSimpleClientset(ns, statefulset)
+		clientset := fake.NewClientset(ns, statefulset)
 		ctx := context.Background()
 
 		sts, err := clientset.AppsV1().StatefulSets(ArgoCDNamespace).Get(ctx, "argocd-application-controller", metav1.GetOptions{})
@@ -499,7 +499,7 @@ func TestEnsureServerSecretKey(t *testing.T) {
 				},
 			},
 		}
-		clientset := fake.NewSimpleClientset(secret, sts)
+		clientset := fake.NewClientset(secret, sts)
 		ctx := context.Background()
 
 		err := ensureServerSecretKey(ctx, clientset)
@@ -532,7 +532,7 @@ func TestEnsureServerSecretKey(t *testing.T) {
 				Replicas: int32Ptr(1),
 			},
 		}
-		clientset := fake.NewSimpleClientset(secret, sts)
+		clientset := fake.NewClientset(secret, sts)
 		ctx := context.Background()
 
 		err := ensureServerSecretKey(ctx, clientset)
@@ -566,7 +566,7 @@ func TestEnsureServerSecretKey(t *testing.T) {
 				},
 			},
 		}
-		clientset := fake.NewSimpleClientset(secret, sts)
+		clientset := fake.NewClientset(secret, sts)
 		ctx := context.Background()
 
 		err := ensureServerSecretKey(ctx, clientset)
@@ -579,7 +579,7 @@ func TestEnsureServerSecretKey(t *testing.T) {
 	})
 
 	t.Run("returns error when secret not found", func(t *testing.T) {
-		clientset := fake.NewSimpleClientset() // No secret created
+		clientset := fake.NewClientset() // No secret created
 		ctx := context.Background()
 
 		err := ensureServerSecretKey(ctx, clientset)
@@ -605,7 +605,7 @@ func TestRestartApplicationController(t *testing.T) {
 				},
 			},
 		}
-		clientset := fake.NewSimpleClientset(sts)
+		clientset := fake.NewClientset(sts)
 		ctx := context.Background()
 
 		err := restartApplicationController(ctx, clientset)
@@ -637,7 +637,7 @@ func TestRestartApplicationController(t *testing.T) {
 				},
 			},
 		}
-		clientset := fake.NewSimpleClientset(sts)
+		clientset := fake.NewClientset(sts)
 		ctx := context.Background()
 
 		err := restartApplicationController(ctx, clientset)
@@ -667,7 +667,7 @@ func TestRestartApplicationController(t *testing.T) {
 				},
 			},
 		}
-		clientset := fake.NewSimpleClientset(sts)
+		clientset := fake.NewClientset(sts)
 		ctx := context.Background()
 
 		err := restartApplicationController(ctx, clientset)
@@ -680,7 +680,7 @@ func TestRestartApplicationController(t *testing.T) {
 	})
 
 	t.Run("returns error when StatefulSet not found", func(t *testing.T) {
-		clientset := fake.NewSimpleClientset() // No StatefulSet created
+		clientset := fake.NewClientset() // No StatefulSet created
 		ctx := context.Background()
 
 		err := restartApplicationController(ctx, clientset)

@@ -18,7 +18,7 @@ import (
 )
 
 func TestNewExecutor(t *testing.T) {
-	clientset := fake.NewSimpleClientset()
+	clientset := fake.NewClientset()
 	dynamicClient := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme())
 	restConfig := &rest.Config{}
 	namespace := "test-namespace"
@@ -34,7 +34,7 @@ func TestNewExecutor(t *testing.T) {
 
 func TestExecute_UnknownType(t *testing.T) {
 	executor := NewExecutor(
-		fake.NewSimpleClientset(),
+		fake.NewClientset(),
 		dynamicfake.NewSimpleDynamicClient(runtime.NewScheme()),
 		&rest.Config{},
 		"test-ns",
@@ -72,7 +72,7 @@ func TestExecuteAll(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset(pod)
+	clientset := fake.NewClientset(pod)
 	executor := NewExecutor(
 		clientset,
 		dynamicfake.NewSimpleDynamicClient(runtime.NewScheme()),
@@ -126,7 +126,7 @@ func TestExecuteStatus_Success(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset(pod)
+	clientset := fake.NewClientset(pod)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
 	spec := StatusSpec{
@@ -162,7 +162,7 @@ func TestExecuteStatus_ConditionNotMet(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset(pod)
+	clientset := fake.NewClientset(pod)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
 	spec := StatusSpec{
@@ -183,7 +183,7 @@ func TestExecuteStatus_ConditionNotMet(t *testing.T) {
 }
 
 func TestExecuteStatus_NoMatchingPods(t *testing.T) {
-	clientset := fake.NewSimpleClientset()
+	clientset := fake.NewClientset()
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
 	spec := StatusSpec{
@@ -229,7 +229,7 @@ func TestExecuteStatus_ByLabelSelector(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset(pod1, pod2)
+	clientset := fake.NewClientset(pod1, pod2)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
 	spec := StatusSpec{
@@ -260,7 +260,7 @@ func TestExecuteEvent_NoForbiddenEvents(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset(pod)
+	clientset := fake.NewClientset(pod)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
 	spec := EventSpec{
@@ -303,7 +303,7 @@ func TestExecuteEvent_ForbiddenEventDetected(t *testing.T) {
 		EventTime:     metav1.NowMicro(),
 	}
 
-	clientset := fake.NewSimpleClientset(pod, event)
+	clientset := fake.NewClientset(pod, event)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
 	spec := EventSpec{
@@ -648,7 +648,7 @@ func TestGetTargetPods_ByName(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset(pod)
+	clientset := fake.NewClientset(pod)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
 	pods, err := executor.getTargetPods(context.Background(), Target{
@@ -678,7 +678,7 @@ func TestGetTargetPods_ByLabelSelector(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset(pod1, pod2)
+	clientset := fake.NewClientset(pod1, pod2)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
 	pods, err := executor.getTargetPods(context.Background(), Target{
@@ -719,7 +719,7 @@ func TestGetPodsForResource_Deployment(t *testing.T) {
 
 	scheme := runtime.NewScheme()
 	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, deployment)
-	clientset := fake.NewSimpleClientset(pod)
+	clientset := fake.NewClientset(pod)
 
 	executor := NewExecutor(clientset, dynamicClient, nil, "test-ns")
 
@@ -734,7 +734,7 @@ func TestGetPodsForResource_Deployment(t *testing.T) {
 }
 func TestExecute_LogType(t *testing.T) {
 	executor := NewExecutor(
-		fake.NewSimpleClientset(),
+		fake.NewClientset(),
 		dynamicfake.NewSimpleDynamicClient(runtime.NewScheme()),
 		&rest.Config{},
 		"test-ns",
@@ -762,7 +762,7 @@ func TestExecute_LogType(t *testing.T) {
 
 func TestExecute_ConnectivityType(t *testing.T) {
 	executor := NewExecutor(
-		fake.NewSimpleClientset(),
+		fake.NewClientset(),
 		nil,
 		&rest.Config{},
 		"test-ns",
@@ -921,7 +921,7 @@ func TestNewExecutor_NilValues(t *testing.T) {
 // =============================================================================
 
 func TestExecuteLog_NoMatchingPods(t *testing.T) {
-	clientset := fake.NewSimpleClientset()
+	clientset := fake.NewClientset()
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
 	spec := LogSpec{
@@ -950,7 +950,7 @@ func TestExecuteLog_NoMatchingPodsWithLabelSelector(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset(pod)
+	clientset := fake.NewClientset(pod)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
 	spec := LogSpec{
@@ -996,7 +996,7 @@ func TestExecuteLog_ByLabelSelector(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset(pod1, pod2)
+	clientset := fake.NewClientset(pod1, pod2)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
 	spec := LogSpec{
@@ -1032,7 +1032,7 @@ func TestExecuteLog_WithSpecificContainer(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset(pod)
+	clientset := fake.NewClientset(pod)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
 	spec := LogSpec{
@@ -1066,7 +1066,7 @@ func TestExecuteLog_MultipleExpectedStrings(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset(pod)
+	clientset := fake.NewClientset(pod)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
 	spec := LogSpec{
@@ -1103,7 +1103,7 @@ func TestExecuteLog_DefaultContainer(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset(pod)
+	clientset := fake.NewClientset(pod)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
 	spec := LogSpec{
@@ -1147,7 +1147,7 @@ func TestExecuteEvent_ByLabelSelector(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset(pod1, pod2)
+	clientset := fake.NewClientset(pod1, pod2)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
 	spec := EventSpec{
@@ -1206,7 +1206,7 @@ func TestExecuteEvent_MultipleForbiddenReasons(t *testing.T) {
 		EventTime:     metav1.NowMicro(),
 	}
 
-	clientset := fake.NewSimpleClientset(pod, event1, event2)
+	clientset := fake.NewClientset(pod, event1, event2)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
 	spec := EventSpec{
@@ -1262,7 +1262,7 @@ func TestExecuteEvent_EventsOnMultiplePods(t *testing.T) {
 		EventTime:     metav1.NowMicro(),
 	}
 
-	clientset := fake.NewSimpleClientset(pod1, pod2, event1)
+	clientset := fake.NewClientset(pod1, pod2, event1)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
 	spec := EventSpec{
@@ -1307,7 +1307,7 @@ func TestExecuteEvent_OldEventsIgnored(t *testing.T) {
 		EventTime:     metav1.NewMicroTime(oldTime.Time),
 	}
 
-	clientset := fake.NewSimpleClientset(pod, event)
+	clientset := fake.NewClientset(pod, event)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
 	spec := EventSpec{
@@ -1327,7 +1327,7 @@ func TestExecuteEvent_OldEventsIgnored(t *testing.T) {
 }
 
 func TestExecuteEvent_NoMatchingPods(t *testing.T) {
-	clientset := fake.NewSimpleClientset()
+	clientset := fake.NewClientset()
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
 	spec := EventSpec{
@@ -1369,7 +1369,7 @@ func TestExecuteEvent_NonPodEventsIgnored(t *testing.T) {
 		EventTime:     metav1.NowMicro(),
 	}
 
-	clientset := fake.NewSimpleClientset(pod, event)
+	clientset := fake.NewClientset(pod, event)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
 	spec := EventSpec{
@@ -1407,7 +1407,7 @@ func TestExecuteStatus_MultipleConditions(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset(pod)
+	clientset := fake.NewClientset(pod)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
 	spec := StatusSpec{
@@ -1443,7 +1443,7 @@ func TestExecuteStatus_PartialConditionsMet(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset(pod)
+	clientset := fake.NewClientset(pod)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
 	spec := StatusSpec{
@@ -1477,7 +1477,7 @@ func TestExecuteStatus_ConditionNotFound(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset(pod)
+	clientset := fake.NewClientset(pod)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
 	spec := StatusSpec{
@@ -1524,7 +1524,7 @@ func TestExecuteStatus_MultiplePodsMixedResults(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset(pod1, pod2)
+	clientset := fake.NewClientset(pod1, pod2)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
 	spec := StatusSpec{
@@ -1579,7 +1579,7 @@ func TestExecuteStatus_ForDeployment(t *testing.T) {
 
 	scheme := runtime.NewScheme()
 	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, deployment)
-	clientset := fake.NewSimpleClientset(pod)
+	clientset := fake.NewClientset(pod)
 	executor := NewExecutor(clientset, dynamicClient, nil, "test-ns")
 
 	spec := StatusSpec{
@@ -1604,7 +1604,7 @@ func TestExecuteStatus_ForDeployment(t *testing.T) {
 // =============================================================================
 
 func TestExecuteConnectivity_NoMatchingSourcePods(t *testing.T) {
-	clientset := fake.NewSimpleClientset()
+	clientset := fake.NewClientset()
 	executor := NewExecutor(clientset, nil, &rest.Config{}, "test-ns")
 
 	spec := ConnectivitySpec{
@@ -1635,7 +1635,7 @@ func TestExecuteConnectivity_NoRunningSourcePods(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset(pod)
+	clientset := fake.NewClientset(pod)
 	executor := NewExecutor(clientset, nil, &rest.Config{}, "test-ns")
 
 	spec := ConnectivitySpec{
@@ -1655,7 +1655,7 @@ func TestExecuteConnectivity_NoRunningSourcePods(t *testing.T) {
 }
 
 func TestExecuteConnectivity_NoSourcePodSpecified(t *testing.T) {
-	clientset := fake.NewSimpleClientset()
+	clientset := fake.NewClientset()
 	executor := NewExecutor(clientset, nil, &rest.Config{}, "test-ns")
 
 	spec := ConnectivitySpec{
@@ -1675,13 +1675,13 @@ func TestExecuteConnectivity_NoSourcePodSpecified(t *testing.T) {
 }
 
 // Note: TestExecuteConnectivity_SourcePodByName and TestExecuteConnectivity_SourcePodByLabelSelectorRunning
-// cannot be fully tested with fake clientset because fake.NewSimpleClientset() does not provide
+// cannot be fully tested with fake clientset because fake.NewClientset() does not provide
 // a real RESTClient for pod exec operations. These scenarios are tested through integration tests.
 // The core logic of source pod lookup by name is implicitly tested in TestExecuteConnectivity_SourcePodNotFound
 // and the label selector logic is tested in TestExecuteConnectivity_NoRunningSourcePods.
 
 func TestExecuteConnectivity_SourcePodNotFound(t *testing.T) {
-	clientset := fake.NewSimpleClientset()
+	clientset := fake.NewClientset()
 	executor := NewExecutor(clientset, nil, &rest.Config{}, "test-ns")
 
 	spec := ConnectivitySpec{

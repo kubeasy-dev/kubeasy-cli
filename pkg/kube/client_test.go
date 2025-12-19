@@ -21,7 +21,7 @@ import (
 // TestCreateNamespace_Logic tests namespace creation logic
 func TestCreateNamespace_Logic(t *testing.T) {
 	t.Run("creates new namespace successfully", func(t *testing.T) {
-		clientset := fake.NewSimpleClientset()
+		clientset := fake.NewClientset()
 		ctx := context.Background()
 
 		// Manually test the logic without calling CreateNamespace
@@ -51,7 +51,7 @@ func TestCreateNamespace_Logic(t *testing.T) {
 				Name: "existing-namespace",
 			},
 		}
-		clientset := fake.NewSimpleClientset(ns)
+		clientset := fake.NewClientset(ns)
 		ctx := context.Background()
 
 		// Check namespace exists
@@ -75,7 +75,7 @@ func TestCreateNamespace_Logic(t *testing.T) {
 
 func TestCreateNamespace(t *testing.T) {
 	t.Run("creates new namespace successfully", func(t *testing.T) {
-		clientset := fake.NewSimpleClientset()
+		clientset := fake.NewClientset()
 		ctx := context.Background()
 
 		// Add a reactor to set namespace status to Active on creation
@@ -104,7 +104,7 @@ func TestCreateNamespace(t *testing.T) {
 				Phase: corev1.NamespaceActive,
 			},
 		}
-		clientset := fake.NewSimpleClientset(ns)
+		clientset := fake.NewClientset(ns)
 		ctx := context.Background()
 
 		err := CreateNamespace(ctx, clientset, "existing-namespace")
@@ -125,7 +125,7 @@ func TestDeleteNamespace_Logic(t *testing.T) {
 				Name: "to-delete",
 			},
 		}
-		clientset := fake.NewSimpleClientset(ns)
+		clientset := fake.NewClientset(ns)
 		ctx := context.Background()
 
 		// Verify namespace exists
@@ -142,7 +142,7 @@ func TestDeleteNamespace_Logic(t *testing.T) {
 	})
 
 	t.Run("idempotent - namespace does not exist", func(t *testing.T) {
-		clientset := fake.NewSimpleClientset()
+		clientset := fake.NewClientset()
 		ctx := context.Background()
 
 		// Try to delete non-existent namespace
@@ -165,7 +165,7 @@ func TestWaitForNamespaceActive(t *testing.T) {
 				Phase: corev1.NamespaceActive,
 			},
 		}
-		clientset := fake.NewSimpleClientset(ns)
+		clientset := fake.NewClientset(ns)
 		ctx := context.Background()
 
 		err := WaitForNamespaceActive(ctx, clientset, "active-namespace")
@@ -181,7 +181,7 @@ func TestWaitForNamespaceActive(t *testing.T) {
 				Phase: corev1.NamespaceTerminating,
 			},
 		}
-		clientset := fake.NewSimpleClientset(ns)
+		clientset := fake.NewClientset(ns)
 		ctx := context.Background()
 
 		err := WaitForNamespaceActive(ctx, clientset, "terminating-namespace")
@@ -198,7 +198,7 @@ func TestWaitForNamespaceActive(t *testing.T) {
 				Phase: "", // Empty phase - not Active
 			},
 		}
-		clientset := fake.NewSimpleClientset(ns)
+		clientset := fake.NewClientset(ns)
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 		defer cancel()
 
@@ -208,7 +208,7 @@ func TestWaitForNamespaceActive(t *testing.T) {
 	})
 
 	t.Run("returns error when namespace does not exist", func(t *testing.T) {
-		clientset := fake.NewSimpleClientset()
+		clientset := fake.NewClientset()
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 		defer cancel()
 
@@ -227,7 +227,7 @@ func TestWaitForNamespaceActive(t *testing.T) {
 				Phase: "", // Start with empty phase
 			},
 		}
-		clientset := fake.NewSimpleClientset(ns)
+		clientset := fake.NewClientset(ns)
 		ctx := context.Background()
 
 		// Track get attempts and transition to Active after 2 attempts
@@ -266,7 +266,7 @@ func TestCreateNamespace_WaitsForActive(t *testing.T) {
 				Phase: "", // Start with empty phase
 			},
 		}
-		clientset := fake.NewSimpleClientset(ns)
+		clientset := fake.NewClientset(ns)
 		ctx := context.Background()
 
 		// Track get attempts and transition to Active after 2 attempts
@@ -295,7 +295,7 @@ func TestCreateNamespace_WaitsForActive(t *testing.T) {
 	})
 
 	t.Run("handles race condition and waits for Active", func(t *testing.T) {
-		clientset := fake.NewSimpleClientset()
+		clientset := fake.NewClientset()
 		ctx := context.Background()
 
 		// Simulate race condition: Get returns NotFound, but Create returns AlreadyExists
@@ -343,7 +343,7 @@ func TestDeleteNamespace(t *testing.T) {
 				Name: "to-delete",
 			},
 		}
-		clientset := fake.NewSimpleClientset(ns)
+		clientset := fake.NewClientset(ns)
 		ctx := context.Background()
 
 		err := DeleteNamespace(ctx, clientset, "to-delete")
@@ -355,7 +355,7 @@ func TestDeleteNamespace(t *testing.T) {
 	})
 
 	t.Run("idempotent - namespace does not exist", func(t *testing.T) {
-		clientset := fake.NewSimpleClientset()
+		clientset := fake.NewClientset()
 		ctx := context.Background()
 
 		err := DeleteNamespace(ctx, clientset, "nonexistent")

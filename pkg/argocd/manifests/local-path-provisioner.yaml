@@ -12,7 +12,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/rancher/local-path-provisioner.git
-    targetRevision: v0.0.32
+    targetRevision: v0.0.33
     path: deploy
     directory:
       include: local-path-storage.yaml

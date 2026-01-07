@@ -1,5 +1,6 @@
 // Package validation provides types and executors for CLI-based validation
-// of Kubernetes resources. See docs/VALIDATION_EXAMPLES.md for usage examples.
+// of Kubernetes resources. Supports 5 validation types: status, log, event,
+// metrics, and connectivity. See docs/VALIDATION_EXAMPLES.md for usage examples.
 package validation
 
 // ValidationConfig represents the top-level structure of a challenge.yaml validation section
@@ -24,8 +25,10 @@ type Validation struct {
 	// Type specifies which validation executor to use (status, log, event, metrics, connectivity)
 	Type ValidationType `yaml:"type" json:"type"`
 	// Spec contains the type-specific configuration (parsed based on Type)
-	Spec interface{} `yaml:"-" json:"-"` // Parsed based on Type
-	// RawSpec holds the unparsed YAML spec before type-specific parsing
+	// Excluded from serialization - use RawSpec for marshaling
+	Spec interface{} `yaml:"-" json:"-"`
+	// RawSpec holds the unparsed spec before type-specific parsing
+	// Used for YAML parsing and JSON serialization of the original spec
 	RawSpec interface{} `yaml:"spec" json:"spec"`
 }
 
@@ -182,6 +185,7 @@ type ConnectivityCheck struct {
 
 // Result represents the outcome of a single validation execution
 // Returned by the executor and sent to the backend API
+// Note: No YAML tags as this type is only used for executor output, never parsed from challenge.yaml
 type Result struct {
 	// Key matches the validation key for backend correlation
 	Key string `json:"key"`

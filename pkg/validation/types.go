@@ -38,19 +38,19 @@ type ValidationType string
 
 const (
 	// TypeStatus validates Kubernetes resource conditions (Ready, Available, Progressing)
-	// Use when: checking if Deployments, Pods, StatefulSets are in expected state
+	// Value: "status" - Use when checking if Deployments, Pods, StatefulSets are in expected state
 	TypeStatus ValidationType = "status"
 	// TypeLog searches container logs for expected strings
-	// Use when: verifying application behavior, startup messages, or processed requests
+	// Value: "log" - Use when verifying application behavior, startup messages, or processed requests
 	TypeLog ValidationType = "log"
 	// TypeEvent validates that forbidden Kubernetes events are NOT present
-	// Use when: ensuring pods aren't crash-looping, OOMKilled, or failing to schedule
+	// Value: "event" - Use when ensuring pods aren't crash-looping, OOMKilled, or failing to schedule
 	TypeEvent ValidationType = "event"
 	// TypeMetrics validates numeric fields from resource status
-	// Use when: checking replica counts, restart counts, or other numeric conditions
+	// Value: "metrics" - Use when checking replica counts, restart counts, or other numeric conditions
 	TypeMetrics ValidationType = "metrics"
 	// TypeConnectivity tests HTTP connectivity between pods
-	// Use when: verifying Services, NetworkPolicies, or inter-pod communication
+	// Value: "connectivity" - Use when verifying Services, NetworkPolicies, or inter-pod communication
 	TypeConnectivity ValidationType = "connectivity"
 )
 
@@ -60,7 +60,8 @@ type Target struct {
 	// Kind is the Kubernetes resource type to target
 	// Common values: Deployment, Pod, Service, StatefulSet, Job, ConfigMap, Secret, DaemonSet
 	Kind string `yaml:"kind" json:"kind"`
-	// Name matches a specific resource by exact name (mutually exclusive with LabelSelector)
+	// Name matches a specific resource by exact name
+	// If both Name and LabelSelector are provided, Name takes precedence
 	Name string `yaml:"name,omitempty" json:"name,omitempty"`
 	// LabelSelector matches resources by labels, e.g., {"app": "nginx", "tier": "frontend"}
 	// For single-resource validations, the first matching resource is used
@@ -118,6 +119,7 @@ type EventSpec struct {
 	ForbiddenReasons []string `yaml:"forbiddenReasons" json:"forbiddenReasons"`
 	// SinceSeconds limits the time window for event checking (optional)
 	// Events older than this are ignored, e.g., 600 for last 10 minutes
+	// When omitted (0), checks all events regardless of age
 	SinceSeconds int `yaml:"sinceSeconds,omitempty" json:"sinceSeconds,omitempty"`
 }
 

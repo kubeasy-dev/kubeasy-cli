@@ -43,7 +43,7 @@ const (
 	// TypeLog searches container logs for expected strings
 	// Use when: verifying application behavior, startup messages, or processed requests
 	TypeLog ValidationType = "log"
-	// TypeEvent checks for absence of problematic Kubernetes events
+	// TypeEvent validates that forbidden Kubernetes events are NOT present
 	// Use when: ensuring pods aren't crash-looping, OOMKilled, or failing to schedule
 	TypeEvent ValidationType = "event"
 	// TypeMetrics validates numeric fields from resource status
@@ -140,6 +140,7 @@ type MetricCheck struct {
 	// Operator is the comparison operator to use
 	// Supported: "==" (equal), "!=" (not equal), ">" (greater than),
 	// "<" (less than), ">=" (greater or equal), "<=" (less or equal)
+	// Example: operator: ">=" with value: 3 checks if field is at least 3
 	Operator string `yaml:"operator" json:"operator"`
 	// Value is the expected numeric value to compare against
 	Value int64 `yaml:"value" json:"value"`
@@ -176,7 +177,7 @@ type ConnectivityCheck struct {
 	URL string `yaml:"url" json:"url"`
 	// ExpectedStatusCode is the HTTP status code that indicates success
 	// Common values: 200 (OK), 201 (Created), 204 (No Content), 301/302 (Redirects)
-	// Use 0 to verify connection is refused (useful for testing NetworkPolicy blocks)
+	// Use 0 to verify connection failed (timeout or refused, useful for NetworkPolicy tests)
 	ExpectedStatusCode int `yaml:"expectedStatusCode" json:"expectedStatusCode"`
 	// TimeoutSeconds is the maximum time to wait for a response (optional)
 	// Default is typically 10 seconds, increase for slow services

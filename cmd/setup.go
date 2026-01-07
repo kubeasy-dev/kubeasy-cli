@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/argocd"
+	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/ui"
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/kind/pkg/cluster"
@@ -42,15 +43,18 @@ var setupCmd = &cobra.Command{
 			return err
 		}
 		if !exists {
-			err := ui.TimedSpinner("Creating kind cluster 'kubeasy'", func() error {
-				return cluster.NewProvider().Create("kubeasy")
+			err := ui.TimedSpinner(fmt.Sprintf("Creating kind cluster 'kubeasy' (Kubernetes %s)", constants.KubernetesVersion), func() error {
+				return cluster.NewProvider().Create(
+					"kubeasy",
+					cluster.CreateWithNodeImage(constants.KindNodeImage),
+				)
 			})
 			if err != nil {
 				ui.Error("Failed to create kind cluster 'kubeasy'")
 				return fmt.Errorf("failed to create kind cluster: %w", err)
 			}
 		} else {
-			ui.Success("Kind cluster 'kubeasy' already exists")
+			ui.Success(fmt.Sprintf("Kind cluster 'kubeasy' already exists (Kubernetes %s)", constants.KubernetesVersion))
 		}
 
 		// Step 2: Install ArgoCD

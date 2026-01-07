@@ -1,3 +1,5 @@
+// Package validation provides types and executors for CLI-based validation
+// of Kubernetes resources. See docs/VALIDATION_EXAMPLES.md for usage examples.
 package validation
 
 // ValidationConfig represents the top-level structure of a challenge.yaml validation section
@@ -130,8 +132,7 @@ type MetricsSpec struct {
 type MetricCheck struct {
 	// Field is the dot-notation path to the numeric field in the resource
 	// Common paths: status.readyReplicas, status.availableReplicas, status.replicas,
-	// spec.replicas. Array indexing (e.g., status.containerStatuses[0].restartCount)
-	// support depends on the executor implementation
+	// spec.replicas. Array indexing uses dot notation: status.containerStatuses.0.restartCount
 	Field string `yaml:"field" json:"field"`
 	// Operator is the comparison operator to use
 	// Supported: "==" (equal), "!=" (not equal), ">" (greater than),

@@ -11,6 +11,35 @@
   "argocd": {
     "managerFilePatterns": ["/pkg/argocd/manifests/.*\\.yaml$/"]
   },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Update Kubernetes version in Taskfile.yml (based on kindest/node availability)",
+      "fileMatch": ["^Taskfile\\.ya?ml$"],
+      "matchStrings": [
+        "#\\s*renovate:\\s*datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\n\\s*K8S_VERSION:\\s*\"(?<currentValue>.*?)\""
+      ],
+      "extractVersionTemplate": "^v?(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Update Kubernetes version in Go constants (based on kindest/node availability)",
+      "fileMatch": ["^pkg/constants/const\\.go$"],
+      "matchStrings": [
+        "//\\s*renovate:\\s*datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\nvar KubernetesVersion\\s*=\\s*\"(?<currentValue>.*?)\""
+      ],
+      "extractVersionTemplate": "^v?(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Update Kind node image in Go constants",
+      "fileMatch": ["^pkg/constants/const\\.go$"],
+      "matchStrings": [
+        "//\\s*renovate:\\s*datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\nvar KindNodeImage\\s*=\\s*\"kindest/node:v(?<currentValue>.*?)\""
+      ],
+      "extractVersionTemplate": "^v?(?<version>.*)$"
+    }
+  ],
   "packageRules": [
     {
       "description": "Group all GitHub Actions non-major updates (including digests)",
@@ -27,9 +56,12 @@
       "automerge": true
     },
     {
-      "description": "Group Go modules non-major updates",
+      "description": "Group Go modules non-major updates (excluding k8s.io)",
       "matchManagers": [
         "gomod"
+      ],
+      "excludePackagePatterns": [
+        "^k8s\\.io/"
       ],
       "matchUpdateTypes": [
         "minor",
@@ -72,6 +104,16 @@
       "groupName": "Embedded ArgoCD manifests",
       "separateMajorMinor": false,
       "separateMinorPatch": false
+    },
+    {
+      "description": "Group all Kubernetes-related updates together (manual merge required)",
+      "matchPackagePatterns": [
+        "^k8s\\.io/",
+        "^kindest/node$"
+      ],
+      "groupName": "Kubernetes dependencies",
+      "groupSlug": "kubernetes",
+      "automerge": false
     }
   ],
   "separateMajorMinor": true

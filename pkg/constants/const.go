@@ -11,7 +11,7 @@ var GithubRootURL = "https://github.com/kubeasy-dev"
 
 var ExercisesRepoURL = GithubRootURL + "/challenges"
 
-var ExercicesRepoBranch = "main"
+var ExercicesRepoBranch = "challenge/refactoring-2024"
 
 var Version = "dev"
 

@@ -7,7 +7,8 @@ package validation
 // It contains all validations that must pass for a challenge to be considered complete
 type ValidationConfig struct {
 	// Validations is the list of all validation checks for a challenge
-	Validations []Validation `yaml:"validations" json:"validations"`
+	// Note: YAML key is "objectives" to match challenge.yaml format
+	Validations []Validation `yaml:"objectives" json:"objectives"`
 }
 
 // Validation represents a single validation definition with its type and specification

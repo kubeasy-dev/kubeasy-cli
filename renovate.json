@@ -9,13 +9,17 @@
     ":automergeLinters"
   ],
   "argocd": {
-    "managerFilePatterns": ["/pkg/argocd/manifests/.*\\.yaml$/"]
+    "managerFilePatterns": [
+      "/pkg/argocd/manifests/.*\\.yaml$/"
+    ]
   },
   "customManagers": [
     {
       "customType": "regex",
       "description": "Update Kubernetes version in Taskfile.yml (based on kindest/node availability)",
-      "fileMatch": ["^Taskfile\\.ya?ml$"],
+      "managerFilePatterns": [
+        "/^Taskfile\\.ya?ml$/"
+      ],
       "matchStrings": [
         "#\\s*renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)\\s*\\n\\s*K8S_VERSION:\\s*[\"']?(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)[\"']?"
       ],
@@ -24,7 +28,9 @@
     {
       "customType": "regex",
       "description": "Update Kind node image in Go constants (single source of truth for K8s version)",
-      "fileMatch": ["^pkg/constants/const\\.go$"],
+      "managerFilePatterns": [
+        "/^pkg/constants/const\\.go$/"
+      ],
       "matchStrings": [
         "//\\s*renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)\\s*\\nvar\\s+KindNodeImage\\s*=\\s*\"kindest/node:v?(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\""
       ],
@@ -51,16 +57,16 @@
       "matchManagers": [
         "gomod"
       ],
-      "excludePackagePatterns": [
-        "^k8s\\.io/"
-      ],
       "matchUpdateTypes": [
         "minor",
         "patch"
       ],
       "groupName": "Go non-major dependencies",
       "groupSlug": "go-non-major",
-      "automerge": true
+      "automerge": true,
+      "matchPackageNames": [
+        "!/^k8s\\.io//"
+      ]
     },
     {
       "description": "Group npm updates",
@@ -98,13 +104,13 @@
     },
     {
       "description": "Group all Kubernetes-related updates together (manual merge required)",
-      "matchPackagePatterns": [
-        "^k8s\\.io/",
-        "^kindest/node$"
-      ],
       "groupName": "Kubernetes dependencies",
       "groupSlug": "kubernetes",
-      "automerge": false
+      "automerge": false,
+      "matchPackageNames": [
+        "/^k8s\\.io//",
+        "/^kindest/node$/"
+      ]
     }
   ],
   "separateMajorMinor": true

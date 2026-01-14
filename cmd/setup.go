@@ -5,6 +5,9 @@ import (
 	"time"
 
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/argocd"
+	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
+	"github.com/kubeasy-dev/kubeasy-cli/pkg/kube"
+	"github.com/kubeasy-dev/kubeasy-cli/pkg/logger"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/ui"
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/kind/pkg/cluster"
@@ -42,15 +45,38 @@ var setupCmd = &cobra.Command{
 			return err
 		}
 		if !exists {
-			err := ui.TimedSpinner("Creating kind cluster 'kubeasy'", func() error {
-				return cluster.NewProvider().Create("kubeasy")
+			err := ui.TimedSpinner(fmt.Sprintf("Creating kind cluster 'kubeasy' (Kubernetes %s)", constants.GetKubernetesVersion()), func() error {
+				return cluster.NewProvider().Create(
+					"kubeasy",
+					cluster.CreateWithNodeImage(constants.KindNodeImage),
+				)
 			})
 			if err != nil {
-				ui.Error("Failed to create kind cluster 'kubeasy'")
-				return fmt.Errorf("failed to create kind cluster: %w", err)
+				ui.Error(fmt.Sprintf("Failed to create Kind cluster with image %s", constants.KindNodeImage))
+				ui.Info("Verify that the Kind node image is available")
+				ui.Info("You can manually pull: docker pull " + constants.KindNodeImage)
+				return fmt.Errorf("failed to create kind cluster with image %s: %w", constants.KindNodeImage, err)
 			}
 		} else {
-			ui.Success("Kind cluster 'kubeasy' already exists")
+			// Detect actual cluster version and compare with expected
+			actualVersion, err := kube.GetServerVersion()
+			if err != nil {
+				// Log at debug level for troubleshooting, but don't block setup
+				logger.Debug("Could not detect cluster version: %v", err)
+				ui.Success("Kind cluster 'kubeasy' already exists")
+				ui.Info("Could not verify cluster version - cluster may need configuration")
+			} else {
+				expectedVersion := constants.GetKubernetesVersion()
+				// Compare major.minor versions to handle build metadata (+k3s1, -eks) and patch differences
+				if !constants.VersionsCompatible(actualVersion, expectedVersion) {
+					actualMajorMinor := constants.GetMajorMinorVersion(actualVersion)
+					expectedMajorMinor := constants.GetMajorMinorVersion(expectedVersion)
+					ui.Warning(fmt.Sprintf("Kind cluster 'kubeasy' exists with Kubernetes %s (expected %s)", actualMajorMinor, expectedMajorMinor))
+					ui.Info("Consider recreating: kind delete cluster -n kubeasy && kubeasy setup")
+				} else {
+					ui.Success(fmt.Sprintf("Kind cluster 'kubeasy' already exists (Kubernetes %s)", constants.GetMajorMinorVersion(actualVersion)))
+				}
+			}
 		}
 
 		// Step 2: Install ArgoCD

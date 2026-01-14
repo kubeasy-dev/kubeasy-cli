@@ -113,6 +113,16 @@ func TestGetMajorMinorVersion(t *testing.T) {
 			input:    "v1.35.0+k3s1",
 			expected: "1.35",
 		},
+		{
+			name:     "both prerelease and build metadata",
+			input:    "1.35.0-rc.1+build123",
+			expected: "1.35",
+		},
+		{
+			name:     "both build metadata and prerelease (reversed)",
+			input:    "1.35.0+build123-rc.1",
+			expected: "1.35",
+		},
 	}
 
 	for _, tt := range tests {

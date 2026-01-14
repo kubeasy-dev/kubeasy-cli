@@ -50,12 +50,10 @@ func GetMajorMinorVersion(version string) string {
 	// Remove leading "v" if present
 	v := strings.TrimPrefix(version, "v")
 
-	// Split on common separators: +, -, and extract base version
-	// Handle formats like "1.35.0+k3s1" or "1.35.0-eks"
-	for _, sep := range []string{"+", "-"} {
-		if idx := strings.Index(v, sep); idx > 0 {
-			v = v[:idx]
-		}
+	// Strip build metadata and prerelease info by finding the first separator
+	// Handles formats like "1.35.0+k3s1", "1.35.0-eks", or "1.35.0-rc.1+build123"
+	if idx := strings.IndexAny(v, "+-"); idx > 0 {
+		v = v[:idx]
 	}
 
 	// Extract major.minor from "major.minor.patch"

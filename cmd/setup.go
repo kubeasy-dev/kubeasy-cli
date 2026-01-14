@@ -6,6 +6,8 @@ import (
 
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/argocd"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
+	"github.com/kubeasy-dev/kubeasy-cli/pkg/kube"
+	"github.com/kubeasy-dev/kubeasy-cli/pkg/logger"
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/ui"
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/kind/pkg/cluster"
@@ -43,18 +45,33 @@ var setupCmd = &cobra.Command{
 			return err
 		}
 		if !exists {
-			err := ui.TimedSpinner(fmt.Sprintf("Creating kind cluster 'kubeasy' (Kubernetes %s)", constants.KubernetesVersion), func() error {
+			err := ui.TimedSpinner(fmt.Sprintf("Creating kind cluster 'kubeasy' (Kubernetes %s)", constants.GetKubernetesVersion()), func() error {
 				return cluster.NewProvider().Create(
 					"kubeasy",
 					cluster.CreateWithNodeImage(constants.KindNodeImage),
 				)
 			})
 			if err != nil {
-				ui.Error("Failed to create kind cluster 'kubeasy'")
-				return fmt.Errorf("failed to create kind cluster: %w", err)
+				ui.Error(fmt.Sprintf("Failed to create Kind cluster with image %s", constants.KindNodeImage))
+				ui.Info("Verify that the Kind node image is available")
+				ui.Info("You can manually pull: docker pull " + constants.KindNodeImage)
+				return fmt.Errorf("failed to create kind cluster with image %s: %w", constants.KindNodeImage, err)
 			}
 		} else {
-			ui.Success(fmt.Sprintf("Kind cluster 'kubeasy' already exists (Kubernetes %s)", constants.KubernetesVersion))
+			// Detect actual cluster version and compare with expected
+			actualVersion, err := kube.GetServerVersion()
+			if err != nil {
+				logger.Warning("Could not detect cluster version: %v", err)
+				ui.Success("Kind cluster 'kubeasy' already exists")
+			} else {
+				expectedVersion := constants.GetKubernetesVersion()
+				if actualVersion != expectedVersion {
+					ui.Warning(fmt.Sprintf("Kind cluster 'kubeasy' exists with Kubernetes %s (expected %s)", actualVersion, expectedVersion))
+					ui.Info("Consider recreating: kind delete cluster -n kubeasy && kubeasy setup")
+				} else {
+					ui.Success(fmt.Sprintf("Kind cluster 'kubeasy' already exists (Kubernetes %s)", actualVersion))
+				}
+			}
 		}
 
 		// Step 2: Install ArgoCD

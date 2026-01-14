@@ -99,6 +99,22 @@ func getRestConfig() (*rest.Config, error) {
 	return config, nil
 }
 
+// GetServerVersion returns the Kubernetes server version of the connected cluster.
+// Returns the version without the "v" prefix (e.g., "1.35.0").
+func GetServerVersion() (string, error) {
+	clientset, err := GetKubernetesClient()
+	if err != nil {
+		return "", fmt.Errorf("failed to get Kubernetes client: %w", err)
+	}
+
+	serverVersion, err := clientset.Discovery().ServerVersion()
+	if err != nil {
+		return "", fmt.Errorf("failed to get server version: %w", err)
+	}
+
+	return strings.TrimPrefix(serverVersion.GitVersion, "v"), nil
+}
+
 // GetDynamicClient returns the Kubernetes dynamic client using the Kubeasy context
 func GetDynamicClient() (dynamic.Interface, error) {
 	logger.Debug("Attempting to get Kubernetes dynamic client...")

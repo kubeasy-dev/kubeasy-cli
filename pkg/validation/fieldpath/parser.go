@@ -10,13 +10,26 @@ import (
 var (
 	// Regex patterns for parsing field path segments
 	// Matches: field, field[0], field[key=value], field[] (empty brackets caught later)
-	segmentPattern = regexp.MustCompile(`^([a-zA-Z][a-zA-Z0-9]*)((?:\[[^\]]*\])*)$`)
-	arrayPattern   = regexp.MustCompile(`\[([^\]]*)\]`)
-	filterPattern  = regexp.MustCompile(`^([a-zA-Z][a-zA-Z0-9]*)=(.+)$`)
+	segmentPattern   = regexp.MustCompile(`^([a-zA-Z][a-zA-Z0-9]*)((?:\[[^\]]*\])*)$`)
+	arrayPattern     = regexp.MustCompile(`\[([^\]]*)\]`)
+	filterPattern    = regexp.MustCompile(`^([a-zA-Z][a-zA-Z0-9]*)=(.+)$`)
+	fieldNamePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]*$`)
+)
+
+const (
+	// MaxPathLength limits the total length of a field path to prevent DoS
+	MaxPathLength = 1000
+	// MaxPathDepth limits the nesting depth to prevent stack overflow
+	MaxPathDepth = 50
 )
 
 // Parse parses a field path string into a sequence of tokens.
+//
 // The input path is automatically prefixed with "status." before parsing.
+// NOTE: This hardcoded prefix makes the parser specific to Kubernetes status fields.
+// This is intentional for the current use case (status validation), but limits reusability.
+// If you need to parse paths in other contexts, consider creating a separate function.
+//
 // Examples:
 //   - "readyReplicas" -> []PathToken{FieldToken{Name: "status"}, FieldToken{Name: "readyReplicas"}}
 //   - "containerStatuses[0].restartCount" -> tokens for status, containerStatuses, [0], restartCount
@@ -26,11 +39,25 @@ func Parse(path string) ([]PathToken, error) {
 		return nil, fmt.Errorf("field path cannot be empty")
 	}
 
+	// Validate path length to prevent DoS attacks
+	if len(path) > MaxPathLength {
+		return nil, fmt.Errorf("field path exceeds maximum length of %d characters", MaxPathLength)
+	}
+
 	// Automatically prefix with "status."
 	fullPath := "status." + path
 
 	// Split by dots, but protect content inside brackets from being split
-	segments := splitPath(fullPath)
+	segments, err := splitPath(fullPath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate path depth to prevent stack overflow
+	if len(segments) > MaxPathDepth {
+		return nil, fmt.Errorf("field path exceeds maximum depth of %d levels", MaxPathDepth)
+	}
+
 	var tokens []PathToken
 
 	for i, segment := range segments {
@@ -49,9 +76,10 @@ func Parse(path string) ([]PathToken, error) {
 	return tokens, nil
 }
 
-// splitPath splits a path by dots, but ignores dots inside brackets
+// splitPath splits a path by dots, but ignores dots inside brackets.
+// Returns an error if brackets are mismatched.
 // Example: "field[key=value.with.dots].nested" -> ["field[key=value.with.dots]", "nested"]
-func splitPath(path string) []string {
+func splitPath(path string) ([]string, error) {
 	var segments []string
 	var current strings.Builder
 	bracketDepth := 0
@@ -63,6 +91,10 @@ func splitPath(path string) []string {
 			current.WriteRune(ch)
 		case ']':
 			bracketDepth--
+			// Check for negative depth (more closing than opening brackets)
+			if bracketDepth < 0 {
+				return nil, fmt.Errorf("mismatched brackets: extra closing bracket in path %q", path)
+			}
 			current.WriteRune(ch)
 		case '.':
 			if bracketDepth == 0 {
@@ -78,12 +110,17 @@ func splitPath(path string) []string {
 		}
 	}
 
+	// Validate that all brackets were closed
+	if bracketDepth != 0 {
+		return nil, fmt.Errorf("mismatched brackets: %d unclosed bracket(s) in path %q", bracketDepth, path)
+	}
+
 	// Add the last segment
 	if current.Len() > 0 {
 		segments = append(segments, current.String())
 	}
 
-	return segments
+	return segments, nil
 }
 
 // parseSegment parses a single segment that may include array accessors
@@ -155,12 +192,11 @@ func parseArrayAccessor(accessor string, position int, originalPath string) (Pat
 	}, nil
 }
 
-// isValidFieldName checks if a string is a valid Go field name
+// isValidFieldName checks if a string is a valid Go field name.
+// Must start with a letter, followed by letters or digits.
 func isValidFieldName(name string) bool {
 	if name == "" {
 		return false
 	}
-	// Must start with letter, followed by letters or digits
-	matched, _ := regexp.MatchString(`^[a-zA-Z][a-zA-Z0-9]*$`, name)
-	return matched
+	return fieldNamePattern.MatchString(name)
 }

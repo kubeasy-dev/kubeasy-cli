@@ -1,6 +1,7 @@
 package fieldpath
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -259,7 +260,7 @@ func TestParse_ErrorCases(t *testing.T) {
 		{
 			name:        "unclosed bracket",
 			path:        "items[0",
-			errContains: "invalid field name",
+			errContains: "mismatched brackets",
 		},
 		{
 			name:        "empty brackets",
@@ -384,4 +385,49 @@ func TestIsValidFieldName(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+func TestParse_SecurityValidation(t *testing.T) {
+	t.Run("path too long", func(t *testing.T) {
+		// Create a path longer than MaxPathLength
+		longPath := strings.Repeat("a.", MaxPathLength/2+1)
+		tokens, err := Parse(longPath)
+		assert.Error(t, err)
+		assert.Nil(t, tokens)
+		assert.Contains(t, err.Error(), "exceeds maximum length")
+	})
+
+	t.Run("path too deep", func(t *testing.T) {
+		// Create a path deeper than MaxPathDepth
+		deepPath := strings.Repeat("a.", MaxPathDepth+1)
+		tokens, err := Parse(deepPath)
+		assert.Error(t, err)
+		assert.Nil(t, tokens)
+		assert.Contains(t, err.Error(), "exceeds maximum depth")
+	})
+
+	t.Run("mismatched brackets - unclosed", func(t *testing.T) {
+		tokens, err := Parse("field[0.nested")
+		assert.Error(t, err)
+		assert.Nil(t, tokens)
+		assert.Contains(t, err.Error(), "mismatched brackets")
+		assert.Contains(t, err.Error(), "unclosed")
+	})
+
+	t.Run("mismatched brackets - extra closing", func(t *testing.T) {
+		tokens, err := Parse("field].nested")
+		assert.Error(t, err)
+		assert.Nil(t, tokens)
+		assert.Contains(t, err.Error(), "mismatched brackets")
+		assert.Contains(t, err.Error(), "extra closing")
+	})
+
+	t.Run("valid path within limits", func(t *testing.T) {
+		// Create a path just under the limits
+		path := strings.Repeat("a.", 10)
+		path = strings.TrimSuffix(path, ".")
+		tokens, err := Parse(path)
+		assert.NoError(t, err)
+		assert.NotNil(t, tokens)
+	})
 }

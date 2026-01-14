@@ -593,6 +593,12 @@ func TestGetAvailableFilterValues(t *testing.T) {
 			filterField: "type",
 			expected:    []string{"none"},
 		},
+		{
+			name:        "nil slice",
+			slice:       nil,
+			filterField: "type",
+			expected:    []string{"none"},
+		},
 	}
 
 	for _, tt := range tests {

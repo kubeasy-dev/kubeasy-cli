@@ -133,9 +133,14 @@ func lowercaseFirst(s string) string {
 	return strings.ToLower(s[:1]) + s[1:]
 }
 
-// getAvailableFilterValues extracts all unique values for a filter field from a slice
-// Used for helpful error messages
+// getAvailableFilterValues extracts all unique values for a filter field from a slice.
+// Used for helpful error messages. Returns ["none"] for nil or empty slices.
 func getAvailableFilterValues(slice []interface{}, filterField string) []string {
+	// Defensive: handle nil slice (though caller should prevent this)
+	if slice == nil {
+		return []string{"none"}
+	}
+
 	values := make(map[string]bool)
 
 	for _, elem := range slice {

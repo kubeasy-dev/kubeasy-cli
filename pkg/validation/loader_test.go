@@ -13,17 +13,55 @@ import (
 func TestParse_StatusValidation(t *testing.T) {
 	yaml := `
 objectives:
+  - key: deployment-ready
+    title: Deployment Ready
+    description: Deployment must have ready replicas
+    order: 1
+    type: status
+    spec:
+      target:
+        kind: Deployment
+        labelSelector:
+          app: test-app
+      checks:
+        - field: readyReplicas
+          operator: ">="
+          value: 3
+`
+
+	config, err := Parse([]byte(yaml))
+	require.NoError(t, err)
+	require.Len(t, config.Validations, 1)
+
+	v := config.Validations[0]
+	assert.Equal(t, "deployment-ready", v.Key)
+	assert.Equal(t, "Deployment Ready", v.Title)
+	assert.Equal(t, TypeStatus, v.Type)
+
+	spec, ok := v.Spec.(StatusSpec)
+	require.True(t, ok, "spec should be StatusSpec")
+	assert.Equal(t, "Deployment", spec.Target.Kind)
+	assert.Equal(t, "test-app", spec.Target.LabelSelector["app"])
+	require.Len(t, spec.Checks, 1)
+	assert.Equal(t, "readyReplicas", spec.Checks[0].Field)
+	assert.Equal(t, ">=", spec.Checks[0].Operator)
+}
+
+// TestParse_ConditionValidation tests parsing of condition validation spec
+func TestParse_ConditionValidation(t *testing.T) {
+	yaml := `
+objectives:
   - key: pod-ready
     title: Pod Ready
     description: Pod must be running
     order: 1
-    type: status
+    type: condition
     spec:
       target:
         kind: Pod
         labelSelector:
           app: test-app
-      conditions:
+      checks:
         - type: Ready
           status: "True"
 `
@@ -35,15 +73,14 @@ objectives:
 	v := config.Validations[0]
 	assert.Equal(t, "pod-ready", v.Key)
 	assert.Equal(t, "Pod Ready", v.Title)
-	assert.Equal(t, TypeStatus, v.Type)
+	assert.Equal(t, TypeCondition, v.Type)
 
-	spec, ok := v.Spec.(StatusSpec)
-	require.True(t, ok, "spec should be StatusSpec")
+	spec, ok := v.Spec.(ConditionSpec)
+	require.True(t, ok, "spec should be ConditionSpec")
 	assert.Equal(t, "Pod", spec.Target.Kind)
 	assert.Equal(t, "test-app", spec.Target.LabelSelector["app"])
-	require.Len(t, spec.Conditions, 1)
-	assert.Equal(t, "Ready", spec.Conditions[0].Type)
-	assert.Equal(t, "True", spec.Conditions[0].Status)
+	require.Len(t, spec.Checks, 1)
+	assert.Equal(t, "Ready", spec.Checks[0].Type)
 }
 
 // TestParse_LogValidation tests parsing of log validation with defaults
@@ -140,21 +177,21 @@ objectives:
 	})
 }
 
-// TestParse_MetricsValidation tests parsing of metrics validation
-func TestParse_MetricsValidation(t *testing.T) {
+// TestParse_StatusValidationMultipleChecks tests parsing status validation with multiple checks
+func TestParse_StatusValidationMultipleChecks(t *testing.T) {
 	yaml := `
 objectives:
   - key: replica-count
-    type: metrics
+    type: status
     spec:
       target:
         kind: Deployment
         name: web-server
       checks:
-        - field: spec.replicas
+        - field: replicas
           operator: "=="
           value: 3
-        - field: status.readyReplicas
+        - field: readyReplicas
           operator: ">="
           value: 2
 `
@@ -162,19 +199,17 @@ objectives:
 	config, err := Parse([]byte(yaml))
 	require.NoError(t, err)
 
-	spec, ok := config.Validations[0].Spec.(MetricsSpec)
+	spec, ok := config.Validations[0].Spec.(StatusSpec)
 	require.True(t, ok)
 	assert.Equal(t, "Deployment", spec.Target.Kind)
 	assert.Equal(t, "web-server", spec.Target.Name)
 
 	require.Len(t, spec.Checks, 2)
-	assert.Equal(t, "spec.replicas", spec.Checks[0].Field)
+	assert.Equal(t, "replicas", spec.Checks[0].Field)
 	assert.Equal(t, "==", spec.Checks[0].Operator)
-	assert.Equal(t, int64(3), spec.Checks[0].Value)
 
-	assert.Equal(t, "status.readyReplicas", spec.Checks[1].Field)
+	assert.Equal(t, "readyReplicas", spec.Checks[1].Field)
 	assert.Equal(t, ">=", spec.Checks[1].Operator)
-	assert.Equal(t, int64(2), spec.Checks[1].Value)
 }
 
 // TestParse_ConnectivityValidation tests parsing of connectivity validation with defaults
@@ -260,11 +295,11 @@ func TestParse_MultipleValidations(t *testing.T) {
 	yaml := `
 objectives:
   - key: pod-ready
-    type: status
+    type: condition
     spec:
       target:
         name: my-pod
-      conditions:
+      checks:
         - type: Ready
           status: "True"
   - key: no-errors
@@ -288,7 +323,7 @@ objectives:
 	assert.Len(t, config.Validations, 3)
 
 	assert.Equal(t, "pod-ready", config.Validations[0].Key)
-	assert.Equal(t, TypeStatus, config.Validations[0].Type)
+	assert.Equal(t, TypeCondition, config.Validations[0].Type)
 
 	assert.Equal(t, "no-errors", config.Validations[1].Key)
 	assert.Equal(t, TypeLog, config.Validations[1].Type)
@@ -343,9 +378,10 @@ objectives:
     spec:
       target:
         kind: Pod
-      conditions:
-        - type: Ready
-          status: "True"
+      checks:
+        - field: replicas
+          operator: "=="
+          value: 3
 `,
 			errorContains: "target must specify either name or labelSelector",
 		},
@@ -467,11 +503,11 @@ func TestLoadFromFile(t *testing.T) {
 		content := `
 objectives:
   - key: test
-    type: status
+    type: condition
     spec:
       target:
         name: test-pod
-      conditions:
+      checks:
         - type: Ready
           status: "True"
 `

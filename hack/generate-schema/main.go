@@ -12,12 +12,12 @@ func main() {
 
 	// Génère les specs et types dépendants (ordre = dépendances d'abord)
 	c.AddType(validation.Target{})
-	c.AddType(validation.StatusCondition{})
+	c.AddType(validation.StatusCheck{})
 	c.AddType(validation.StatusSpec{})
+	c.AddType(validation.ConditionCheck{})
+	c.AddType(validation.ConditionSpec{})
 	c.AddType(validation.LogSpec{})
 	c.AddType(validation.EventSpec{})
-	c.AddType(validation.MetricCheck{})
-	c.AddType(validation.MetricsSpec{})
 	c.AddType(validation.SourcePod{})
 	c.AddType(validation.ConnectivityCheck{})
 	c.AddType(validation.ConnectivitySpec{})
@@ -34,18 +34,18 @@ func main() {
 	// Ajoute l'enum et le schema principal manuellement
 	output += `export const ObjectiveTypeSchema = z.enum([
   "status",
+  "condition",
   "log",
   "event",
-  "metrics",
   "connectivity",
 ]);
 export type ObjectiveType = z.infer<typeof ObjectiveTypeSchema>;
 
 export const ObjectiveSpecSchema = z.union([
   StatusSpecSchema,
+  ConditionSpecSchema,
   LogSpecSchema,
   EventSpecSchema,
-  MetricsSpecSchema,
   ConnectivitySpecSchema,
 ]);
 export type ObjectiveSpec = z.infer<typeof ObjectiveSpecSchema>;

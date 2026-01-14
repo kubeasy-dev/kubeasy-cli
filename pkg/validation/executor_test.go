@@ -83,14 +83,14 @@ func TestExecuteAll(t *testing.T) {
 	validations := []Validation{
 		{
 			Key:  "pod-ready",
-			Type: TypeStatus,
-			Spec: StatusSpec{
+			Type: TypeCondition,
+			Spec: ConditionSpec{
 				Target: Target{
 					Kind: "Pod",
 					Name: "test-pod",
 				},
-				Conditions: []StatusCondition{
-					{Type: "Ready", Status: "True"},
+				Checks: []ConditionCheck{
+					{Type: "Ready", Status: corev1.ConditionTrue},
 				},
 			},
 		},
@@ -110,7 +110,7 @@ func TestExecuteAll(t *testing.T) {
 	assert.Equal(t, "unknown-type", results[1].Key)
 }
 
-func TestExecuteStatus_Success(t *testing.T) {
+func TestExecuteCondition_Success(t *testing.T) {
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-pod",
@@ -129,24 +129,24 @@ func TestExecuteStatus_Success(t *testing.T) {
 	clientset := fake.NewClientset(pod)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
-	spec := StatusSpec{
+	spec := ConditionSpec{
 		Target: Target{
 			Kind: "Pod",
 			Name: "test-pod",
 		},
-		Conditions: []StatusCondition{
-			{Type: "Ready", Status: "True"},
+		Checks: []ConditionCheck{
+			{Type: "Ready", Status: corev1.ConditionTrue},
 		},
 	}
 
-	passed, msg, err := executor.executeStatus(context.Background(), spec)
+	passed, msg, err := executor.executeCondition(context.Background(), spec)
 
 	require.NoError(t, err)
 	assert.True(t, passed)
 	assert.Contains(t, msg, "All 1 pod(s) meet the required conditions")
 }
 
-func TestExecuteStatus_ConditionNotMet(t *testing.T) {
+func TestExecuteCondition_ConditionNotMet(t *testing.T) {
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-pod",
@@ -165,44 +165,44 @@ func TestExecuteStatus_ConditionNotMet(t *testing.T) {
 	clientset := fake.NewClientset(pod)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
-	spec := StatusSpec{
+	spec := ConditionSpec{
 		Target: Target{
 			Kind: "Pod",
 			Name: "test-pod",
 		},
-		Conditions: []StatusCondition{
-			{Type: "Ready", Status: "True"},
+		Checks: []ConditionCheck{
+			{Type: "Ready", Status: corev1.ConditionTrue},
 		},
 	}
 
-	passed, msg, err := executor.executeStatus(context.Background(), spec)
+	passed, msg, err := executor.executeCondition(context.Background(), spec)
 
 	require.NoError(t, err)
 	assert.False(t, passed)
 	assert.Contains(t, msg, "condition Ready is not True")
 }
 
-func TestExecuteStatus_NoMatchingPods(t *testing.T) {
+func TestExecuteCondition_NoMatchingPods(t *testing.T) {
 	clientset := fake.NewClientset()
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
-	spec := StatusSpec{
+	spec := ConditionSpec{
 		Target: Target{
 			Kind: "Pod",
 			Name: "nonexistent-pod",
 		},
-		Conditions: []StatusCondition{
-			{Type: "Ready", Status: "True"},
+		Checks: []ConditionCheck{
+			{Type: "Ready", Status: corev1.ConditionTrue},
 		},
 	}
 
-	passed, _, err := executor.executeStatus(context.Background(), spec)
+	passed, _, err := executor.executeCondition(context.Background(), spec)
 
 	assert.Error(t, err)
 	assert.False(t, passed)
 }
 
-func TestExecuteStatus_ByLabelSelector(t *testing.T) {
+func TestExecuteCondition_ByLabelSelector(t *testing.T) {
 	pod1 := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-pod-1",
@@ -232,17 +232,17 @@ func TestExecuteStatus_ByLabelSelector(t *testing.T) {
 	clientset := fake.NewClientset(pod1, pod2)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
-	spec := StatusSpec{
+	spec := ConditionSpec{
 		Target: Target{
 			Kind:          "Pod",
 			LabelSelector: map[string]string{"app": "test"},
 		},
-		Conditions: []StatusCondition{
-			{Type: "Ready", Status: "True"},
+		Checks: []ConditionCheck{
+			{Type: "Ready", Status: corev1.ConditionTrue},
 		},
 	}
 
-	passed, msg, err := executor.executeStatus(context.Background(), spec)
+	passed, msg, err := executor.executeCondition(context.Background(), spec)
 
 	require.NoError(t, err)
 	assert.True(t, passed)
@@ -323,7 +323,7 @@ func TestExecuteEvent_ForbiddenEventDetected(t *testing.T) {
 	assert.Contains(t, msg, "OOMKilled")
 }
 
-func TestExecuteMetrics_Success(t *testing.T) {
+func TestExecuteStatus_Success(t *testing.T) {
 	deployment := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "apps/v1",
@@ -346,24 +346,24 @@ func TestExecuteMetrics_Success(t *testing.T) {
 
 	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
 
-	spec := MetricsSpec{
+	spec := StatusSpec{
 		Target: Target{
 			Kind: "Deployment",
 			Name: "test-deployment",
 		},
-		Checks: []MetricCheck{
-			{Field: "status.readyReplicas", Operator: "==", Value: 3},
+		Checks: []StatusCheck{
+			{Field: "readyReplicas", Operator: "==", Value: int64(3)},
 		},
 	}
 
-	passed, msg, err := executor.executeMetrics(context.Background(), spec)
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
 
 	require.NoError(t, err)
 	assert.True(t, passed)
-	assert.Equal(t, errAllMetricsChecksPassed, msg)
+	assert.Equal(t, errAllStatusChecksPassed, msg)
 }
 
-func TestExecuteMetrics_CheckFailed(t *testing.T) {
+func TestExecuteStatus_CheckFailed(t *testing.T) {
 	deployment := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "apps/v1",
@@ -383,24 +383,24 @@ func TestExecuteMetrics_CheckFailed(t *testing.T) {
 
 	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
 
-	spec := MetricsSpec{
+	spec := StatusSpec{
 		Target: Target{
 			Kind: "Deployment",
 			Name: "test-deployment",
 		},
-		Checks: []MetricCheck{
-			{Field: "status.readyReplicas", Operator: ">=", Value: 3},
+		Checks: []StatusCheck{
+			{Field: "readyReplicas", Operator: ">=", Value: int64(3)},
 		},
 	}
 
-	passed, msg, err := executor.executeMetrics(context.Background(), spec)
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
 
 	require.NoError(t, err)
 	assert.False(t, passed)
 	assert.Contains(t, msg, "got 1, expected >= 3")
 }
 
-func TestExecuteMetrics_NoMatchingResources(t *testing.T) {
+func TestExecuteStatus_NoMatchingResources(t *testing.T) {
 	// Create a pod with different labels
 	podUnstructured := &unstructured.Unstructured{
 		Object: map[string]interface{}{
@@ -427,37 +427,37 @@ func TestExecuteMetrics_NoMatchingResources(t *testing.T) {
 	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, podUnstructured)
 	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
 
-	spec := MetricsSpec{
+	spec := StatusSpec{
 		Target: Target{
 			Kind:          "Pod",
 			LabelSelector: map[string]string{"app": "nonexistent"},
 		},
-		Checks: []MetricCheck{
-			{Field: "status.containerStatuses[0].restartCount", Operator: "==", Value: 0},
+		Checks: []StatusCheck{
+			{Field: "containerStatuses.0.restartCount", Operator: "==", Value: int64(0)},
 		},
 	}
 
-	passed, msg, err := executor.executeMetrics(context.Background(), spec)
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
 
 	require.NoError(t, err)
 	assert.False(t, passed)
 	assert.Equal(t, errNoMatchingResources, msg)
 }
 
-func TestExecuteMetrics_NoTargetSpecified(t *testing.T) {
+func TestExecuteStatus_NoTargetSpecified(t *testing.T) {
 	executor := NewExecutor(nil, dynamicfake.NewSimpleDynamicClient(runtime.NewScheme()), nil, "test-ns")
 
-	spec := MetricsSpec{
+	spec := StatusSpec{
 		Target: Target{
 			Kind: "Deployment",
 			// No name or labelSelector
 		},
-		Checks: []MetricCheck{
-			{Field: "status.readyReplicas", Operator: "==", Value: 3},
+		Checks: []StatusCheck{
+			{Field: "readyReplicas", Operator: "==", Value: int64(3)},
 		},
 	}
 
-	passed, msg, err := executor.executeMetrics(context.Background(), spec)
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
 
 	require.NoError(t, err)
 	assert.False(t, passed)
@@ -1389,10 +1389,10 @@ func TestExecuteEvent_NonPodEventsIgnored(t *testing.T) {
 }
 
 // =============================================================================
-// Status Validator Tests
+// Condition Validator Tests
 // =============================================================================
 
-func TestExecuteStatus_MultipleConditions(t *testing.T) {
+func TestExecuteCondition_MultipleConditions(t *testing.T) {
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-pod",
@@ -1410,26 +1410,26 @@ func TestExecuteStatus_MultipleConditions(t *testing.T) {
 	clientset := fake.NewClientset(pod)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
-	spec := StatusSpec{
+	spec := ConditionSpec{
 		Target: Target{
 			Kind: "Pod",
 			Name: "test-pod",
 		},
-		Conditions: []StatusCondition{
-			{Type: "Ready", Status: "True"},
-			{Type: "PodScheduled", Status: "True"},
-			{Type: "ContainersReady", Status: "True"},
+		Checks: []ConditionCheck{
+			{Type: "Ready", Status: corev1.ConditionTrue},
+			{Type: "PodScheduled", Status: corev1.ConditionTrue},
+			{Type: "ContainersReady", Status: corev1.ConditionTrue},
 		},
 	}
 
-	passed, msg, err := executor.executeStatus(context.Background(), spec)
+	passed, msg, err := executor.executeCondition(context.Background(), spec)
 
 	require.NoError(t, err)
 	assert.True(t, passed)
 	assert.Contains(t, msg, "All 1 pod(s) meet the required conditions")
 }
 
-func TestExecuteStatus_PartialConditionsMet(t *testing.T) {
+func TestExecuteCondition_PartialConditionsMet(t *testing.T) {
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-pod",
@@ -1446,25 +1446,25 @@ func TestExecuteStatus_PartialConditionsMet(t *testing.T) {
 	clientset := fake.NewClientset(pod)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
-	spec := StatusSpec{
+	spec := ConditionSpec{
 		Target: Target{
 			Kind: "Pod",
 			Name: "test-pod",
 		},
-		Conditions: []StatusCondition{
-			{Type: "Ready", Status: "True"},
-			{Type: "PodScheduled", Status: "True"},
+		Checks: []ConditionCheck{
+			{Type: "Ready", Status: corev1.ConditionTrue},
+			{Type: "PodScheduled", Status: corev1.ConditionTrue},
 		},
 	}
 
-	passed, msg, err := executor.executeStatus(context.Background(), spec)
+	passed, msg, err := executor.executeCondition(context.Background(), spec)
 
 	require.NoError(t, err)
 	assert.False(t, passed)
 	assert.Contains(t, msg, "PodScheduled is not True")
 }
 
-func TestExecuteStatus_ConditionNotFound(t *testing.T) {
+func TestExecuteCondition_ConditionNotFound(t *testing.T) {
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-pod",
@@ -1480,24 +1480,24 @@ func TestExecuteStatus_ConditionNotFound(t *testing.T) {
 	clientset := fake.NewClientset(pod)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
-	spec := StatusSpec{
+	spec := ConditionSpec{
 		Target: Target{
 			Kind: "Pod",
 			Name: "test-pod",
 		},
-		Conditions: []StatusCondition{
-			{Type: "NonExistentCondition", Status: "True"},
+		Checks: []ConditionCheck{
+			{Type: "NonExistentCondition", Status: corev1.ConditionTrue},
 		},
 	}
 
-	passed, msg, err := executor.executeStatus(context.Background(), spec)
+	passed, msg, err := executor.executeCondition(context.Background(), spec)
 
 	require.NoError(t, err)
 	assert.False(t, passed)
 	assert.Contains(t, msg, "condition NonExistentCondition not found")
 }
 
-func TestExecuteStatus_MultiplePodsMixedResults(t *testing.T) {
+func TestExecuteCondition_MultiplePodsMixedResults(t *testing.T) {
 	pod1 := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-pod-1",
@@ -1527,17 +1527,17 @@ func TestExecuteStatus_MultiplePodsMixedResults(t *testing.T) {
 	clientset := fake.NewClientset(pod1, pod2)
 	executor := NewExecutor(clientset, nil, nil, "test-ns")
 
-	spec := StatusSpec{
+	spec := ConditionSpec{
 		Target: Target{
 			Kind:          "Pod",
 			LabelSelector: map[string]string{"app": "test"},
 		},
-		Conditions: []StatusCondition{
-			{Type: "Ready", Status: "True"},
+		Checks: []ConditionCheck{
+			{Type: "Ready", Status: corev1.ConditionTrue},
 		},
 	}
 
-	passed, msg, err := executor.executeStatus(context.Background(), spec)
+	passed, msg, err := executor.executeCondition(context.Background(), spec)
 
 	require.NoError(t, err)
 	assert.False(t, passed)
@@ -1545,7 +1545,7 @@ func TestExecuteStatus_MultiplePodsMixedResults(t *testing.T) {
 	assert.Contains(t, msg, "Ready is not True")
 }
 
-func TestExecuteStatus_ForDeployment(t *testing.T) {
+func TestExecuteCondition_ForDeployment(t *testing.T) {
 	deployment := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "apps/v1",
@@ -1582,17 +1582,17 @@ func TestExecuteStatus_ForDeployment(t *testing.T) {
 	clientset := fake.NewClientset(pod)
 	executor := NewExecutor(clientset, dynamicClient, nil, "test-ns")
 
-	spec := StatusSpec{
+	spec := ConditionSpec{
 		Target: Target{
 			Kind: "Deployment",
 			Name: "test-deployment",
 		},
-		Conditions: []StatusCondition{
-			{Type: "Ready", Status: "True"},
+		Checks: []ConditionCheck{
+			{Type: "Ready", Status: corev1.ConditionTrue},
 		},
 	}
 
-	passed, msg, err := executor.executeStatus(context.Background(), spec)
+	passed, msg, err := executor.executeCondition(context.Background(), spec)
 
 	require.NoError(t, err)
 	assert.True(t, passed)
@@ -1701,10 +1701,10 @@ func TestExecuteConnectivity_SourcePodNotFound(t *testing.T) {
 }
 
 // =============================================================================
-// Metrics Validator Tests
+// Status (Field-Based) Validator Tests
 // =============================================================================
 
-func TestExecuteMetrics_MultipleChecks(t *testing.T) {
+func TestExecuteStatus_MultipleChecks(t *testing.T) {
 	deployment := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "apps/v1",
@@ -1728,26 +1728,26 @@ func TestExecuteMetrics_MultipleChecks(t *testing.T) {
 	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, deployment)
 	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
 
-	spec := MetricsSpec{
+	spec := StatusSpec{
 		Target: Target{
 			Kind: "Deployment",
 			Name: "test-deployment",
 		},
-		Checks: []MetricCheck{
-			{Field: "status.readyReplicas", Operator: "==", Value: 3},
-			{Field: "status.availableReplicas", Operator: ">=", Value: 3},
-			{Field: "spec.replicas", Operator: "<=", Value: 5},
+		Checks: []StatusCheck{
+			{Field: "readyReplicas", Operator: "==", Value: int64(3)},
+			{Field: "availableReplicas", Operator: ">=", Value: int64(3)},
+			{Field: "replicas", Operator: "<=", Value: int64(5)},
 		},
 	}
 
-	passed, msg, err := executor.executeMetrics(context.Background(), spec)
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
 
 	require.NoError(t, err)
 	assert.True(t, passed)
-	assert.Equal(t, errAllMetricsChecksPassed, msg)
+	assert.Equal(t, errAllStatusChecksPassed, msg)
 }
 
-func TestExecuteMetrics_MultipleChecksMixedResults(t *testing.T) {
+func TestExecuteStatus_MultipleChecksMixedResults(t *testing.T) {
 	deployment := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "apps/v1",
@@ -1767,26 +1767,26 @@ func TestExecuteMetrics_MultipleChecksMixedResults(t *testing.T) {
 	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, deployment)
 	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
 
-	spec := MetricsSpec{
+	spec := StatusSpec{
 		Target: Target{
 			Kind: "Deployment",
 			Name: "test-deployment",
 		},
-		Checks: []MetricCheck{
-			{Field: "status.readyReplicas", Operator: "==", Value: 3},
-			{Field: "status.availableReplicas", Operator: ">=", Value: 3},
+		Checks: []StatusCheck{
+			{Field: "readyReplicas", Operator: "==", Value: int64(3)},
+			{Field: "availableReplicas", Operator: ">=", Value: int64(3)},
 		},
 	}
 
-	passed, msg, err := executor.executeMetrics(context.Background(), spec)
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
 
 	require.NoError(t, err)
 	assert.False(t, passed)
-	assert.Contains(t, msg, "status.readyReplicas")
-	assert.Contains(t, msg, "status.availableReplicas")
+	assert.Contains(t, msg, "readyReplicas")
+	assert.Contains(t, msg, "availableReplicas")
 }
 
-func TestExecuteMetrics_ByLabelSelector(t *testing.T) {
+func TestExecuteStatus_ByLabelSelector(t *testing.T) {
 	deployment := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "apps/v1",
@@ -1808,24 +1808,24 @@ func TestExecuteMetrics_ByLabelSelector(t *testing.T) {
 	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, deployment)
 	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
 
-	spec := MetricsSpec{
+	spec := StatusSpec{
 		Target: Target{
 			Kind:          "Deployment",
 			LabelSelector: map[string]string{"app": "test"},
 		},
-		Checks: []MetricCheck{
-			{Field: "status.readyReplicas", Operator: "==", Value: 3},
+		Checks: []StatusCheck{
+			{Field: "readyReplicas", Operator: "==", Value: int64(3)},
 		},
 	}
 
-	passed, msg, err := executor.executeMetrics(context.Background(), spec)
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
 
 	require.NoError(t, err)
 	assert.True(t, passed)
-	assert.Equal(t, errAllMetricsChecksPassed, msg)
+	assert.Equal(t, errAllStatusChecksPassed, msg)
 }
 
-func TestExecuteMetrics_FieldNotFound(t *testing.T) {
+func TestExecuteStatus_FieldNotFound(t *testing.T) {
 	deployment := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "apps/v1",
@@ -1842,24 +1842,24 @@ func TestExecuteMetrics_FieldNotFound(t *testing.T) {
 	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, deployment)
 	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
 
-	spec := MetricsSpec{
+	spec := StatusSpec{
 		Target: Target{
 			Kind: "Deployment",
 			Name: "test-deployment",
 		},
-		Checks: []MetricCheck{
-			{Field: "status.nonexistent", Operator: "==", Value: 3},
+		Checks: []StatusCheck{
+			{Field: "nonexistent", Operator: "==", Value: int64(3)},
 		},
 	}
 
-	passed, msg, err := executor.executeMetrics(context.Background(), spec)
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
 
 	require.NoError(t, err)
 	assert.False(t, passed)
-	assert.Contains(t, msg, "Field status.nonexistent not found")
+	assert.Contains(t, msg, "Field nonexistent not found")
 }
 
-func TestExecuteMetrics_StatefulSet(t *testing.T) {
+func TestExecuteStatus_StatefulSet(t *testing.T) {
 	statefulset := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "apps/v1",
@@ -1879,24 +1879,24 @@ func TestExecuteMetrics_StatefulSet(t *testing.T) {
 	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, statefulset)
 	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
 
-	spec := MetricsSpec{
+	spec := StatusSpec{
 		Target: Target{
 			Kind: "StatefulSet",
 			Name: "test-statefulset",
 		},
-		Checks: []MetricCheck{
-			{Field: "status.readyReplicas", Operator: "==", Value: 3},
+		Checks: []StatusCheck{
+			{Field: "readyReplicas", Operator: "==", Value: int64(3)},
 		},
 	}
 
-	passed, msg, err := executor.executeMetrics(context.Background(), spec)
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
 
 	require.NoError(t, err)
 	assert.True(t, passed)
-	assert.Equal(t, errAllMetricsChecksPassed, msg)
+	assert.Equal(t, errAllStatusChecksPassed, msg)
 }
 
-func TestExecuteMetrics_DaemonSet(t *testing.T) {
+func TestExecuteStatus_DaemonSet(t *testing.T) {
 	daemonset := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "apps/v1",
@@ -1916,45 +1916,45 @@ func TestExecuteMetrics_DaemonSet(t *testing.T) {
 	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, daemonset)
 	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
 
-	spec := MetricsSpec{
+	spec := StatusSpec{
 		Target: Target{
 			Kind: "DaemonSet",
 			Name: "test-daemonset",
 		},
-		Checks: []MetricCheck{
-			{Field: "status.numberReady", Operator: "==", Value: 3},
+		Checks: []StatusCheck{
+			{Field: "numberReady", Operator: "==", Value: int64(3)},
 		},
 	}
 
-	passed, msg, err := executor.executeMetrics(context.Background(), spec)
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
 
 	require.NoError(t, err)
 	assert.True(t, passed)
-	assert.Equal(t, errAllMetricsChecksPassed, msg)
+	assert.Equal(t, errAllStatusChecksPassed, msg)
 }
 
-func TestExecuteMetrics_ResourceNotFound(t *testing.T) {
+func TestExecuteStatus_ResourceNotFound(t *testing.T) {
 	scheme := runtime.NewScheme()
 	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme)
 	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
 
-	spec := MetricsSpec{
+	spec := StatusSpec{
 		Target: Target{
 			Kind: "Deployment",
 			Name: "nonexistent",
 		},
-		Checks: []MetricCheck{
-			{Field: "status.readyReplicas", Operator: "==", Value: 3},
+		Checks: []StatusCheck{
+			{Field: "readyReplicas", Operator: "==", Value: int64(3)},
 		},
 	}
 
-	passed, _, err := executor.executeMetrics(context.Background(), spec)
+	passed, _, err := executor.executeStatus(context.Background(), spec)
 
 	assert.False(t, passed)
 	assert.Error(t, err)
 }
 
-func TestExecuteMetrics_AllOperators(t *testing.T) {
+func TestExecuteStatus_AllOperators(t *testing.T) {
 	// In these tests:
 	// - "actual" is the value in the resource (status.readyReplicas)
 	// - "value" is the expected value to compare against in the check
@@ -1962,7 +1962,7 @@ func TestExecuteMetrics_AllOperators(t *testing.T) {
 	tests := []struct {
 		name     string
 		operator string
-		value    int64 // expected value in the MetricCheck
+		value    int64 // expected value in the StatusCheck
 		actual   int64 // actual value from the resource
 		expected bool  // expected test result
 	}{
@@ -1999,17 +1999,17 @@ func TestExecuteMetrics_AllOperators(t *testing.T) {
 			dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, deployment)
 			executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
 
-			spec := MetricsSpec{
+			spec := StatusSpec{
 				Target: Target{
 					Kind: "Deployment",
 					Name: "test-deployment",
 				},
-				Checks: []MetricCheck{
-					{Field: "status.readyReplicas", Operator: tt.operator, Value: tt.value},
+				Checks: []StatusCheck{
+					{Field: "readyReplicas", Operator: tt.operator, Value: tt.value},
 				},
 			}
 
-			passed, _, err := executor.executeMetrics(context.Background(), spec)
+			passed, _, err := executor.executeStatus(context.Background(), spec)
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.expected, passed)

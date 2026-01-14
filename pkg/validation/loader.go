@@ -128,6 +128,48 @@ func parseSpec(v *Validation) error {
 		if err := validateTarget(spec.Target); err != nil {
 			return err
 		}
+		// Validate checks
+		if len(spec.Checks) == 0 {
+			return fmt.Errorf("status validation must have at least one check")
+		}
+		for i, check := range spec.Checks {
+			if check.Field == "" {
+				return fmt.Errorf("check %d: field is required", i)
+			}
+			if check.Operator == "" {
+				return fmt.Errorf("check %d: operator is required", i)
+			}
+			if check.Value == nil {
+				return fmt.Errorf("check %d: value is required", i)
+			}
+			// Validate operator
+			validOperators := []string{"==", "!=", ">", "<", ">=", "<="}
+			if !containsString(validOperators, check.Operator) {
+				return fmt.Errorf("check %d: invalid operator %s (valid: %v)", i, check.Operator, validOperators)
+			}
+		}
+		v.Spec = spec
+
+	case TypeCondition:
+		var spec ConditionSpec
+		if err := yaml.Unmarshal(specYAML, &spec); err != nil {
+			return err
+		}
+		if err := validateTarget(spec.Target); err != nil {
+			return err
+		}
+		// Validate checks
+		if len(spec.Checks) == 0 {
+			return fmt.Errorf("condition validation must have at least one check")
+		}
+		for i, check := range spec.Checks {
+			if check.Type == "" {
+				return fmt.Errorf("check %d: type is required", i)
+			}
+			if check.Status == "" {
+				return fmt.Errorf("check %d: status is required", i)
+			}
+		}
 		v.Spec = spec
 
 	case TypeLog:
@@ -155,16 +197,6 @@ func parseSpec(v *Validation) error {
 		// Apply default sinceSeconds if not specified
 		if spec.SinceSeconds == 0 {
 			spec.SinceSeconds = DefaultEventSinceSeconds
-		}
-		v.Spec = spec
-
-	case TypeMetrics:
-		var spec MetricsSpec
-		if err := yaml.Unmarshal(specYAML, &spec); err != nil {
-			return err
-		}
-		if err := validateTarget(spec.Target); err != nil {
-			return err
 		}
 		v.Spec = spec
 
@@ -205,4 +237,14 @@ func validateSourcePod(sourcePod SourcePod) error {
 		return fmt.Errorf("sourcePod must specify either name or labelSelector")
 	}
 	return nil
+}
+
+// containsString checks if a string is in a slice
+func containsString(slice []string, s string) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
 }

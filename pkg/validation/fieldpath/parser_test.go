@@ -255,7 +255,7 @@ func TestParse_ErrorCases(t *testing.T) {
 		{
 			name:        "invalid array filter missing value",
 			path:        "conditions[type=]",
-			errContains: "invalid array accessor",
+			errContains: "invalid array filter",
 		},
 		{
 			name:        "unclosed bracket",

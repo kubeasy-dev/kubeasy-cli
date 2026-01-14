@@ -2,6 +2,7 @@ package fieldpath
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -10,6 +11,14 @@ import (
 // - value: the resolved value (nil if not found)
 // - found: true if the path exists and was successfully resolved
 // - error: non-nil if there was an error during resolution (type mismatch, out of bounds, etc.)
+//
+// Error Behavior:
+// - Missing field: returns (nil, false, nil) - field doesn't exist, not an error
+// - Type mismatch: returns (nil, false, error) - expected map/slice but got something else
+// - Out of bounds: returns (nil, false, error) - array index out of range
+// - Filter not found: returns (nil, false, error) - no array element matches filter
+// This asymmetry is intentional: missing fields are common and expected, while type mismatches
+// and out-of-bounds access indicate either incorrect paths or unexpected object structure.
 func Resolve(obj map[string]interface{}, tokens []PathToken) (interface{}, bool, error) {
 	if len(tokens) == 0 {
 		return nil, false, fmt.Errorf("no tokens to resolve")
@@ -26,7 +35,19 @@ func Resolve(obj map[string]interface{}, tokens []PathToken) (interface{}, bool,
 				return nil, false, fmt.Errorf("expected map at token %d (%s), got %T", i, t.Name, current)
 			}
 
-			// Access field (try exact case first, then try capitalized for JSON compatibility)
+			// Access field with case-insensitive fallback
+			// This tries three variations to handle JSON unmarshaling vs Go struct field names:
+			// 1. Exact match (e.g., "readyReplicas")
+			// 2. Lowercase first letter (e.g., "readyReplicas" -> "readyReplicas")
+			// 3. Uppercase first letter (e.g., "readyReplicas" -> "ReadyReplicas")
+			//
+			// Performance note: In worst case, this performs 3 map lookups per field.
+			// This is acceptable for typical Kubernetes object sizes, but could be optimized
+			// if profiling shows it's a bottleneck (e.g., by caching or normalizing keys).
+			//
+			// Design choice: We prefer convenience (accepting either case) over performance.
+			// Users typically write paths matching JSON fields (lowercase first), so the first
+			// lookup usually succeeds.
 			val, exists := currentMap[t.Name]
 			if !exists {
 				// Try with first letter lowercased (for JSON unmarshaling compatibility)
@@ -84,7 +105,7 @@ func Resolve(obj map[string]interface{}, tokens []PathToken) (interface{}, bool,
 					}
 				}
 
-				if exists && fmt.Sprintf("%v", fieldVal) == t.FilterValue {
+				if exists && compareFilterValue(fieldVal, t.FilterValue) {
 					current = elemMap
 					found = true
 					break
@@ -176,5 +197,44 @@ func getAvailableFilterValues(slice []interface{}, filterField string) []string 
 		return []string{"none"}
 	}
 
+	sort.Strings(result)
 	return result
+}
+
+// compareFilterValue compares a field value against the filter value string in a type-aware manner.
+// This provides more predictable behavior than simple string conversion.
+//
+// Comparison rules:
+// - Strings: direct comparison
+// - Numbers: convert both to strings and compare
+// - Booleans: convert to "true"/"false" strings
+// - Nil: only matches empty filter value ""
+func compareFilterValue(fieldVal interface{}, filterValue string) bool {
+	if fieldVal == nil {
+		return filterValue == ""
+	}
+
+	switch v := fieldVal.(type) {
+	case string:
+		return v == filterValue
+	case bool:
+		// Compare boolean as "true" or "false" string
+		boolStr := "false"
+		if v {
+			boolStr = "true"
+		}
+		return boolStr == filterValue
+	case int, int8, int16, int32, int64:
+		// All integer types
+		return fmt.Sprintf("%d", v) == filterValue
+	case uint, uint8, uint16, uint32, uint64:
+		// All unsigned integer types
+		return fmt.Sprintf("%d", v) == filterValue
+	case float32, float64:
+		// Floating point numbers
+		return fmt.Sprintf("%v", v) == filterValue
+	default:
+		// Fallback to string conversion for other types
+		return fmt.Sprintf("%v", v) == filterValue
+	}
 }

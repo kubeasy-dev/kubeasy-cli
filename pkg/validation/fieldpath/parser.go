@@ -180,6 +180,10 @@ func parseArrayAccessor(accessor string, position int, originalPath string) (Pat
 	// Try to parse as filter (key=value)
 	filterMatches := filterPattern.FindStringSubmatch(accessor)
 	if filterMatches == nil {
+		// Check if it looks like an attempted filter (contains '=')
+		if strings.Contains(accessor, "=") {
+			return nil, fmt.Errorf("invalid array filter %q at position %d in path %q (filter must be in format 'key=value' with non-empty value)", accessor, position, originalPath)
+		}
 		return nil, fmt.Errorf("invalid array accessor %q at position %d in path %q (expected integer index or key=value filter)", accessor, position, originalPath)
 	}
 

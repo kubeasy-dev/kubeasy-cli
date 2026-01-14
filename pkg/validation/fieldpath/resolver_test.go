@@ -571,8 +571,8 @@ func TestGetAvailableFilterValues(t *testing.T) {
 			expected:    []string{"Ready"},
 		},
 		{
-			name: "empty slice",
-			slice: []interface{}{},
+			name:        "empty slice",
+			slice:       []interface{}{},
 			filterField: "type",
 			expected:    []string{"none"},
 		},

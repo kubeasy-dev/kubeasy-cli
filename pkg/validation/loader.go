@@ -63,7 +63,7 @@ func loadFromURL(url string) (*ValidationConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch validations: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to fetch validations: HTTP %d", resp.StatusCode)

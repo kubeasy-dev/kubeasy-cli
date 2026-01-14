@@ -12,7 +12,7 @@ import (
 // TestParse_StatusValidation tests parsing of status validation spec
 func TestParse_StatusValidation(t *testing.T) {
 	yaml := `
-validations:
+objectives:
   - key: pod-ready
     title: Pod Ready
     description: Pod must be running
@@ -50,7 +50,7 @@ validations:
 func TestParse_LogValidation(t *testing.T) {
 	t.Run("with explicit sinceSeconds", func(t *testing.T) {
 		yaml := `
-validations:
+objectives:
   - key: log-check
     type: log
     spec:
@@ -73,7 +73,7 @@ validations:
 
 	t.Run("with default sinceSeconds", func(t *testing.T) {
 		yaml := `
-validations:
+objectives:
   - key: log-check
     type: log
     spec:
@@ -96,7 +96,7 @@ validations:
 func TestParse_EventValidation(t *testing.T) {
 	t.Run("with explicit sinceSeconds", func(t *testing.T) {
 		yaml := `
-validations:
+objectives:
   - key: no-crashes
     type: event
     spec:
@@ -121,7 +121,7 @@ validations:
 
 	t.Run("with default sinceSeconds", func(t *testing.T) {
 		yaml := `
-validations:
+objectives:
   - key: no-crashes
     type: event
     spec:
@@ -143,7 +143,7 @@ validations:
 // TestParse_MetricsValidation tests parsing of metrics validation
 func TestParse_MetricsValidation(t *testing.T) {
 	yaml := `
-validations:
+objectives:
   - key: replica-count
     type: metrics
     spec:
@@ -181,7 +181,7 @@ validations:
 func TestParse_ConnectivityValidation(t *testing.T) {
 	t.Run("with explicit timeoutSeconds", func(t *testing.T) {
 		yaml := `
-validations:
+objectives:
   - key: http-connectivity
     type: connectivity
     spec:
@@ -208,7 +208,7 @@ validations:
 
 	t.Run("with default timeoutSeconds", func(t *testing.T) {
 		yaml := `
-validations:
+objectives:
   - key: http-connectivity
     type: connectivity
     spec:
@@ -230,7 +230,7 @@ validations:
 
 	t.Run("multiple targets with mixed timeouts", func(t *testing.T) {
 		yaml := `
-validations:
+objectives:
   - key: multi-connectivity
     type: connectivity
     spec:
@@ -258,7 +258,7 @@ validations:
 // TestParse_MultipleValidations tests parsing multiple validations in one config
 func TestParse_MultipleValidations(t *testing.T) {
 	yaml := `
-validations:
+objectives:
   - key: pod-ready
     type: status
     spec:
@@ -307,7 +307,7 @@ func TestParse_ValidationErrors(t *testing.T) {
 		{
 			name: "invalid YAML",
 			yaml: `
-validations:
+objectives:
   - key: test
     type: status
     spec: [invalid yaml structure
@@ -317,7 +317,7 @@ validations:
 		{
 			name: "missing spec",
 			yaml: `
-validations:
+objectives:
   - key: test
     type: status
 `,
@@ -326,7 +326,7 @@ validations:
 		{
 			name: "unknown validation type",
 			yaml: `
-validations:
+objectives:
   - key: test
     type: unknown-type
     spec:
@@ -337,7 +337,7 @@ validations:
 		{
 			name: "target without name or labelSelector",
 			yaml: `
-validations:
+objectives:
   - key: test
     type: status
     spec:
@@ -352,7 +352,7 @@ validations:
 		{
 			name: "sourcePod without name or labelSelector",
 			yaml: `
-validations:
+objectives:
   - key: test
     type: connectivity
     spec:
@@ -465,7 +465,7 @@ func TestLoadFromFile(t *testing.T) {
 		filePath := filepath.Join(tmpDir, "challenge.yaml")
 
 		content := `
-validations:
+objectives:
   - key: test
     type: status
     spec:
@@ -521,7 +521,7 @@ func TestFindLocalChallengeFile(t *testing.T) {
 
 		// Create challenge.yaml
 		yamlPath := filepath.Join(challengeDir, "challenge.yaml")
-		err = os.WriteFile(yamlPath, []byte("validations: []"), 0600)
+		err = os.WriteFile(yamlPath, []byte("objectives: []"), 0600)
 		require.NoError(t, err)
 
 		// Change to temp directory

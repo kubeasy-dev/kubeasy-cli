@@ -34,6 +34,10 @@ const (
 	errAllConditionsMet        = "All %d pod(s) meet the required conditions"
 	errFoundAllExpectedStrings = "Found all expected strings in logs"
 	errNoForbiddenEvents       = "No forbidden events found"
+	errResourceExists          = "%s %s exists"
+	errResourceNotFound        = "%s %s not found"
+	errResourceConditionsMet   = "%s meets all required conditions"
+	errResourcePhaseMatch      = "%s is in %s phase"
 )
 
 // Executor executes validations against a Kubernetes cluster
@@ -114,6 +118,42 @@ func (e *Executor) ExecuteAll(ctx context.Context, validations []Validation) []R
 func (e *Executor) executeStatus(ctx context.Context, spec StatusSpec) (bool, string, error) {
 	logger.Debug("Executing status validation for %s", spec.Target.Kind)
 
+	// Check if this is an existence-only validation (empty conditions or Exists type)
+	if isExistenceCheck(spec.Conditions) {
+		return e.executeExistenceCheck(ctx, spec.Target)
+	}
+
+	// Route based on resource category
+	category := getResourceCategory(spec.Target.Kind)
+	switch category {
+	case categoryPod:
+		return e.executeStatusForPod(ctx, spec)
+	case categoryConditionBased:
+		return e.executeResourceConditions(ctx, spec)
+	case categoryPhaseBased:
+		return e.executePhaseCheck(ctx, spec)
+	case categoryExistenceOnly:
+		// For existence-only resources with conditions specified,
+		// we still just check existence since they don't have conditions
+		return e.executeExistenceCheck(ctx, spec.Target)
+	default:
+		return e.executeExistenceCheck(ctx, spec.Target)
+	}
+}
+
+// isExistenceCheck returns true if the conditions indicate an existence-only check
+func isExistenceCheck(conditions []StatusCondition) bool {
+	if len(conditions) == 0 {
+		return true
+	}
+	if len(conditions) == 1 && conditions[0].Type == ConditionTypeExists {
+		return true
+	}
+	return false
+}
+
+// executeStatusForPod checks pod conditions (original behavior)
+func (e *Executor) executeStatusForPod(ctx context.Context, spec StatusSpec) (bool, string, error) {
 	pods, err := e.getTargetPods(ctx, spec.Target)
 	if err != nil {
 		return false, "", err
@@ -150,6 +190,167 @@ func (e *Executor) executeStatus(ctx context.Context, spec StatusSpec) (bool, st
 
 	if allPassed {
 		return true, fmt.Sprintf(errAllConditionsMet, len(pods)), nil
+	}
+	return false, strings.Join(messages, "; "), nil
+}
+
+// executeExistenceCheck verifies that a resource exists
+func (e *Executor) executeExistenceCheck(ctx context.Context, target Target) (bool, string, error) {
+	gvr, err := getGVRForKind(target.Kind)
+	if err != nil {
+		return false, "", err
+	}
+
+	var resourceName string
+	switch {
+	case target.Name != "":
+		_, err = e.dynamicClient.Resource(gvr).Namespace(e.namespace).Get(ctx, target.Name, metav1.GetOptions{})
+		resourceName = target.Name
+	case len(target.LabelSelector) > 0:
+		list, listErr := e.dynamicClient.Resource(gvr).Namespace(e.namespace).List(ctx, metav1.ListOptions{
+			LabelSelector: labels.SelectorFromSet(target.LabelSelector).String(),
+		})
+		if listErr != nil {
+			return false, "", listErr
+		}
+		if len(list.Items) == 0 {
+			return false, fmt.Sprintf(errResourceNotFound, target.Kind, "matching selector"), nil
+		}
+		resourceName = list.Items[0].GetName()
+		err = nil
+	default:
+		return false, errNoTargetSpecified, nil
+	}
+
+	if err != nil {
+		return false, fmt.Sprintf(errResourceNotFound, target.Kind, resourceName), nil
+	}
+
+	return true, fmt.Sprintf(errResourceExists, target.Kind, resourceName), nil
+}
+
+// executeResourceConditions checks conditions on resources that have status.conditions[]
+func (e *Executor) executeResourceConditions(ctx context.Context, spec StatusSpec) (bool, string, error) {
+	gvr, err := getGVRForKind(spec.Target.Kind)
+	if err != nil {
+		return false, "", err
+	}
+
+	obj, err := e.getTargetResource(ctx, gvr, spec.Target)
+	if err != nil {
+		return false, "", err
+	}
+	if obj == nil {
+		return false, errNoMatchingResources, nil
+	}
+
+	// Extract conditions from status.conditions[]
+	conditions, found, err := unstructured.NestedSlice(obj.Object, "status", "conditions")
+	if err != nil {
+		return false, "", fmt.Errorf("failed to get conditions: %w", err)
+	}
+	if !found || len(conditions) == 0 {
+		return false, fmt.Sprintf("%s has no conditions yet", spec.Target.Kind), nil
+	}
+
+	return e.checkUnstructuredConditions(obj.GetName(), spec.Target.Kind, conditions, spec.Conditions)
+}
+
+// executePhaseCheck checks the phase of phase-based resources like PVC
+func (e *Executor) executePhaseCheck(ctx context.Context, spec StatusSpec) (bool, string, error) {
+	gvr, err := getGVRForKind(spec.Target.Kind)
+	if err != nil {
+		return false, "", err
+	}
+
+	obj, err := e.getTargetResource(ctx, gvr, spec.Target)
+	if err != nil {
+		return false, "", err
+	}
+	if obj == nil {
+		return false, errNoMatchingResources, nil
+	}
+
+	// Get the phase from status.phase
+	phase, found, err := unstructured.NestedString(obj.Object, "status", "phase")
+	if err != nil {
+		return false, "", fmt.Errorf("failed to get phase: %w", err)
+	}
+	if !found {
+		return false, fmt.Sprintf("%s has no phase yet", spec.Target.Kind), nil
+	}
+
+	// For phase-based resources, treat condition.Type as the expected phase
+	// We check if any of the conditions match the phase
+	for _, cond := range spec.Conditions {
+		if cond.Type == phase {
+			return true, fmt.Sprintf(errResourcePhaseMatch, obj.GetName(), phase), nil
+		}
+	}
+
+	expectedPhases := make([]string, len(spec.Conditions))
+	for i, c := range spec.Conditions {
+		expectedPhases[i] = c.Type
+	}
+	return false, fmt.Sprintf("%s phase is %s, expected one of: %v", obj.GetName(), phase, expectedPhases), nil
+}
+
+// getTargetResource fetches a resource by name or label selector
+func (e *Executor) getTargetResource(ctx context.Context, gvr schema.GroupVersionResource, target Target) (*unstructured.Unstructured, error) {
+	if target.Name != "" {
+		return e.dynamicClient.Resource(gvr).Namespace(e.namespace).Get(ctx, target.Name, metav1.GetOptions{})
+	}
+
+	if len(target.LabelSelector) > 0 {
+		list, err := e.dynamicClient.Resource(gvr).Namespace(e.namespace).List(ctx, metav1.ListOptions{
+			LabelSelector: labels.SelectorFromSet(target.LabelSelector).String(),
+		})
+		if err != nil {
+			return nil, err
+		}
+		if len(list.Items) == 0 {
+			return nil, nil
+		}
+		return &list.Items[0], nil
+	}
+
+	return nil, fmt.Errorf("%s", errNoTargetSpecified)
+}
+
+// checkUnstructuredConditions compares conditions from an unstructured object with expected conditions
+func (e *Executor) checkUnstructuredConditions(name, kind string, conditions []interface{}, expected []StatusCondition) (bool, string, error) {
+	allPassed := true
+	var messages []string
+
+	for _, expectedCond := range expected {
+		found := false
+		passed := false
+
+		for _, c := range conditions {
+			condMap, ok := c.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			condType, _ := condMap["type"].(string)
+			if condType == expectedCond.Type {
+				found = true
+				condStatus, _ := condMap["status"].(string)
+				passed = condStatus == expectedCond.Status
+				break
+			}
+		}
+
+		if !found {
+			allPassed = false
+			messages = append(messages, fmt.Sprintf("%s %s: condition %s not found", kind, name, expectedCond.Type))
+		} else if !passed {
+			allPassed = false
+			messages = append(messages, fmt.Sprintf("%s %s: condition %s is not %s", kind, name, expectedCond.Type, expectedCond.Status))
+		}
+	}
+
+	if allPassed {
+		return true, fmt.Sprintf(errResourceConditionsMet, name), nil
 	}
 	return false, strings.Join(messages, "; "), nil
 }
@@ -545,6 +746,7 @@ func (e *Executor) getPodsForResource(ctx context.Context, target Target) ([]cor
 // getGVRForKind returns the GroupVersionResource for a given kind
 func getGVRForKind(kind string) (schema.GroupVersionResource, error) {
 	switch strings.ToLower(kind) {
+	// apps group
 	case "deployment":
 		return schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}, nil
 	case "statefulset":
@@ -553,14 +755,64 @@ func getGVRForKind(kind string) (schema.GroupVersionResource, error) {
 		return schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "daemonsets"}, nil
 	case "replicaset":
 		return schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "replicasets"}, nil
+	// batch group
 	case "job":
 		return schema.GroupVersionResource{Group: "batch", Version: "v1", Resource: "jobs"}, nil
+	// core group
 	case "pod":
 		return schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}, nil
 	case "service":
 		return schema.GroupVersionResource{Group: "", Version: "v1", Resource: "services"}, nil
+	case "configmap":
+		return schema.GroupVersionResource{Group: "", Version: "v1", Resource: "configmaps"}, nil
+	case "secret":
+		return schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}, nil
+	case "persistentvolumeclaim", "pvc":
+		return schema.GroupVersionResource{Group: "", Version: "v1", Resource: "persistentvolumeclaims"}, nil
+	// rbac group
+	case "role":
+		return schema.GroupVersionResource{Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "roles"}, nil
+	case "rolebinding":
+		return schema.GroupVersionResource{Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "rolebindings"}, nil
+	case "clusterrole":
+		return schema.GroupVersionResource{Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "clusterroles"}, nil
+	case "clusterrolebinding":
+		return schema.GroupVersionResource{Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "clusterrolebindings"}, nil
+	// networking group
+	case "ingress":
+		return schema.GroupVersionResource{Group: "networking.k8s.io", Version: "v1", Resource: "ingresses"}, nil
 	default:
 		return schema.GroupVersionResource{}, fmt.Errorf("unsupported resource kind: %s", kind)
+	}
+}
+
+// resourceCategory determines how a resource should be validated
+type resourceCategory int
+
+const (
+	// categoryPod uses existing pod condition logic
+	categoryPod resourceCategory = iota
+	// categoryConditionBased resources have status.conditions[] (Deployment, StatefulSet, Job, etc.)
+	categoryConditionBased
+	// categoryPhaseBased resources have status.phase (PVC, PV)
+	categoryPhaseBased
+	// categoryExistenceOnly resources have no status conditions (ConfigMap, Secret, Role, etc.)
+	categoryExistenceOnly
+)
+
+// getResourceCategory returns how a resource kind should be validated
+func getResourceCategory(kind string) resourceCategory {
+	switch strings.ToLower(kind) {
+	case "pod":
+		return categoryPod
+	case "deployment", "statefulset", "daemonset", "replicaset", "job":
+		return categoryConditionBased
+	case "persistentvolumeclaim", "pvc", "persistentvolume", "pv":
+		return categoryPhaseBased
+	case "configmap", "secret", "role", "rolebinding", "clusterrole", "clusterrolebinding", "ingress", "service":
+		return categoryExistenceOnly
+	default:
+		return categoryExistenceOnly // Fallback to existence check for unknown resources
 	}
 }
 

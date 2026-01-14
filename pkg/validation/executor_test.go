@@ -1546,6 +1546,8 @@ func TestExecuteStatus_MultiplePodsMixedResults(t *testing.T) {
 }
 
 func TestExecuteStatus_ForDeployment(t *testing.T) {
+	// Test that Deployment status validation now checks Deployment's own conditions
+	// (not the owned pods' conditions)
 	deployment := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "apps/v1",
@@ -1561,26 +1563,20 @@ func TestExecuteStatus_ForDeployment(t *testing.T) {
 					},
 				},
 			},
-		},
-	}
-
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-pod",
-			Namespace: "test-ns",
-			Labels:    map[string]string{"app": "test"},
-		},
-		Status: corev1.PodStatus{
-			Conditions: []corev1.PodCondition{
-				{Type: corev1.PodReady, Status: corev1.ConditionTrue},
+			"status": map[string]interface{}{
+				"conditions": []interface{}{
+					map[string]interface{}{
+						"type":   "Available",
+						"status": "True",
+					},
+				},
 			},
 		},
 	}
 
 	scheme := runtime.NewScheme()
 	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, deployment)
-	clientset := fake.NewClientset(pod)
-	executor := NewExecutor(clientset, dynamicClient, nil, "test-ns")
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
 
 	spec := StatusSpec{
 		Target: Target{
@@ -1588,7 +1584,7 @@ func TestExecuteStatus_ForDeployment(t *testing.T) {
 			Name: "test-deployment",
 		},
 		Conditions: []StatusCondition{
-			{Type: "Ready", Status: "True"},
+			{Type: "Available", Status: "True"},
 		},
 	}
 
@@ -1596,7 +1592,7 @@ func TestExecuteStatus_ForDeployment(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, passed)
-	assert.Contains(t, msg, "All 1 pod(s) meet the required conditions")
+	assert.Contains(t, msg, "meets all required conditions")
 }
 
 // =============================================================================
@@ -2161,4 +2157,911 @@ func TestGetGVRForKind_CaseInsensitive(t *testing.T) {
 			assert.Equal(t, "deployments", gvr.Resource)
 		})
 	}
+}
+
+// Tests for extended resource kind support
+
+func TestGetGVRForKind_NewResources(t *testing.T) {
+	tests := []struct {
+		kind     string
+		expected schema.GroupVersionResource
+	}{
+		{
+			kind: "ConfigMap",
+			expected: schema.GroupVersionResource{
+				Group: "", Version: "v1", Resource: "configmaps",
+			},
+		},
+		{
+			kind: "Secret",
+			expected: schema.GroupVersionResource{
+				Group: "", Version: "v1", Resource: "secrets",
+			},
+		},
+		{
+			kind: "PersistentVolumeClaim",
+			expected: schema.GroupVersionResource{
+				Group: "", Version: "v1", Resource: "persistentvolumeclaims",
+			},
+		},
+		{
+			kind: "pvc",
+			expected: schema.GroupVersionResource{
+				Group: "", Version: "v1", Resource: "persistentvolumeclaims",
+			},
+		},
+		{
+			kind: "Role",
+			expected: schema.GroupVersionResource{
+				Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "roles",
+			},
+		},
+		{
+			kind: "RoleBinding",
+			expected: schema.GroupVersionResource{
+				Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "rolebindings",
+			},
+		},
+		{
+			kind: "ClusterRole",
+			expected: schema.GroupVersionResource{
+				Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "clusterroles",
+			},
+		},
+		{
+			kind: "ClusterRoleBinding",
+			expected: schema.GroupVersionResource{
+				Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "clusterrolebindings",
+			},
+		},
+		{
+			kind: "Ingress",
+			expected: schema.GroupVersionResource{
+				Group: "networking.k8s.io", Version: "v1", Resource: "ingresses",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.kind, func(t *testing.T) {
+			gvr, err := getGVRForKind(tt.kind)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, gvr)
+		})
+	}
+}
+
+func TestGetResourceCategory(t *testing.T) {
+	tests := []struct {
+		kind     string
+		expected resourceCategory
+	}{
+		{"Pod", categoryPod},
+		{"pod", categoryPod},
+		{"Deployment", categoryConditionBased},
+		{"StatefulSet", categoryConditionBased},
+		{"DaemonSet", categoryConditionBased},
+		{"Job", categoryConditionBased},
+		{"ReplicaSet", categoryConditionBased},
+		{"PersistentVolumeClaim", categoryPhaseBased},
+		{"pvc", categoryPhaseBased},
+		{"ConfigMap", categoryExistenceOnly},
+		{"Secret", categoryExistenceOnly},
+		{"Role", categoryExistenceOnly},
+		{"RoleBinding", categoryExistenceOnly},
+		{"Ingress", categoryExistenceOnly},
+		{"Service", categoryExistenceOnly},
+		{"UnknownKind", categoryExistenceOnly}, // fallback
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.kind, func(t *testing.T) {
+			result := getResourceCategory(tt.kind)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestIsExistenceCheck(t *testing.T) {
+	tests := []struct {
+		name       string
+		conditions []StatusCondition
+		expected   bool
+	}{
+		{
+			name:       "empty conditions",
+			conditions: []StatusCondition{},
+			expected:   true,
+		},
+		{
+			name:       "nil conditions",
+			conditions: nil,
+			expected:   true,
+		},
+		{
+			name: "single Exists condition",
+			conditions: []StatusCondition{
+				{Type: ConditionTypeExists},
+			},
+			expected: true,
+		},
+		{
+			name: "regular condition",
+			conditions: []StatusCondition{
+				{Type: "Ready", Status: "True"},
+			},
+			expected: false,
+		},
+		{
+			name: "multiple conditions",
+			conditions: []StatusCondition{
+				{Type: "Ready", Status: "True"},
+				{Type: "Available", Status: "True"},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isExistenceCheck(tt.conditions)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestExecuteStatus_ConfigMap_Exists(t *testing.T) {
+	configMap := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "ConfigMap",
+			"metadata": map[string]interface{}{
+				"name":      "app-config",
+				"namespace": "test-ns",
+			},
+			"data": map[string]interface{}{
+				"key": "value",
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, configMap)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{
+			Kind: "ConfigMap",
+			Name: "app-config",
+		},
+		Conditions: []StatusCondition{}, // Empty = existence check
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Contains(t, msg, "exists")
+}
+
+func TestExecuteStatus_ConfigMap_NotFound(t *testing.T) {
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{
+			Kind: "ConfigMap",
+			Name: "nonexistent",
+		},
+		Conditions: []StatusCondition{},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "not found")
+}
+
+func TestExecuteStatus_Secret_Exists(t *testing.T) {
+	secret := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Secret",
+			"metadata": map[string]interface{}{
+				"name":      "app-secret",
+				"namespace": "test-ns",
+			},
+			"data": map[string]interface{}{
+				"password": "c2VjcmV0",
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, secret)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{
+			Kind: "Secret",
+			Name: "app-secret",
+		},
+		Conditions: []StatusCondition{
+			{Type: ConditionTypeExists}, // Explicit Exists check
+		},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Contains(t, msg, "exists")
+}
+
+func TestExecuteStatus_Role_Exists(t *testing.T) {
+	role := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "rbac.authorization.k8s.io/v1",
+			"kind":       "Role",
+			"metadata": map[string]interface{}{
+				"name":      "pod-reader",
+				"namespace": "test-ns",
+			},
+			"rules": []interface{}{
+				map[string]interface{}{
+					"apiGroups": []interface{}{""},
+					"resources": []interface{}{"pods"},
+					"verbs":     []interface{}{"get", "list"},
+				},
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, role)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{
+			Kind: "Role",
+			Name: "pod-reader",
+		},
+		Conditions: []StatusCondition{},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Contains(t, msg, "exists")
+}
+
+func TestExecuteStatus_RoleBinding_Exists(t *testing.T) {
+	roleBinding := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "rbac.authorization.k8s.io/v1",
+			"kind":       "RoleBinding",
+			"metadata": map[string]interface{}{
+				"name":      "read-pods",
+				"namespace": "test-ns",
+			},
+			"roleRef": map[string]interface{}{
+				"kind":     "Role",
+				"name":     "pod-reader",
+				"apiGroup": "rbac.authorization.k8s.io",
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, roleBinding)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{
+			Kind: "RoleBinding",
+			Name: "read-pods",
+		},
+		Conditions: []StatusCondition{},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Contains(t, msg, "exists")
+}
+
+func TestExecuteStatus_Ingress_Exists(t *testing.T) {
+	ingress := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "networking.k8s.io/v1",
+			"kind":       "Ingress",
+			"metadata": map[string]interface{}{
+				"name":      "app-ingress",
+				"namespace": "test-ns",
+			},
+			"spec": map[string]interface{}{
+				"rules": []interface{}{},
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, ingress)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{
+			Kind: "Ingress",
+			Name: "app-ingress",
+		},
+		Conditions: []StatusCondition{},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Contains(t, msg, "exists")
+}
+
+func TestExecuteStatus_Deployment_ConditionAvailable(t *testing.T) {
+	deployment := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      "web-app",
+				"namespace": "test-ns",
+			},
+			"status": map[string]interface{}{
+				"conditions": []interface{}{
+					map[string]interface{}{
+						"type":   "Available",
+						"status": "True",
+					},
+					map[string]interface{}{
+						"type":   "Progressing",
+						"status": "True",
+					},
+				},
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, deployment)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{
+			Kind: "Deployment",
+			Name: "web-app",
+		},
+		Conditions: []StatusCondition{
+			{Type: "Available", Status: "True"},
+		},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Contains(t, msg, "meets all required conditions")
+}
+
+func TestExecuteStatus_Deployment_ConditionNotMet(t *testing.T) {
+	deployment := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      "web-app",
+				"namespace": "test-ns",
+			},
+			"status": map[string]interface{}{
+				"conditions": []interface{}{
+					map[string]interface{}{
+						"type":   "Available",
+						"status": "False",
+					},
+				},
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, deployment)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{
+			Kind: "Deployment",
+			Name: "web-app",
+		},
+		Conditions: []StatusCondition{
+			{Type: "Available", Status: "True"},
+		},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "Available is not True")
+}
+
+func TestExecuteStatus_Deployment_MultipleConditions(t *testing.T) {
+	deployment := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      "web-app",
+				"namespace": "test-ns",
+			},
+			"status": map[string]interface{}{
+				"conditions": []interface{}{
+					map[string]interface{}{
+						"type":   "Available",
+						"status": "True",
+					},
+					map[string]interface{}{
+						"type":   "Progressing",
+						"status": "True",
+					},
+				},
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, deployment)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{
+			Kind: "Deployment",
+			Name: "web-app",
+		},
+		Conditions: []StatusCondition{
+			{Type: "Available", Status: "True"},
+			{Type: "Progressing", Status: "True"},
+		},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Contains(t, msg, "meets all required conditions")
+}
+
+func TestExecuteStatus_Deployment_ConditionNotFound(t *testing.T) {
+	deployment := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      "web-app",
+				"namespace": "test-ns",
+			},
+			"status": map[string]interface{}{
+				"conditions": []interface{}{
+					map[string]interface{}{
+						"type":   "Available",
+						"status": "True",
+					},
+				},
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, deployment)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{
+			Kind: "Deployment",
+			Name: "web-app",
+		},
+		Conditions: []StatusCondition{
+			{Type: "NonExistent", Status: "True"},
+		},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "condition NonExistent not found")
+}
+
+func TestExecuteStatus_Job_Complete(t *testing.T) {
+	job := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "batch/v1",
+			"kind":       "Job",
+			"metadata": map[string]interface{}{
+				"name":      "migration-job",
+				"namespace": "test-ns",
+			},
+			"status": map[string]interface{}{
+				"conditions": []interface{}{
+					map[string]interface{}{
+						"type":   "Complete",
+						"status": "True",
+					},
+				},
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, job)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{
+			Kind: "Job",
+			Name: "migration-job",
+		},
+		Conditions: []StatusCondition{
+			{Type: "Complete", Status: "True"},
+		},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Contains(t, msg, "meets all required conditions")
+}
+
+func TestExecuteStatus_Job_Failed(t *testing.T) {
+	job := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "batch/v1",
+			"kind":       "Job",
+			"metadata": map[string]interface{}{
+				"name":      "migration-job",
+				"namespace": "test-ns",
+			},
+			"status": map[string]interface{}{
+				"conditions": []interface{}{
+					map[string]interface{}{
+						"type":   "Failed",
+						"status": "True",
+					},
+				},
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, job)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{
+			Kind: "Job",
+			Name: "migration-job",
+		},
+		Conditions: []StatusCondition{
+			{Type: "Complete", Status: "True"},
+		},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "condition Complete not found")
+}
+
+func TestExecuteStatus_StatefulSet_Available(t *testing.T) {
+	statefulSet := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "StatefulSet",
+			"metadata": map[string]interface{}{
+				"name":      "database",
+				"namespace": "test-ns",
+			},
+			"status": map[string]interface{}{
+				"conditions": []interface{}{
+					map[string]interface{}{
+						"type":   "Available",
+						"status": "True",
+					},
+				},
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, statefulSet)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{
+			Kind: "StatefulSet",
+			Name: "database",
+		},
+		Conditions: []StatusCondition{
+			{Type: "Available", Status: "True"},
+		},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Contains(t, msg, "meets all required conditions")
+}
+
+func TestExecuteStatus_PVC_Bound(t *testing.T) {
+	pvc := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "PersistentVolumeClaim",
+			"metadata": map[string]interface{}{
+				"name":      "data-pvc",
+				"namespace": "test-ns",
+			},
+			"status": map[string]interface{}{
+				"phase": "Bound",
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, pvc)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{
+			Kind: "PersistentVolumeClaim",
+			Name: "data-pvc",
+		},
+		Conditions: []StatusCondition{
+			{Type: "Bound"}, // For phase-based, Type is the expected phase
+		},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Contains(t, msg, "Bound phase")
+}
+
+func TestExecuteStatus_PVC_Pending(t *testing.T) {
+	pvc := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "PersistentVolumeClaim",
+			"metadata": map[string]interface{}{
+				"name":      "data-pvc",
+				"namespace": "test-ns",
+			},
+			"status": map[string]interface{}{
+				"phase": "Pending",
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, pvc)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{
+			Kind: "PersistentVolumeClaim",
+			Name: "data-pvc",
+		},
+		Conditions: []StatusCondition{
+			{Type: "Bound"},
+		},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "phase is Pending")
+	assert.Contains(t, msg, "expected one of")
+}
+
+func TestExecuteStatus_PVC_WithPVCAlias(t *testing.T) {
+	pvc := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "PersistentVolumeClaim",
+			"metadata": map[string]interface{}{
+				"name":      "data-pvc",
+				"namespace": "test-ns",
+			},
+			"status": map[string]interface{}{
+				"phase": "Bound",
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, pvc)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{
+			Kind: "pvc", // Using the alias
+			Name: "data-pvc",
+		},
+		Conditions: []StatusCondition{
+			{Type: "Bound"},
+		},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Contains(t, msg, "Bound phase")
+}
+
+func TestExecuteStatus_ConfigMap_ByLabelSelector(t *testing.T) {
+	configMap := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "ConfigMap",
+			"metadata": map[string]interface{}{
+				"name":      "app-config",
+				"namespace": "test-ns",
+				"labels": map[string]interface{}{
+					"app": "myapp",
+				},
+			},
+			"data": map[string]interface{}{
+				"key": "value",
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, configMap)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{
+			Kind:          "ConfigMap",
+			LabelSelector: map[string]string{"app": "myapp"},
+		},
+		Conditions: []StatusCondition{},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Contains(t, msg, "exists")
+}
+
+func TestExecuteStatus_Deployment_ByLabelSelector(t *testing.T) {
+	deployment := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      "web-app",
+				"namespace": "test-ns",
+				"labels": map[string]interface{}{
+					"tier": "frontend",
+				},
+			},
+			"status": map[string]interface{}{
+				"conditions": []interface{}{
+					map[string]interface{}{
+						"type":   "Available",
+						"status": "True",
+					},
+				},
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, deployment)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{
+			Kind:          "Deployment",
+			LabelSelector: map[string]string{"tier": "frontend"},
+		},
+		Conditions: []StatusCondition{
+			{Type: "Available", Status: "True"},
+		},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Contains(t, msg, "meets all required conditions")
+}
+
+func TestExecuteStatus_Deployment_NoConditionsYet(t *testing.T) {
+	deployment := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      "web-app",
+				"namespace": "test-ns",
+			},
+			"status": map[string]interface{}{
+				// No conditions yet
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, deployment)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{
+			Kind: "Deployment",
+			Name: "web-app",
+		},
+		Conditions: []StatusCondition{
+			{Type: "Available", Status: "True"},
+		},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "no conditions yet")
+}
+
+func TestExecuteStatus_PVC_NoPhaseYet(t *testing.T) {
+	pvc := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "PersistentVolumeClaim",
+			"metadata": map[string]interface{}{
+				"name":      "data-pvc",
+				"namespace": "test-ns",
+			},
+			"status": map[string]interface{}{
+				// No phase yet
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, pvc)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{
+			Kind: "PersistentVolumeClaim",
+			Name: "data-pvc",
+		},
+		Conditions: []StatusCondition{
+			{Type: "Bound"},
+		},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "no phase yet")
 }

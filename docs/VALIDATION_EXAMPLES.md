@@ -67,8 +67,159 @@ validations:
 
 **What it checks**:
 - Finds the deployment by name
-- Gets pods owned by the deployment (via label selector)
-- Checks pod conditions
+- Checks the Deployment's own `status.conditions[]`
+- Validates that the `Available` condition is `True`
+
+---
+
+### Job Complete Check
+
+```yaml
+validations:
+  - key: job-complete
+    title: "Migration Complete"
+    description: "The migration job must complete successfully"
+    order: 1
+    type: status
+    spec:
+      target:
+        kind: Job
+        name: migration-job
+      conditions:
+        - type: Complete
+          status: "True"
+```
+
+**When to use**: Verify that a Job has completed successfully.
+
+**What it checks**:
+- Finds the Job by name
+- Checks the Job's `status.conditions[]` for `Complete` condition
+
+---
+
+### PVC Bound Check
+
+```yaml
+validations:
+  - key: pvc-bound
+    title: "Storage Ready"
+    description: "The PersistentVolumeClaim must be bound"
+    order: 1
+    type: status
+    spec:
+      target:
+        kind: PersistentVolumeClaim
+        name: data-pvc
+      conditions:
+        - type: Bound  # For PVC, type is the expected phase value
+```
+
+**When to use**: Verify that a PVC has been bound to a PersistentVolume.
+
+**What it checks**:
+- Finds the PVC by name
+- Checks if `status.phase` equals `Bound`
+
+---
+
+### ConfigMap Existence Check
+
+```yaml
+validations:
+  - key: config-exists
+    title: "Config Exists"
+    description: "The application configuration must exist"
+    order: 1
+    type: status
+    spec:
+      target:
+        kind: ConfigMap
+        name: app-config
+      conditions: []  # Empty conditions = existence check
+```
+
+**When to use**: Verify that a ConfigMap has been created.
+
+**What it checks**:
+- Finds the ConfigMap by name
+- Passes if the resource exists
+
+---
+
+### Secret Existence Check
+
+```yaml
+validations:
+  - key: secret-exists
+    title: "TLS Secret Exists"
+    description: "The TLS secret must exist"
+    order: 1
+    type: status
+    spec:
+      target:
+        kind: Secret
+        name: tls-cert
+      conditions:
+        - type: Exists  # Explicit existence check
+```
+
+**When to use**: Verify that a Secret has been created.
+
+**What it checks**:
+- Finds the Secret by name
+- Passes if the resource exists
+
+---
+
+### Role and RoleBinding Existence
+
+```yaml
+validations:
+  - key: role-exists
+    title: "Role Created"
+    description: "The pod-reader role must exist"
+    order: 1
+    type: status
+    spec:
+      target:
+        kind: Role
+        name: pod-reader
+      conditions: []
+
+  - key: rolebinding-exists
+    title: "RoleBinding Created"
+    description: "The role binding must exist"
+    order: 2
+    type: status
+    spec:
+      target:
+        kind: RoleBinding
+        name: read-pods
+      conditions: []
+```
+
+**When to use**: Verify that RBAC resources have been created.
+
+---
+
+### Ingress Existence Check
+
+```yaml
+validations:
+  - key: ingress-exists
+    title: "Ingress Configured"
+    description: "The ingress must be configured"
+    order: 1
+    type: status
+    spec:
+      target:
+        kind: Ingress
+        name: app-ingress
+      conditions: []
+```
+
+**When to use**: Verify that an Ingress has been created.
 
 ---
 
@@ -773,15 +924,25 @@ Adjust time windows based on application behavior:
 
 ### Supported Resource Kinds
 
-| Kind | Group | Version | Notes |
-|------|-------|---------|-------|
-| Pod | core | v1 | Direct pod checks |
-| Deployment | apps | v1 | Checks owned pods |
-| StatefulSet | apps | v1 | Checks owned pods |
-| DaemonSet | apps | v1 | Checks owned pods |
-| ReplicaSet | apps | v1 | Checks owned pods |
-| Job | batch | v1 | Checks owned pods |
-| Service | core | v1 | Connectivity targets only |
+| Kind | Group | Version | Status Validation | Notes |
+|------|-------|---------|-------------------|-------|
+| Pod | core | v1 | Conditions | Direct pod condition checks |
+| Deployment | apps | v1 | Conditions | Available, Progressing, ReplicaFailure |
+| StatefulSet | apps | v1 | Conditions | Available condition |
+| DaemonSet | apps | v1 | Conditions | Available condition |
+| ReplicaSet | apps | v1 | Conditions | Resource conditions |
+| Job | batch | v1 | Conditions | Complete, Failed |
+| PersistentVolumeClaim | core | v1 | Phase | Bound, Pending, Lost |
+| ConfigMap | core | v1 | Existence | Resource exists |
+| Secret | core | v1 | Existence | Resource exists |
+| Role | rbac | v1 | Existence | Resource exists |
+| RoleBinding | rbac | v1 | Existence | Resource exists |
+| ClusterRole | rbac | v1 | Existence | Resource exists |
+| ClusterRoleBinding | rbac | v1 | Existence | Resource exists |
+| Ingress | networking | v1 | Existence | Resource exists |
+| Service | core | v1 | Existence | Connectivity targets |
+
+**Aliases:** `pvc` can be used instead of `PersistentVolumeClaim`
 
 ### Default Values
 

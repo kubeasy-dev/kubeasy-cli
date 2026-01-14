@@ -41,6 +41,10 @@ const (
 	// TypeStatus validates Kubernetes resource conditions (Ready, Available, Progressing)
 	// Value: "status" - Use when checking if Deployments, Pods, StatefulSets are in expected state
 	TypeStatus ValidationType = "status"
+
+	// ConditionTypeExists is a pseudo-condition type for existence checks
+	// When used as a condition type, the validation passes if the resource exists
+	ConditionTypeExists = "Exists"
 	// TypeLog searches container logs for expected strings
 	// Value: "log" - Use when verifying application behavior, startup messages, or processed requests
 	TypeLog ValidationType = "log"

@@ -168,6 +168,12 @@ func (tv *TypedValue) compareBool(operator string, other *TypedValue) (bool, err
 // compareNumeric compares two numeric values (int64 or float64)
 // Supports all comparison operators: "==", "!=", ">", "<", ">=", "<="
 // Handles int/float coercion by converting to float64 for comparison
+//
+// Note on float equality: This uses direct float comparison (==) which can be
+// problematic for computed values due to floating-point precision. However, this
+// is acceptable for Kubernetes validation because values come from YAML specs or
+// resource status fields (not calculations). If epsilon-based comparison becomes
+// necessary, it can be added here without changing the public API.
 func (tv *TypedValue) compareNumeric(operator string, other *TypedValue) (bool, error) {
 	// Convert both to float64 for comparison
 	var a, b float64

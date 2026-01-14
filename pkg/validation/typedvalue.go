@@ -107,11 +107,17 @@ func (tv *TypedValue) String() string {
 
 // Compare compares this TypedValue with another using the given operator.
 // Supported operators: "==", "!=", ">", "<", ">=", "<="
+// The "=" operator is normalized to "==" for convenience.
 // String and bool types only support "==" and "!="
 // Numeric types (int, float) support all operators and allow int/float coercion
 func (tv *TypedValue) Compare(operator string, other *TypedValue) (bool, error) {
 	if other == nil {
 		return false, fmt.Errorf("cannot compare with nil value")
+	}
+
+	// Normalize "=" to "==" for consistency
+	if operator == "=" {
+		operator = "=="
 	}
 
 	// Handle numeric coercion: int can be compared with float
@@ -143,12 +149,12 @@ func (tv *TypedValue) isNumeric() bool {
 // Only supports "==" and "!=" operators
 func (tv *TypedValue) compareString(operator string, other *TypedValue) (bool, error) {
 	switch operator {
-	case "==", "=":
+	case "==":
 		return tv.StringVal == other.StringVal, nil
 	case "!=":
 		return tv.StringVal != other.StringVal, nil
 	default:
-		return false, fmt.Errorf("operator %q not supported for string comparison (use == or !=)", operator)
+		return false, fmt.Errorf("invalid operator %q for string comparison (valid: ==, !=)", operator)
 	}
 }
 
@@ -156,12 +162,12 @@ func (tv *TypedValue) compareString(operator string, other *TypedValue) (bool, e
 // Only supports "==" and "!=" operators
 func (tv *TypedValue) compareBool(operator string, other *TypedValue) (bool, error) {
 	switch operator {
-	case "==", "=":
+	case "==":
 		return tv.BoolVal == other.BoolVal, nil
 	case "!=":
 		return tv.BoolVal != other.BoolVal, nil
 	default:
-		return false, fmt.Errorf("operator %q not supported for boolean comparison (use == or !=)", operator)
+		return false, fmt.Errorf("invalid operator %q for boolean comparison (valid: ==, !=)", operator)
 	}
 }
 
@@ -191,7 +197,7 @@ func (tv *TypedValue) compareNumeric(operator string, other *TypedValue) (bool, 
 	}
 
 	switch operator {
-	case "==", "=":
+	case "==":
 		return a == b, nil
 	case "!=":
 		return a != b, nil
@@ -204,7 +210,7 @@ func (tv *TypedValue) compareNumeric(operator string, other *TypedValue) (bool, 
 	case "<=":
 		return a <= b, nil
 	default:
-		return false, fmt.Errorf("invalid operator %q (valid: ==, !=, >, <, >=, <=)", operator)
+		return false, fmt.Errorf("invalid operator %q for numeric comparison (valid: ==, !=, >, <, >=, <=)", operator)
 	}
 }
 

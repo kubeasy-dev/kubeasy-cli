@@ -184,7 +184,7 @@ func TestTypedValue_Compare_StringInvalidOperator(t *testing.T) {
 			result, err := tvA.Compare(op, tvB)
 			assert.Error(t, err)
 			assert.False(t, result)
-			assert.Contains(t, err.Error(), "not supported for string")
+			assert.Contains(t, err.Error(), "invalid operator")
 		})
 	}
 }
@@ -281,6 +281,7 @@ func TestTypedValue_Compare_BoolComparison(t *testing.T) {
 		expected bool
 	}{
 		{"true == true", true, true, "==", true},
+		{"true = true (normalized)", true, true, "=", true},
 		{"false == false", false, false, "==", true},
 		{"true == false", true, false, "==", false},
 		{"true != false", true, false, "!=", true},
@@ -310,7 +311,7 @@ func TestTypedValue_Compare_BoolInvalidOperator(t *testing.T) {
 			result, err := tvA.Compare(op, tvB)
 			assert.Error(t, err)
 			assert.False(t, result)
-			assert.Contains(t, err.Error(), "not supported for boolean")
+			assert.Contains(t, err.Error(), "invalid operator")
 		})
 	}
 }

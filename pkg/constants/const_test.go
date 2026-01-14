@@ -21,8 +21,10 @@ func TestGetKubernetesVersion(t *testing.T) {
 	t.Run("returns version without v prefix", func(t *testing.T) {
 		version := GetKubernetesVersion()
 
-		// Should not start with "v"
-		assert.NotEqual(t, "v", string(version[0]), "version should not start with 'v' prefix")
+		// Should not start with "v" (guard against empty string panic)
+		if assert.NotEmpty(t, version) {
+			assert.NotEqual(t, "v", string(version[0]), "version should not start with 'v' prefix")
+		}
 	})
 
 	t.Run("matches expected version from KindNodeImage", func(t *testing.T) {
@@ -122,6 +124,16 @@ func TestGetMajorMinorVersion(t *testing.T) {
 			name:     "both build metadata and prerelease (reversed)",
 			input:    "1.35.0+build123-rc.1",
 			expected: "1.35",
+		},
+		{
+			name:     "malformed - starts with separator",
+			input:    "-prerelease",
+			expected: UnknownVersion,
+		},
+		{
+			name:     "malformed - starts with plus",
+			input:    "+metadata",
+			expected: UnknownVersion,
 		},
 	}
 

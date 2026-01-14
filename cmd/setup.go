@@ -69,9 +69,9 @@ var setupCmd = &cobra.Command{
 				expectedVersion := constants.GetKubernetesVersion()
 				// Compare major.minor versions to handle build metadata (+k3s1, -eks) and patch differences
 				if !constants.VersionsCompatible(actualVersion, expectedVersion) {
-					actualMM := constants.GetMajorMinorVersion(actualVersion)
-					expectedMM := constants.GetMajorMinorVersion(expectedVersion)
-					ui.Warning(fmt.Sprintf("Kind cluster 'kubeasy' exists with Kubernetes %s (expected %s)", actualMM, expectedMM))
+					actualMajorMinor := constants.GetMajorMinorVersion(actualVersion)
+					expectedMajorMinor := constants.GetMajorMinorVersion(expectedVersion)
+					ui.Warning(fmt.Sprintf("Kind cluster 'kubeasy' exists with Kubernetes %s (expected %s)", actualMajorMinor, expectedMajorMinor))
 					ui.Info("Consider recreating: kind delete cluster -n kubeasy && kubeasy setup")
 				} else {
 					ui.Success(fmt.Sprintf("Kind cluster 'kubeasy' already exists (Kubernetes %s)", constants.GetMajorMinorVersion(actualVersion)))

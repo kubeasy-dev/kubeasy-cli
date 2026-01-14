@@ -26,8 +26,8 @@ const UnknownVersion = "unknown"
 // This is the single source of truth for the Kubernetes version used by Kind.
 // The version should match the k8s.io/* library versions in go.mod (v0.X.Y -> 1.X.Y).
 //
-// IMPORTANT: This constant is managed by Renovate. The comment format below
-// is required for automatic updates. Do not modify the format.
+// Note: This is a var (not const) to allow Renovate to update it automatically.
+// IMPORTANT: The comment format below is required for Renovate. Do not modify.
 // renovate: datasource=docker depName=kindest/node
 var KindNodeImage = "kindest/node:v1.35.0"
 
@@ -52,7 +52,7 @@ func GetMajorMinorVersion(version string) string {
 
 	// Strip build metadata and prerelease info by finding the first separator
 	// Handles formats like "1.35.0+k3s1", "1.35.0-eks", or "1.35.0-rc.1+build123"
-	if idx := strings.IndexAny(v, "+-"); idx > 0 {
+	if idx := strings.IndexAny(v, "+-"); idx >= 0 {
 		v = v[:idx]
 	}
 

@@ -2162,3 +2162,404 @@ func TestGetGVRForKind_CaseInsensitive(t *testing.T) {
 		})
 	}
 }
+
+// Comprehensive status validation tests
+
+func TestExecuteStatus_StringComparison(t *testing.T) {
+	pod := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Pod",
+			"metadata": map[string]interface{}{
+				"name":      "test-pod",
+				"namespace": "test-ns",
+			},
+			"status": map[string]interface{}{
+				"phase": "Running",
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, pod)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	tests := []struct {
+		name     string
+		field    string
+		operator string
+		value    string
+		want     bool
+	}{
+		{"equal match", "phase", "==", "Running", true},
+		{"equal no match", "phase", "==", "Pending", false},
+		{"not equal match", "phase", "!=", "Pending", true},
+		{"not equal no match", "phase", "!=", "Running", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec := StatusSpec{
+				Target: Target{Kind: "Pod", Name: "test-pod"},
+				Checks: []StatusCheck{
+					{Field: tt.field, Operator: tt.operator, Value: tt.value},
+				},
+			}
+
+			passed, _, err := executor.executeStatus(context.Background(), spec)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, passed)
+		})
+	}
+}
+
+func TestExecuteStatus_BooleanComparison(t *testing.T) {
+	pod := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Pod",
+			"metadata": map[string]interface{}{
+				"name":      "test-pod",
+				"namespace": "test-ns",
+			},
+			"status": map[string]interface{}{
+				"containerStatuses": []interface{}{
+					map[string]interface{}{
+						"ready":   true,
+						"started": false,
+					},
+				},
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, pod)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	tests := []struct {
+		name     string
+		field    string
+		operator string
+		value    bool
+		want     bool
+	}{
+		{"true equals true", "containerStatuses[0].ready", "==", true, true},
+		{"true equals false", "containerStatuses[0].ready", "==", false, false},
+		{"false equals false", "containerStatuses[0].started", "==", false, true},
+		{"not equal", "containerStatuses[0].ready", "!=", false, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec := StatusSpec{
+				Target: Target{Kind: "Pod", Name: "test-pod"},
+				Checks: []StatusCheck{
+					{Field: tt.field, Operator: tt.operator, Value: tt.value},
+				},
+			}
+
+			passed, _, err := executor.executeStatus(context.Background(), spec)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, passed)
+		})
+	}
+}
+
+func TestExecuteStatus_NumericOperators(t *testing.T) {
+	deployment := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      "test-deployment",
+				"namespace": "test-ns",
+			},
+			"status": map[string]interface{}{
+				"readyReplicas":     int64(3),
+				"availableReplicas": int64(5),
+				"replicas":          int64(5),
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, deployment)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	tests := []struct {
+		name     string
+		field    string
+		operator string
+		value    int64
+		want     bool
+	}{
+		{"equal match", "readyReplicas", "==", 3, true},
+		{"equal no match", "readyReplicas", "==", 5, false},
+		{"not equal match", "readyReplicas", "!=", 5, true},
+		{"not equal no match", "readyReplicas", "!=", 3, false},
+		{"greater than match", "availableReplicas", ">", 3, true},
+		{"greater than no match", "readyReplicas", ">", 5, false},
+		{"less than match", "readyReplicas", "<", 5, true},
+		{"less than no match", "availableReplicas", "<", 3, false},
+		{"greater or equal match exact", "readyReplicas", ">=", 3, true},
+		{"greater or equal match greater", "availableReplicas", ">=", 3, true},
+		{"greater or equal no match", "readyReplicas", ">=", 5, false},
+		{"less or equal match exact", "readyReplicas", "<=", 3, true},
+		{"less or equal match less", "readyReplicas", "<=", 5, true},
+		{"less or equal no match", "availableReplicas", "<=", 3, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec := StatusSpec{
+				Target: Target{Kind: "Deployment", Name: "test-deployment"},
+				Checks: []StatusCheck{
+					{Field: tt.field, Operator: tt.operator, Value: tt.value},
+				},
+			}
+
+			passed, _, err := executor.executeStatus(context.Background(), spec)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, passed)
+		})
+	}
+}
+
+func TestExecuteStatus_ArrayIndexAccess(t *testing.T) {
+	pod := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Pod",
+			"metadata": map[string]interface{}{
+				"name":      "test-pod",
+				"namespace": "test-ns",
+			},
+			"status": map[string]interface{}{
+				"containerStatuses": []interface{}{
+					map[string]interface{}{
+						"name":         "container-1",
+						"restartCount": int64(0),
+					},
+					map[string]interface{}{
+						"name":         "container-2",
+						"restartCount": int64(5),
+					},
+				},
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, pod)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	tests := []struct {
+		name     string
+		field    string
+		operator string
+		value    interface{}
+		want     bool
+	}{
+		{"first container restart count", "containerStatuses[0].restartCount", "==", int64(0), true},
+		{"second container restart count", "containerStatuses[1].restartCount", "==", int64(5), true},
+		{"first container name", "containerStatuses[0].name", "==", "container-1", true},
+		{"second container name", "containerStatuses[1].name", "==", "container-2", true},
+		{"restart count comparison", "containerStatuses[1].restartCount", "<", int64(10), true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec := StatusSpec{
+				Target: Target{Kind: "Pod", Name: "test-pod"},
+				Checks: []StatusCheck{
+					{Field: tt.field, Operator: tt.operator, Value: tt.value},
+				},
+			}
+
+			passed, _, err := executor.executeStatus(context.Background(), spec)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, passed)
+		})
+	}
+}
+
+func TestExecuteStatus_ArrayFilterAccess(t *testing.T) {
+	deployment := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      "test-deployment",
+				"namespace": "test-ns",
+			},
+			"status": map[string]interface{}{
+				"conditions": []interface{}{
+					map[string]interface{}{
+						"type":   "Available",
+						"status": "True",
+					},
+					map[string]interface{}{
+						"type":   "Progressing",
+						"status": "True",
+					},
+					map[string]interface{}{
+						"type":   "ReplicaFailure",
+						"status": "False",
+					},
+				},
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, deployment)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	tests := []struct {
+		name     string
+		field    string
+		operator string
+		value    string
+		want     bool
+	}{
+		{"available condition", "conditions[type=Available].status", "==", "True", true},
+		{"progressing condition", "conditions[type=Progressing].status", "==", "True", true},
+		{"replica failure condition", "conditions[type=ReplicaFailure].status", "==", "False", true},
+		{"available not false", "conditions[type=Available].status", "!=", "False", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec := StatusSpec{
+				Target: Target{Kind: "Deployment", Name: "test-deployment"},
+				Checks: []StatusCheck{
+					{Field: tt.field, Operator: tt.operator, Value: tt.value},
+				},
+			}
+
+			passed, _, err := executor.executeStatus(context.Background(), spec)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, passed)
+		})
+	}
+}
+
+func TestExecuteStatus_TypeMismatchError(t *testing.T) {
+	deployment := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      "test-deployment",
+				"namespace": "test-ns",
+			},
+			"status": map[string]interface{}{
+				"readyReplicas": int64(3),
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, deployment)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	// Try to compare int with string - should produce an error about numeric type
+	spec := StatusSpec{
+		Target: Target{Kind: "Deployment", Name: "test-deployment"},
+		Checks: []StatusCheck{
+			{Field: "readyReplicas", Operator: "==", Value: "three"},
+		},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "expected value must be numeric")
+}
+
+func TestExecuteStatus_FieldNotFoundComprehensive(t *testing.T) {
+	deployment := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      "test-deployment",
+				"namespace": "test-ns",
+			},
+			"status": map[string]interface{}{
+				"readyReplicas": int64(3),
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, deployment)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	spec := StatusSpec{
+		Target: Target{Kind: "Deployment", Name: "test-deployment"},
+		Checks: []StatusCheck{
+			{Field: "nonExistentField", Operator: "==", Value: int64(3)},
+		},
+	}
+
+	passed, msg, err := executor.executeStatus(context.Background(), spec)
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "not found")
+}
+
+func TestExecuteStatus_MultipleChecksComprehensive(t *testing.T) {
+	deployment := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      "test-deployment",
+				"namespace": "test-ns",
+			},
+			"status": map[string]interface{}{
+				"readyReplicas":     int64(3),
+				"availableReplicas": int64(3),
+				"replicas":          int64(3),
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(scheme, deployment)
+	executor := NewExecutor(nil, dynamicClient, nil, "test-ns")
+
+	t.Run("all checks pass", func(t *testing.T) {
+		spec := StatusSpec{
+			Target: Target{Kind: "Deployment", Name: "test-deployment"},
+			Checks: []StatusCheck{
+				{Field: "readyReplicas", Operator: "==", Value: int64(3)},
+				{Field: "availableReplicas", Operator: ">=", Value: int64(3)},
+				{Field: "replicas", Operator: "==", Value: int64(3)},
+			},
+		}
+
+		passed, msg, err := executor.executeStatus(context.Background(), spec)
+		require.NoError(t, err)
+		assert.True(t, passed)
+		assert.Equal(t, errAllStatusChecksPassed, msg)
+	})
+
+	t.Run("one check fails", func(t *testing.T) {
+		spec := StatusSpec{
+			Target: Target{Kind: "Deployment", Name: "test-deployment"},
+			Checks: []StatusCheck{
+				{Field: "readyReplicas", Operator: "==", Value: int64(3)},
+				{Field: "availableReplicas", Operator: ">=", Value: int64(5)}, // This fails
+				{Field: "replicas", Operator: "==", Value: int64(3)},
+			},
+		}
+
+		passed, msg, err := executor.executeStatus(context.Background(), spec)
+		require.NoError(t, err)
+		assert.False(t, passed)
+		assert.Contains(t, msg, "availableReplicas")
+	})
+}

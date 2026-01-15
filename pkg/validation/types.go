@@ -1,5 +1,5 @@
 // Package validation provides types and executors for CLI-based validation
-// of Kubernetes resources. Supports 4 validation types: status, condition, log, event,
+// of Kubernetes resources. Supports 5 validation types: status, condition, log, event,
 // and connectivity. See docs/VALIDATION_EXAMPLES.md for usage examples.
 package validation
 

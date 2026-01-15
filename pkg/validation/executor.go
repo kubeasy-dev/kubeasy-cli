@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/logger"
+	"github.com/kubeasy-dev/kubeasy-cli/pkg/validation/fieldpath"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -154,15 +155,17 @@ func (e *Executor) executeStatus(ctx context.Context, spec StatusSpec) (bool, st
 	var messages []string
 
 	for _, check := range spec.Checks {
-		// Prepend "status." to the field path
-		fieldPath := "status." + check.Field
-		fields := strings.Split(fieldPath, ".")
-
-		// Get the value from the object
-		value, found, err := getNestedValue(obj.Object, fields...)
-		if err != nil || !found {
+		// Use fieldpath.Get() which supports array indexing and filtering
+		// Field path is relative to status (fieldpath.Get auto-prefixes with "status.")
+		value, found, err := fieldpath.Get(obj.Object, check.Field)
+		if err != nil {
 			allPassed = false
-			messages = append(messages, fmt.Sprintf("Field %s not found or invalid", check.Field))
+			messages = append(messages, fmt.Sprintf("Field %s: %v", check.Field, err))
+			continue
+		}
+		if !found {
+			allPassed = false
+			messages = append(messages, fmt.Sprintf("Field %s not found", check.Field))
 			continue
 		}
 
@@ -634,11 +637,6 @@ func getPodConditionTypes(pod *corev1.Pod) []string {
 	return types
 }
 
-// getNestedValue extracts a value from a nested map structure
-func getNestedValue(obj map[string]interface{}, fields ...string) (interface{}, bool, error) {
-	return unstructured.NestedFieldNoCopy(obj, fields...)
-}
-
 // compareTypedValues compares two values using the specified operator
 // Supports string, int64, float64, and bool types
 func compareTypedValues(actual interface{}, operator string, expected interface{}) (bool, error) {
@@ -701,8 +699,12 @@ func compareBools(actual bool, operator string, expected bool) (bool, error) {
 	}
 }
 
-// compareNumeric compares numeric values using the specified operator
-// Handles int/float coercion
+// compareNumeric compares numeric values using the specified operator.
+// Handles int/float coercion by converting all numeric types to float64.
+//
+// Note: Converting large int64 values to float64 may lose precision for values
+// greater than 2^53 (9,007,199,254,740,992). For typical Kubernetes use cases
+// like replica counts, restart counts, and resource metrics, this is not an issue.
 func compareNumeric(actual float64, operator string, expected interface{}) (bool, error) {
 	var expectedFloat float64
 

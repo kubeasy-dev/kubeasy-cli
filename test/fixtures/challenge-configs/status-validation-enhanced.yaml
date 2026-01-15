@@ -1,0 +1,145 @@
+# Status validation enhanced fixture
+# Tests advanced field path syntax: array indexing, array filtering, and multiple value types
+validations:
+  # Array index access
+  - key: container-restart-count
+    title: "Low Restart Count"
+    description: "Container must have fewer than 5 restarts"
+    order: 1
+    type: status
+    spec:
+      target:
+        kind: Pod
+        labelSelector:
+          app: test-app
+      checks:
+        - field: containerStatuses[0].restartCount
+          operator: "<"
+          value: 5
+
+  # Boolean field check
+  - key: container-ready
+    title: "Container Ready"
+    description: "First container must be ready"
+    order: 2
+    type: status
+    spec:
+      target:
+        kind: Pod
+        name: test-pod
+      checks:
+        - field: containerStatuses[0].ready
+          operator: "=="
+          value: true
+
+  # Array filter access for conditions
+  - key: deployment-available-condition
+    title: "Deployment Available"
+    description: "Available condition must be True"
+    order: 3
+    type: status
+    spec:
+      target:
+        kind: Deployment
+        name: test-deployment
+      checks:
+        - field: conditions[type=Available].status
+          operator: "=="
+          value: "True"
+        - field: conditions[type=Progressing].status
+          operator: "=="
+          value: "True"
+
+  # Multiple checks with different operators
+  - key: deployment-scaling
+    title: "Deployment Scaling"
+    description: "Deployment must be properly scaled"
+    order: 4
+    type: status
+    spec:
+      target:
+        kind: Deployment
+        labelSelector:
+          app: web-app
+      checks:
+        - field: replicas
+          operator: "=="
+          value: 3
+        - field: readyReplicas
+          operator: ">="
+          value: 3
+        - field: availableReplicas
+          operator: "!="
+          value: 0
+        - field: unavailableReplicas
+          operator: "<="
+          value: 0
+
+  # String comparison
+  - key: pod-running-phase
+    title: "Pod Phase"
+    description: "Pod must be in Running phase"
+    order: 5
+    type: status
+    spec:
+      target:
+        kind: Pod
+        name: test-pod
+      checks:
+        - field: phase
+          operator: "=="
+          value: "Running"
+
+  # DaemonSet checks
+  - key: daemonset-ready
+    title: "DaemonSet Ready"
+    description: "DaemonSet must have all pods ready"
+    order: 6
+    type: status
+    spec:
+      target:
+        kind: DaemonSet
+        name: test-daemonset
+      checks:
+        - field: numberReady
+          operator: "=="
+          value: 3
+        - field: desiredNumberScheduled
+          operator: "=="
+          value: 3
+        - field: numberMisscheduled
+          operator: "=="
+          value: 0
+
+  # Job completion check
+  - key: job-completed
+    title: "Job Completed"
+    description: "Job must have completed successfully"
+    order: 7
+    type: status
+    spec:
+      target:
+        kind: Job
+        name: test-job
+      checks:
+        - field: succeeded
+          operator: ">="
+          value: 1
+        - field: failed
+          operator: "=="
+          value: 0
+
+  # Init container status check
+  - key: init-container-ready
+    title: "Init Container Ready"
+    description: "Init container must have completed"
+    order: 8
+    type: status
+    spec:
+      target:
+        kind: Pod
+        name: test-pod
+      checks:
+        - field: initContainerStatuses[0].ready
+          operator: "=="
+          value: true

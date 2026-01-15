@@ -1,0 +1,48 @@
+# Condition validation fixture
+# Tests the shorthand condition validation type for Kubernetes conditions
+validations:
+  - key: pod-ready
+    title: "Pod Ready Check"
+    description: "Pod must be in Ready state"
+    order: 1
+    type: condition
+    spec:
+      target:
+        kind: Pod
+        labelSelector:
+          app: test-app
+      checks:
+        - type: Ready
+          status: "True"
+
+  - key: pod-multiple-conditions
+    title: "Pod Multiple Conditions"
+    description: "Pod must pass multiple condition checks"
+    order: 2
+    type: condition
+    spec:
+      target:
+        kind: Pod
+        name: test-pod
+      checks:
+        - type: Ready
+          status: "True"
+        - type: ContainersReady
+          status: "True"
+        - type: Initialized
+          status: "True"
+
+  - key: deployment-conditions
+    title: "Deployment Conditions"
+    description: "Deployment must be available and progressing"
+    order: 3
+    type: condition
+    spec:
+      target:
+        kind: Deployment
+        name: test-deployment
+      checks:
+        - type: Available
+          status: "True"
+        - type: Progressing
+          status: "True"

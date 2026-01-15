@@ -74,7 +74,19 @@ jobs:
       - name: Run integration tests
         run: task test:integration
 
+      - name: Check coverage file has data
+        id: check-coverage
+        run: |
+          # Check if coverage file has more than just the mode line
+          if [ -f ./coverage-integration.out ] && [ $(wc -l < ./coverage-integration.out) -gt 1 ]; then
+            echo "has_coverage=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_coverage=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Coverage file is empty or missing, skipping upload"
+          fi
+
       - name: Upload integration test coverage
+        if: steps.check-coverage.outputs.has_coverage == 'true'
         uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
         with:
           files: ./coverage-integration.out

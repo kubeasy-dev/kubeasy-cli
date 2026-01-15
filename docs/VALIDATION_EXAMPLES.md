@@ -790,6 +790,10 @@ Adjust time windows based on application behavior:
 - Use `kubectl get deployment -o yaml` to see available fields
 - For arrays: use `[0]` for index or `[field=value]` for filtering
 
+> **Note**: For supported Kubernetes resources (Pod, Deployment, StatefulSet, etc.), field paths are validated at parse time using reflection. Invalid field paths will cause an error when loading `challenge.yaml`, with a helpful message listing available fields. This early validation catches typos before runtime.
+>
+> However, some fields are conditionally populated (e.g., `containerStatuses` only exists after containers start). These fields pass parse-time validation but may return "field not found" at runtime if the resource isn't in the expected state.
+
 ---
 
 ## Reference

@@ -10,8 +10,7 @@ on:
     paths:
       - 'internal/**'
       - 'cmd/**'
-      - 'pkg/**'
-      - 'tests/**'
+      - 'test/**'
       - go.mod
       - go.sum
       - 'Taskfile.yml'

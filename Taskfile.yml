@@ -143,7 +143,7 @@ tasks:
       - echo "Running unit tests..."
       - |
         go test -v -race -coverprofile=coverage-unit.out -covermode=atomic \
-          -coverpkg=./pkg/... $(go list ./... | grep -v /test/integration)
+          -coverpkg=./internal/... $(go list ./... | grep -v /test/integration)
       - |
         if [ -s coverage-unit.out ]; then
           go tool cover -func=coverage-unit.out | tail -1
@@ -157,7 +157,7 @@ tasks:
       - |
         KUBEBUILDER_ASSETS=$({{.GOPATH}}/bin/setup-envtest use -p path {{.K8S_VERSION}}) \
           go test -v -tags=integration -coverprofile=coverage-integration.out \
-          -covermode=atomic -coverpkg=./pkg/... ./test/integration/... -timeout 15m
+          -covermode=atomic -coverpkg=./internal/... ./test/integration/... -timeout 15m
       - |
         if [ -s coverage-integration.out ]; then
           go tool cover -func=coverage-integration.out | tail -1

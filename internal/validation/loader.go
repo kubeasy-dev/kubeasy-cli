@@ -157,7 +157,7 @@ func parseSpec(v *Validation) error {
 			// Only validate for supported kinds (skip for custom resources)
 			if IsKindSupported(spec.Target.Kind) {
 				if err := ValidateFieldPath(spec.Target.Kind, check.Field); err != nil {
-					return fmt.Errorf("check %d: %w", i, err)
+					return fmt.Errorf("check %d (field %q): %w", i, check.Field, err)
 				}
 			}
 		}

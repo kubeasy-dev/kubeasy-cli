@@ -1,7 +1,11 @@
 // Package validation provides types and executors for CLI-based validation
-// of Kubernetes resources. Supports 5 validation types: status, log, event,
-// metrics, and connectivity. See docs/VALIDATION_EXAMPLES.md for usage examples.
+// of Kubernetes resources. Supports 5 validation types: status, condition, log, event,
+// and connectivity. See docs/VALIDATION_EXAMPLES.md for usage examples.
 package validation
+
+import (
+	corev1 "k8s.io/api/core/v1"
+)
 
 // ValidationConfig represents the top-level structure of a challenge.yaml validation section
 // It contains all validations that must pass for a challenge to be considered complete
@@ -23,7 +27,7 @@ type Validation struct {
 	Description string `yaml:"description" json:"description"`
 	// Order determines the display sequence (lower numbers appear first)
 	Order int `yaml:"order" json:"order"`
-	// Type specifies which validation executor to use (status, log, event, metrics, connectivity)
+	// Type specifies which validation executor to use (status, condition, log, event, connectivity)
 	Type ValidationType `yaml:"type" json:"type"`
 	// Spec contains the type-specific configuration (parsed based on Type)
 	// Excluded from serialization - use RawSpec for marshaling
@@ -38,18 +42,18 @@ type Validation struct {
 type ValidationType string
 
 const (
-	// TypeStatus validates Kubernetes resource conditions (Ready, Available, Progressing)
-	// Value: "status" - Use when checking if Deployments, Pods, StatefulSets are in expected state
+	// TypeStatus validates arbitrary status fields with operators
+	// Value: "status" - Use when checking numeric fields, string values, or any status field
 	TypeStatus ValidationType = "status"
+	// TypeCondition validates Kubernetes resource conditions (shorthand for common condition checks)
+	// Value: "condition" - Use when checking Ready, Available, Progressing conditions
+	TypeCondition ValidationType = "condition"
 	// TypeLog searches container logs for expected strings
 	// Value: "log" - Use when verifying application behavior, startup messages, or processed requests
 	TypeLog ValidationType = "log"
 	// TypeEvent validates that forbidden Kubernetes events are NOT present
 	// Value: "event" - Use when ensuring pods aren't crash-looping, OOMKilled, or failing to schedule
 	TypeEvent ValidationType = "event"
-	// TypeMetrics validates numeric fields from resource status
-	// Value: "metrics" - Use when checking replica counts, restart counts, or other numeric conditions
-	TypeMetrics ValidationType = "metrics"
 	// TypeConnectivity tests HTTP connectivity between pods
 	// Value: "connectivity" - Use when verifying Services, NetworkPolicies, or inter-pod communication
 	TypeConnectivity ValidationType = "connectivity"
@@ -69,27 +73,55 @@ type Target struct {
 	LabelSelector map[string]string `yaml:"labelSelector,omitempty" json:"labelSelector,omitempty"`
 }
 
-// StatusSpec validates Kubernetes resource conditions (Ready, Available, etc.)
-// Use when: checking if a Deployment/Pod/StatefulSet is in the expected state
+// StatusSpec validates arbitrary status fields using operators
+// Use when: checking numeric fields, string values, or any status field
+// Note: Field paths are relative to status (no "status." prefix needed)
 type StatusSpec struct {
 	// Target specifies which Kubernetes resource to check
 	Target Target `yaml:"target" json:"target"`
-	// Conditions lists the status conditions that must ALL be met
-	// Deployment conditions: Available, Progressing, ReplicaFailure
-	// Pod conditions: Ready, ContainersReady, Initialized, PodScheduled
-	Conditions []StatusCondition `yaml:"conditions" json:"conditions"`
+	// Checks lists all field validations that must pass
+	Checks []StatusCheck `yaml:"checks" json:"checks"`
 }
 
-// StatusCondition represents a single condition to verify on a resource
+// StatusCheck defines a field-based status validation
+// Compares a resource status field value against an expected value using an operator
+type StatusCheck struct {
+	// Field is the path to the status field to check (relative to status)
+	// Examples: "readyReplicas", "containerStatuses[0].restartCount", "conditions[type=Ready].status"
+	// Array indexing: [0], [1], etc.
+	// Array filtering: [key=value] to find element where field equals value
+	Field string `yaml:"field" json:"field"`
+	// Operator is the comparison operator to use
+	// Supported: "==" (equal), "!=" (not equal), ">" (greater than),
+	// "<" (less than), ">=" (greater or equal), "<=" (less or equal)
+	Operator string `yaml:"operator" json:"operator"`
+	// Value is the expected value to compare against
+	// Supports: string, int64, bool, float64
+	Value interface{} `yaml:"value" json:"value"`
+}
+
+// ConditionSpec validates Kubernetes resource conditions (shorthand)
+// Use when: checking standard Kubernetes conditions like Ready, Available, Progressing
+// This is a convenient shorthand for the most common validation pattern
+type ConditionSpec struct {
+	// Target specifies which Kubernetes resource to check
+	Target Target `yaml:"target" json:"target"`
+	// Checks lists the condition checks that must ALL pass
+	Checks []ConditionCheck `yaml:"checks" json:"checks"`
+}
+
+// ConditionCheck defines a single condition check
 // Maps to Kubernetes status.conditions[] entries
-type StatusCondition struct {
+type ConditionCheck struct {
 	// Type is the condition type to check
 	// Deployment: "Available", "Progressing", "ReplicaFailure"
 	// Pod: "Ready", "ContainersReady", "Initialized", "PodScheduled"
+	// StatefulSet: "Ready"
+	// Job: "Complete", "Failed"
 	Type string `yaml:"type" json:"type"`
 	// Status is the expected condition status
 	// Values: "True", "False", "Unknown"
-	Status string `yaml:"status" json:"status"`
+	Status corev1.ConditionStatus `yaml:"status" json:"status"`
 }
 
 // LogSpec searches container logs for expected strings
@@ -122,31 +154,6 @@ type EventSpec struct {
 	// Events older than this are ignored, e.g., 600 for last 10 minutes
 	// When omitted (0), checks all events regardless of age
 	SinceSeconds int `yaml:"sinceSeconds,omitempty" json:"sinceSeconds,omitempty"`
-}
-
-// MetricsSpec validates numeric fields from resource status
-// Use when: checking replica counts, restart counts, or resource quantities
-type MetricsSpec struct {
-	// Target specifies which Kubernetes resource to check
-	Target Target `yaml:"target" json:"target"`
-	// Checks lists all numeric field validations that must pass
-	Checks []MetricCheck `yaml:"checks" json:"checks"`
-}
-
-// MetricCheck represents a single numeric field validation
-// Compares a resource field value against an expected value using an operator
-type MetricCheck struct {
-	// Field is the dot-notation path to the numeric field in the resource
-	// Common paths: status.readyReplicas, status.availableReplicas, status.replicas,
-	// spec.replicas. Array indexing uses dot notation: status.containerStatuses.0.restartCount
-	Field string `yaml:"field" json:"field"`
-	// Operator is the comparison operator to use
-	// Supported: "==" (equal), "!=" (not equal), ">" (greater than),
-	// "<" (less than), ">=" (greater or equal), "<=" (less or equal)
-	// Example: operator: ">=" with value: 3 checks if field is at least 3
-	Operator string `yaml:"operator" json:"operator"`
-	// Value is the expected numeric value to compare against
-	Value int64 `yaml:"value" json:"value"`
 }
 
 // ConnectivitySpec tests HTTP connectivity between pods in the cluster

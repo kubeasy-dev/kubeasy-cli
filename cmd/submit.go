@@ -114,9 +114,9 @@ Make sure you have completed the challenge before submitting.`,
 
 		typeLabels := map[validation.ValidationType]string{
 			validation.TypeStatus:       "Status Validation",
+			validation.TypeCondition:    "Condition Validation",
 			validation.TypeLog:          "Log Validation",
 			validation.TypeEvent:        "Event Validation",
-			validation.TypeMetrics:      "Metrics Validation",
 			validation.TypeConnectivity: "Connectivity Validation",
 		}
 

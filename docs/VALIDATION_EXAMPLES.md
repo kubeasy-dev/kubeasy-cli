@@ -4,18 +4,18 @@ This document provides comprehensive examples of all validation types supported 
 
 ## Table of Contents
 
-1. [Status Validation](#status-validation)
-2. [Log Validation](#log-validation)
-3. [Event Validation](#event-validation)
-4. [Metrics Validation](#metrics-validation)
+1. [Condition Validation](#condition-validation)
+2. [Status Validation](#status-validation)
+3. [Log Validation](#log-validation)
+4. [Event Validation](#event-validation)
 5. [Connectivity Validation](#connectivity-validation)
 6. [Complete Challenge Example](#complete-challenge-example)
 
 ---
 
-## Status Validation
+## Condition Validation
 
-Checks Kubernetes resource status conditions (e.g., Pod Ready, Deployment Available).
+Checks Kubernetes resource conditions (e.g., Pod Ready, ContainersReady). This is a shorthand for common condition checks.
 
 ### Basic Pod Ready Check
 
@@ -25,13 +25,13 @@ validations:
     title: "Pod Ready"
     description: "The application pod must be in Ready state"
     order: 1
-    type: status
+    type: condition
     spec:
       target:
         kind: Pod
         labelSelector:
           app: my-application
-      conditions:
+      checks:
         - type: Ready
           status: "True"
 ```
@@ -45,33 +45,6 @@ validations:
 
 ---
 
-### Deployment Available Check
-
-```yaml
-validations:
-  - key: deployment-available
-    title: "Deployment Available"
-    description: "The deployment must have available replicas"
-    order: 1
-    type: status
-    spec:
-      target:
-        kind: Deployment
-        name: web-app
-      conditions:
-        - type: Available
-          status: "True"
-```
-
-**When to use**: Verify that a deployment has successfully rolled out.
-
-**What it checks**:
-- Finds the deployment by name
-- Gets pods owned by the deployment (via label selector)
-- Checks pod conditions
-
----
-
 ### Multiple Conditions
 
 ```yaml
@@ -80,13 +53,13 @@ validations:
     title: "Pod Healthy"
     description: "Pod must be both Ready and Initialized"
     order: 1
-    type: status
+    type: condition
     spec:
       target:
         kind: Pod
         labelSelector:
           app: database
-      conditions:
+      checks:
         - type: Ready
           status: "True"
         - type: Initialized
@@ -94,6 +67,154 @@ validations:
 ```
 
 **When to use**: Verify multiple aspects of pod health.
+
+---
+
+### Common Condition Types
+
+| Resource | Condition Types |
+|----------|-----------------|
+| Pod | `Ready`, `ContainersReady`, `Initialized`, `PodScheduled` |
+| Deployment | `Available`, `Progressing`, `ReplicaFailure` |
+| StatefulSet | `Ready` |
+| Job | `Complete`, `Failed` |
+
+---
+
+## Status Validation
+
+Validates arbitrary status fields using operators. Use this for numeric comparisons, string values, or any status field access.
+
+### Replica Count
+
+```yaml
+validations:
+  - key: scaled-replicas
+    title: "Scaled to 3 Replicas"
+    description: "Deployment must have exactly 3 ready replicas"
+    order: 1
+    type: status
+    spec:
+      target:
+        kind: Deployment
+        name: web-app
+      checks:
+        - field: readyReplicas
+          operator: "=="
+          value: 3
+        - field: availableReplicas
+          operator: ">="
+          value: 3
+```
+
+**When to use**: Verify horizontal scaling has been applied.
+
+**Available operators**: `==`, `!=`, `>`, `<`, `>=`, `<=`
+
+**Note**: Field paths are relative to `status` (no prefix needed).
+
+---
+
+### Restart Count with Array Access
+
+```yaml
+validations:
+  - key: low-restarts
+    title: "Low Restart Count"
+    description: "Pod must have fewer than 3 restarts"
+    order: 1
+    type: status
+    spec:
+      target:
+        kind: Pod
+        labelSelector:
+          app: stable-app
+      checks:
+        - field: containerStatuses[0].restartCount
+          operator: "<"
+          value: 3
+```
+
+**When to use**: Verify pod stability over time.
+
+**Field path syntax**:
+- Simple field: `readyReplicas`
+- Array index: `containerStatuses[0].restartCount`
+- Array filter: `conditions[type=Ready].status`
+
+---
+
+### Condition via Status (Advanced)
+
+```yaml
+validations:
+  - key: deployment-available
+    title: "Deployment Available"
+    description: "The deployment must be available"
+    order: 1
+    type: status
+    spec:
+      target:
+        kind: Deployment
+        name: web-app
+      checks:
+        - field: conditions[type=Available].status
+          operator: "=="
+          value: "True"
+```
+
+**When to use**: Check conditions on any resource type using the flexible status validation.
+
+**Tip**: For simple condition checks, prefer the `condition` type. Use `status` type when you need operators or complex field paths.
+
+---
+
+### StatefulSet Replicas
+
+```yaml
+validations:
+  - key: statefulset-ready
+    title: "StatefulSet Ready"
+    description: "All StatefulSet replicas must be ready"
+    order: 1
+    type: status
+    spec:
+      target:
+        kind: StatefulSet
+        name: database
+      checks:
+        - field: readyReplicas
+          operator: "=="
+          value: 3
+        - field: currentReplicas
+          operator: "=="
+          value: 3
+```
+
+**When to use**: Verify stateful applications are fully deployed.
+
+---
+
+### Boolean and String Fields
+
+```yaml
+validations:
+  - key: phase-running
+    title: "Pod Running"
+    description: "Pod must be in Running phase"
+    order: 1
+    type: status
+    spec:
+      target:
+        kind: Pod
+        name: my-pod
+      checks:
+        - field: phase
+          operator: "=="
+          value: "Running"
+```
+
+**Supported value types**: string, integer, boolean, float
 
 ---
 
@@ -306,116 +427,6 @@ validations:
 
 ---
 
-## Metrics Validation
-
-Validates numeric fields in pod/deployment status (e.g., replicas, restart count).
-
-### Replica Count
-
-```yaml
-validations:
-  - key: scaled-replicas
-    title: "Scaled to 3 Replicas"
-    description: "Deployment must have exactly 3 ready replicas"
-    order: 1
-    type: metrics
-    spec:
-      target:
-        kind: Deployment
-        name: web-app
-      checks:
-        - field: status.readyReplicas
-          operator: "=="
-          value: 3
-        - field: status.availableReplicas
-          operator: ">="
-          value: 3
-```
-
-**When to use**: Verify horizontal scaling has been applied.
-
-**Available operators**: `==`, `!=`, `>`, `<`, `>=`, `<=`
-
----
-
-### Restart Count
-
-```yaml
-validations:
-  - key: low-restarts
-    title: "Low Restart Count"
-    description: "Pod must have fewer than 3 restarts"
-    order: 1
-    type: metrics
-    spec:
-      target:
-        kind: Pod
-        labelSelector:
-          app: stable-app
-      checks:
-        - field: status.containerStatuses.0.restartCount
-          operator: "<"
-          value: 3
-```
-
-**When to use**: Verify pod stability over time.
-
-**Note**: Field paths use dot notation. Array indices are 0-based.
-
----
-
-### StatefulSet Replicas
-
-```yaml
-validations:
-  - key: statefulset-ready
-    title: "StatefulSet Ready"
-    description: "All StatefulSet replicas must be ready"
-    order: 1
-    type: metrics
-    spec:
-      target:
-        kind: StatefulSet
-        name: database
-      checks:
-        - field: status.readyReplicas
-          operator: "=="
-          value: 3
-        - field: status.currentReplicas
-          operator: "=="
-          value: 3
-```
-
-**When to use**: Verify stateful applications are fully deployed.
-
----
-
-### Label Selector with Metrics
-
-```yaml
-validations:
-  - key: deployment-replicas
-    title: "Deployment Replicas"
-    description: "Any matching deployment must have 2+ replicas"
-    order: 1
-    type: metrics
-    spec:
-      target:
-        kind: Deployment
-        labelSelector:
-          tier: backend
-      checks:
-        - field: status.readyReplicas
-          operator: ">="
-          value: 2
-```
-
-**When to use**: Check metrics across multiple resources matching a label.
-
-**Note**: If multiple resources match, only the first is checked.
-
----
-
 ## Connectivity Validation
 
 Tests HTTP connectivity between pods.
@@ -567,7 +578,7 @@ objective: |
   3. Ensure all services can communicate
   4. Verify application startup
 
-validations:
+objectives:
   # 1. Resource Limits Fixed
   - key: no-oom-kills
     title: "No Memory Issues"
@@ -589,16 +600,16 @@ validations:
     title: "Backend Scaled"
     description: "Backend must have 3 ready replicas"
     order: 2
-    type: metrics
+    type: status
     spec:
       target:
         kind: Deployment
         name: backend
       checks:
-        - field: status.readyReplicas
+        - field: readyReplicas
           operator: "=="
           value: 3
-        - field: status.availableReplicas
+        - field: availableReplicas
           operator: ">="
           value: 3
 
@@ -607,13 +618,13 @@ validations:
     title: "All Pods Ready"
     description: "Frontend, backend, and database pods must be ready"
     order: 3
-    type: status
+    type: condition
     spec:
       target:
         kind: Pod
         labelSelector:
           app: microservices
-      conditions:
+      checks:
         - type: Ready
           status: "True"
 
@@ -683,31 +694,42 @@ validations:
 
 ## Best Practices
 
-### 1. Ordering Validations
+### 1. Choosing Between Condition and Status
+
+| Use `condition` when | Use `status` when |
+|---------------------|-------------------|
+| Checking standard K8s conditions | Checking numeric fields (replicas, restarts) |
+| Simple Ready/Available checks | Using operators (>, <, >=, <=) |
+| Targeting Pods directly | Accessing nested fields with array syntax |
+
+### 2. Ordering Validations
 
 Order validations from most basic to most complex:
 ```yaml
-validations:
+objectives:
   - order: 1  # Basic: Pods exist and are ready
+    type: condition
+
+  - order: 2  # Scaling: Correct replica count
     type: status
 
-  - order: 2  # Application: Logs show startup
+  - order: 3  # Application: Logs show startup
     type: log
 
-  - order: 3  # Stability: No crash events
+  - order: 4  # Stability: No crash events
     type: event
 
-  - order: 4  # Advanced: Network connectivity
+  - order: 5  # Advanced: Network connectivity
     type: connectivity
 ```
 
-### 2. Meaningful Titles
+### 3. Meaningful Titles
 
 Use titles that describe success state, not the check:
 - ✅ Good: "Pod Ready", "Database Connected"
 - ❌ Bad: "Check Pod Status", "Validate Database"
 
-### 3. Clear Descriptions
+### 4. Clear Descriptions
 
 Explain what the user should achieve:
 ```yaml
@@ -719,7 +741,7 @@ Not what the validation does:
 description: "Checks if pod has Ready condition set to True"
 ```
 
-### 4. Label Selectors vs Names
+### 5. Label Selectors vs Names
 
 Prefer label selectors for flexibility:
 ```yaml
@@ -735,7 +757,7 @@ target:
   name: my-app-abc123
 ```
 
-### 5. Time Windows
+### 6. Time Windows
 
 Adjust time windows based on application behavior:
 - Fast-starting apps: `sinceSeconds: 60`
@@ -763,13 +785,24 @@ Adjust time windows based on application behavior:
 - Check service DNS name is correct
 - Verify network policies allow connectivity
 
-**"Field not found or invalid"**
-- Check field path is correct: `status.readyReplicas`
+**"Field not found"**
+- Check field path is correct: `readyReplicas` (not `status.readyReplicas`)
 - Use `kubectl get deployment -o yaml` to see available fields
+- For arrays: use `[0]` for index or `[field=value]` for filtering
 
 ---
 
 ## Reference
+
+### Validation Types
+
+| Type | Purpose | Common Use Cases |
+|------|---------|-----------------|
+| `condition` | Check K8s conditions | Pod Ready, Deployment Available |
+| `status` | Check any status field | Replica counts, restart counts, phase |
+| `log` | Search container logs | Startup messages, error detection |
+| `event` | Detect forbidden events | OOMKilled, CrashLoopBackOff |
+| `connectivity` | Test HTTP endpoints | Service discovery, network policies |
 
 ### Supported Resource Kinds
 

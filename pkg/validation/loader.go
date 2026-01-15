@@ -15,13 +15,19 @@ const (
 	// ChallengesRepoBaseURL is the base URL for the challenges repository
 	ChallengesRepoBaseURL = "https://raw.githubusercontent.com/kubeasy-dev/challenges/main"
 
-	// DefaultLogSinceSeconds is the default time window for log searches (5 minutes)
+	// DefaultLogSinceSeconds is the default time window for log searches (5 minutes).
+	// 300 seconds balances capturing recent activity while avoiding false positives
+	// from old logs. Most K8s applications complete startup within this window.
 	DefaultLogSinceSeconds = 300
 
-	// DefaultEventSinceSeconds is the default time window for event searches (5 minutes)
+	// DefaultEventSinceSeconds is the default time window for event searches (5 minutes).
+	// Matches log window for consistency. Events older than this are typically
+	// resolved or no longer relevant to the current validation attempt.
 	DefaultEventSinceSeconds = 300
 
-	// DefaultConnectivityTimeoutSeconds is the default timeout for connectivity checks
+	// DefaultConnectivityTimeoutSeconds is the default timeout for connectivity checks.
+	// 5 seconds is sufficient for healthy in-cluster HTTP requests while detecting
+	// network issues without making validations excessively slow.
 	DefaultConnectivityTimeoutSeconds = 5
 )
 
@@ -128,6 +134,48 @@ func parseSpec(v *Validation) error {
 		if err := validateTarget(spec.Target); err != nil {
 			return err
 		}
+		// Validate checks
+		if len(spec.Checks) == 0 {
+			return fmt.Errorf("status validation must have at least one check")
+		}
+		for i, check := range spec.Checks {
+			if check.Field == "" {
+				return fmt.Errorf("check %d: field is required", i)
+			}
+			if check.Operator == "" {
+				return fmt.Errorf("check %d: operator is required", i)
+			}
+			if check.Value == nil {
+				return fmt.Errorf("check %d: value is required", i)
+			}
+			// Validate operator
+			validOperators := []string{"==", "!=", ">", "<", ">=", "<="}
+			if !containsString(validOperators, check.Operator) {
+				return fmt.Errorf("check %d: invalid operator %s (valid: %v)", i, check.Operator, validOperators)
+			}
+		}
+		v.Spec = spec
+
+	case TypeCondition:
+		var spec ConditionSpec
+		if err := yaml.Unmarshal(specYAML, &spec); err != nil {
+			return err
+		}
+		if err := validateTarget(spec.Target); err != nil {
+			return err
+		}
+		// Validate checks
+		if len(spec.Checks) == 0 {
+			return fmt.Errorf("condition validation must have at least one check")
+		}
+		for i, check := range spec.Checks {
+			if check.Type == "" {
+				return fmt.Errorf("check %d: type is required", i)
+			}
+			if check.Status == "" {
+				return fmt.Errorf("check %d: status is required", i)
+			}
+		}
 		v.Spec = spec
 
 	case TypeLog:
@@ -155,16 +203,6 @@ func parseSpec(v *Validation) error {
 		// Apply default sinceSeconds if not specified
 		if spec.SinceSeconds == 0 {
 			spec.SinceSeconds = DefaultEventSinceSeconds
-		}
-		v.Spec = spec
-
-	case TypeMetrics:
-		var spec MetricsSpec
-		if err := yaml.Unmarshal(specYAML, &spec); err != nil {
-			return err
-		}
-		if err := validateTarget(spec.Target); err != nil {
-			return err
 		}
 		v.Spec = spec
 
@@ -205,4 +243,14 @@ func validateSourcePod(sourcePod SourcePod) error {
 		return fmt.Errorf("sourcePod must specify either name or labelSelector")
 	}
 	return nil
+}
+
+// containsString checks if a string is in a slice
+func containsString(slice []string, s string) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
 }

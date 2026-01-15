@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kubeasy-dev/kubeasy-cli/pkg/logger"
+	"github.com/kubeasy-dev/kubeasy-cli/pkg/validation/fieldpath"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -23,17 +24,20 @@ import (
 )
 
 const (
-	errNoMatchingPods          = "No matching pods found"
-	errNoMatchingSourcePods    = "No matching source pods found"
-	errNoRunningSourcePods     = "No running source pods found"
-	errNoSourcePodSpecified    = "No source pod specified"
-	errNoMatchingResources     = "No matching resources found"
-	errNoTargetSpecified       = "No target name or labelSelector specified"
-	errAllMetricsChecksPassed  = "All metric checks passed"
-	errAllConnectivityPassed   = "All connectivity checks passed"
-	errAllConditionsMet        = "All %d pod(s) meet the required conditions"
-	errFoundAllExpectedStrings = "Found all expected strings in logs"
-	errNoForbiddenEvents       = "No forbidden events found"
+	// Error messages (validation failures or missing resources)
+	errNoMatchingPods       = "No matching pods found"
+	errNoMatchingSourcePods = "No matching source pods found"
+	errNoRunningSourcePods  = "No running source pods found"
+	errNoSourcePodSpecified = "No source pod specified"
+	errNoMatchingResources  = "No matching resources found"
+	errNoTargetSpecified    = "No target name or labelSelector specified"
+
+	// Success messages (validation passed)
+	msgAllStatusChecksPassed   = "All status checks passed"
+	msgAllConnectivityPassed   = "All connectivity checks passed"
+	msgAllConditionsMet        = "All %d pod(s) meet the required conditions"
+	msgFoundAllExpectedStrings = "Found all expected strings in logs"
+	msgNoForbiddenEvents       = "No forbidden events found"
 )
 
 // Executor executes validations against a Kubernetes cluster
@@ -67,15 +71,15 @@ func (e *Executor) Execute(ctx context.Context, v Validation) Result {
 	case TypeStatus:
 		spec := v.Spec.(StatusSpec)
 		result.Passed, result.Message, err = e.executeStatus(ctx, spec)
+	case TypeCondition:
+		spec := v.Spec.(ConditionSpec)
+		result.Passed, result.Message, err = e.executeCondition(ctx, spec)
 	case TypeLog:
 		spec := v.Spec.(LogSpec)
 		result.Passed, result.Message, err = e.executeLog(ctx, spec)
 	case TypeEvent:
 		spec := v.Spec.(EventSpec)
 		result.Passed, result.Message, err = e.executeEvent(ctx, spec)
-	case TypeMetrics:
-		spec := v.Spec.(MetricsSpec)
-		result.Passed, result.Message, err = e.executeMetrics(ctx, spec)
 	case TypeConnectivity:
 		spec := v.Spec.(ConnectivitySpec)
 		result.Passed, result.Message, err = e.executeConnectivity(ctx, spec)
@@ -110,9 +114,91 @@ func (e *Executor) ExecuteAll(ctx context.Context, validations []Validation) []R
 	return results
 }
 
-// executeStatus checks resource status conditions
+// executeStatus checks resource status fields using operators
+// Field paths are relative to status (no "status." prefix needed)
 func (e *Executor) executeStatus(ctx context.Context, spec StatusSpec) (bool, string, error) {
 	logger.Debug("Executing status validation for %s", spec.Target.Kind)
+
+	if len(spec.Checks) == 0 {
+		return false, "No checks specified", nil
+	}
+
+	// Get the resource
+	gvr, err := getGVRForKind(spec.Target.Kind)
+	if err != nil {
+		return false, "", err
+	}
+
+	var obj *unstructured.Unstructured
+
+	switch {
+	case spec.Target.Name != "":
+		obj, err = e.dynamicClient.Resource(gvr).Namespace(e.namespace).Get(ctx, spec.Target.Name, metav1.GetOptions{})
+	case len(spec.Target.LabelSelector) > 0:
+		list, listErr := e.dynamicClient.Resource(gvr).Namespace(e.namespace).List(ctx, metav1.ListOptions{
+			LabelSelector: labels.SelectorFromSet(spec.Target.LabelSelector).String(),
+		})
+		if listErr != nil {
+			return false, "", listErr
+		}
+		if len(list.Items) == 0 {
+			return false, errNoMatchingResources, nil
+		}
+		obj = &list.Items[0]
+		err = nil
+	default:
+		return false, errNoTargetSpecified, nil
+	}
+
+	if err != nil {
+		return false, "", fmt.Errorf("failed to get resource: %w", err)
+	}
+
+	allPassed := true
+	var messages []string
+
+	for _, check := range spec.Checks {
+		// Use fieldpath.Get() which supports array indexing and filtering
+		// Field path is relative to status (fieldpath.Get auto-prefixes with "status.")
+		value, found, err := fieldpath.Get(obj.Object, check.Field)
+		if err != nil {
+			allPassed = false
+			messages = append(messages, fmt.Sprintf("Field %s: %v", check.Field, err))
+			continue
+		}
+		if !found {
+			allPassed = false
+			messages = append(messages, fmt.Sprintf("Field %s not found", check.Field))
+			continue
+		}
+
+		// Compare values
+		passed, compErr := compareTypedValues(value, check.Operator, check.Value)
+		if compErr != nil {
+			allPassed = false
+			messages = append(messages, fmt.Sprintf("Field %s: %v", check.Field, compErr))
+			continue
+		}
+
+		if !passed {
+			allPassed = false
+			messages = append(messages, fmt.Sprintf("%s: got %v, expected %s %v", check.Field, value, check.Operator, check.Value))
+		}
+	}
+
+	if allPassed {
+		return true, msgAllStatusChecksPassed, nil
+	}
+	return false, strings.Join(messages, "; "), nil
+}
+
+// executeCondition checks Kubernetes resource conditions (shorthand)
+func (e *Executor) executeCondition(ctx context.Context, spec ConditionSpec) (bool, string, error) {
+	logger.Debug("Executing condition validation for %s", spec.Target.Kind)
+
+	if len(spec.Checks) == 0 {
+		return false, "No checks specified", nil
+	}
 
 	pods, err := e.getTargetPods(ctx, spec.Target)
 	if err != nil {
@@ -127,29 +213,29 @@ func (e *Executor) executeStatus(ctx context.Context, spec StatusSpec) (bool, st
 	var messages []string
 
 	for _, pod := range pods {
-		for _, condition := range spec.Conditions {
+		for _, check := range spec.Checks {
 			passed := false
 			conditionFound := false
 			for _, podCond := range pod.Status.Conditions {
-				if string(podCond.Type) == condition.Type {
+				if string(podCond.Type) == check.Type {
 					conditionFound = true
-					passed = string(podCond.Status) == condition.Status
+					passed = podCond.Status == check.Status
 					break
 				}
 			}
 			if !conditionFound {
-				logger.Debug("Pod %s: condition type %s not found (available: %v)", pod.Name, condition.Type, getPodConditionTypes(&pod))
+				logger.Debug("Pod %s: condition type %s not found (available: %v)", pod.Name, check.Type, getPodConditionTypes(&pod))
 				allPassed = false
-				messages = append(messages, fmt.Sprintf("Pod %s: condition %s not found", pod.Name, condition.Type))
+				messages = append(messages, fmt.Sprintf("Pod %s: condition %s not found", pod.Name, check.Type))
 			} else if !passed {
 				allPassed = false
-				messages = append(messages, fmt.Sprintf("Pod %s: condition %s is not %s", pod.Name, condition.Type, condition.Status))
+				messages = append(messages, fmt.Sprintf("Pod %s: condition %s is not %s", pod.Name, check.Type, check.Status))
 			}
 		}
 	}
 
 	if allPassed {
-		return true, fmt.Sprintf(errAllConditionsMet, len(pods)), nil
+		return true, fmt.Sprintf(msgAllConditionsMet, len(pods)), nil
 	}
 	return false, strings.Join(messages, "; "), nil
 }
@@ -210,7 +296,7 @@ func (e *Executor) executeLog(ctx context.Context, spec LogSpec) (bool, string, 
 	}
 
 	if len(missingStrings) == 0 {
-		return true, errFoundAllExpectedStrings, nil
+		return true, msgFoundAllExpectedStrings, nil
 	}
 
 	// Include log errors in the failure message if present
@@ -268,69 +354,9 @@ func (e *Executor) executeEvent(ctx context.Context, spec EventSpec) (bool, stri
 	}
 
 	if len(forbiddenFound) == 0 {
-		return true, errNoForbiddenEvents, nil
+		return true, msgNoForbiddenEvents, nil
 	}
 	return false, fmt.Sprintf("Forbidden events detected: %v", forbiddenFound), nil
-}
-
-// executeMetrics checks resource metrics/status fields
-func (e *Executor) executeMetrics(ctx context.Context, spec MetricsSpec) (bool, string, error) {
-	logger.Debug("Executing metrics validation for %s", spec.Target.Kind)
-
-	// Get the resource
-	gvr, err := getGVRForKind(spec.Target.Kind)
-	if err != nil {
-		return false, "", err
-	}
-
-	var obj *unstructured.Unstructured
-
-	switch {
-	case spec.Target.Name != "":
-		obj, err = e.dynamicClient.Resource(gvr).Namespace(e.namespace).Get(ctx, spec.Target.Name, metav1.GetOptions{})
-	case len(spec.Target.LabelSelector) > 0:
-		list, listErr := e.dynamicClient.Resource(gvr).Namespace(e.namespace).List(ctx, metav1.ListOptions{
-			LabelSelector: labels.SelectorFromSet(spec.Target.LabelSelector).String(),
-		})
-		if listErr != nil {
-			return false, "", listErr
-		}
-		if len(list.Items) == 0 {
-			return false, errNoMatchingResources, nil
-		}
-		obj = &list.Items[0]
-		err = nil
-	default:
-		return false, errNoTargetSpecified, nil
-	}
-
-	if err != nil {
-		return false, "", fmt.Errorf("failed to get resource: %w", err)
-	}
-
-	allPassed := true
-	var messages []string
-
-	for _, check := range spec.Checks {
-		// Parse field path (e.g., "status.readyReplicas")
-		value, found, err := getNestedInt64(obj.Object, strings.Split(check.Field, ".")...)
-		if err != nil || !found {
-			allPassed = false
-			messages = append(messages, fmt.Sprintf("Field %s not found or invalid", check.Field))
-			continue
-		}
-
-		passed := compareValues(value, check.Operator, check.Value)
-		if !passed {
-			allPassed = false
-			messages = append(messages, fmt.Sprintf("%s: got %d, expected %s %d", check.Field, value, check.Operator, check.Value))
-		}
-	}
-
-	if allPassed {
-		return true, errAllMetricsChecksPassed, nil
-	}
-	return false, strings.Join(messages, "; "), nil
 }
 
 // executeConnectivity tests network connectivity
@@ -382,7 +408,7 @@ func (e *Executor) executeConnectivity(ctx context.Context, spec ConnectivitySpe
 	}
 
 	if allPassed {
-		return true, errAllConnectivityPassed, nil
+		return true, msgAllConnectivityPassed, nil
 	}
 	return false, strings.Join(messages, "; "), nil
 }
@@ -612,4 +638,106 @@ func getPodConditionTypes(pod *corev1.Pod) []string {
 		types[i] = string(cond.Type)
 	}
 	return types
+}
+
+// compareTypedValues compares two values using the specified operator
+// Supports string, int64, float64, and bool types
+func compareTypedValues(actual interface{}, operator string, expected interface{}) (bool, error) {
+	// Handle nil values
+	if actual == nil {
+		return false, fmt.Errorf("actual value is nil")
+	}
+
+	// Type-specific comparison
+	switch actualVal := actual.(type) {
+	case string:
+		expectedStr, ok := expected.(string)
+		if !ok {
+			return false, fmt.Errorf("type mismatch: actual is string, expected is %T", expected)
+		}
+		return compareStrings(actualVal, operator, expectedStr)
+
+	case bool:
+		expectedBool, ok := expected.(bool)
+		if !ok {
+			return false, fmt.Errorf("type mismatch: actual is bool, expected is %T", expected)
+		}
+		return compareBools(actualVal, operator, expectedBool)
+
+	case int64:
+		return compareNumeric(float64(actualVal), operator, expected)
+	case int32:
+		return compareNumeric(float64(actualVal), operator, expected)
+	case int:
+		return compareNumeric(float64(actualVal), operator, expected)
+	case float64:
+		return compareNumeric(actualVal, operator, expected)
+
+	default:
+		return false, fmt.Errorf("unsupported type: %T", actual)
+	}
+}
+
+// compareStrings compares two strings using the specified operator
+func compareStrings(actual, operator, expected string) (bool, error) {
+	switch operator {
+	case "==", "=":
+		return actual == expected, nil
+	case "!=":
+		return actual != expected, nil
+	default:
+		return false, fmt.Errorf("operator %s not supported for strings (use == or !=)", operator)
+	}
+}
+
+// compareBools compares two booleans using the specified operator
+func compareBools(actual bool, operator string, expected bool) (bool, error) {
+	switch operator {
+	case "==", "=":
+		return actual == expected, nil
+	case "!=":
+		return actual != expected, nil
+	default:
+		return false, fmt.Errorf("operator %s not supported for booleans (use == or !=)", operator)
+	}
+}
+
+// compareNumeric compares numeric values using the specified operator.
+// Handles int/float coercion by converting all numeric types to float64.
+//
+// Note: Converting large int64 values to float64 may lose precision for values
+// greater than 2^53 (9,007,199,254,740,992). For typical Kubernetes use cases
+// like replica counts, restart counts, and resource metrics, this is not an issue.
+func compareNumeric(actual float64, operator string, expected interface{}) (bool, error) {
+	var expectedFloat float64
+
+	switch v := expected.(type) {
+	case int:
+		expectedFloat = float64(v)
+	case int32:
+		expectedFloat = float64(v)
+	case int64:
+		expectedFloat = float64(v)
+	case float64:
+		expectedFloat = v
+	default:
+		return false, fmt.Errorf("expected value must be numeric, got %T", expected)
+	}
+
+	switch operator {
+	case "==", "=":
+		return actual == expectedFloat, nil
+	case "!=":
+		return actual != expectedFloat, nil
+	case ">":
+		return actual > expectedFloat, nil
+	case "<":
+		return actual < expectedFloat, nil
+	case ">=":
+		return actual >= expectedFloat, nil
+	case "<=":
+		return actual <= expectedFloat, nil
+	default:
+		return false, fmt.Errorf("unknown operator: %s", operator)
+	}
 }

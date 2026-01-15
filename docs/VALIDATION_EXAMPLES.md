@@ -6,10 +6,15 @@ This document provides comprehensive examples of all validation types supported 
 
 1. [Condition Validation](#condition-validation)
 2. [Status Validation](#status-validation)
-3. [Log Validation](#log-validation)
-4. [Event Validation](#event-validation)
-5. [Connectivity Validation](#connectivity-validation)
-6. [Complete Challenge Example](#complete-challenge-example)
+3. [Advanced Field Path Syntax](#advanced-field-path-syntax)
+4. [Log Validation](#log-validation)
+5. [Event Validation](#event-validation)
+6. [Connectivity Validation](#connectivity-validation)
+7. [Complete Challenge Example](#complete-challenge-example)
+8. [Metrics Validation (REMOVED)](#metrics-validation-removed)
+9. [Best Practices](#best-practices)
+10. [Troubleshooting](#troubleshooting)
+11. [Reference](#reference)
 
 ---
 
@@ -215,6 +220,167 @@ validations:
 ```
 
 **Supported value types**: string, integer, boolean, float
+
+---
+
+## Advanced Field Path Syntax
+
+The `status` validation type supports advanced field path syntax for accessing nested fields, arrays, and filtering.
+
+### Simple Field Access
+
+Access direct fields on the status object:
+
+```yaml
+checks:
+  - field: phase
+    operator: "=="
+    value: "Running"
+  - field: readyReplicas
+    operator: ">="
+    value: 3
+```
+
+**Note**: Field paths are relative to `status` — no prefix needed. Internally, the system automatically prepends `status.` to your field path.
+
+---
+
+### Nested Field Access
+
+Access fields within nested objects using dot notation:
+
+```yaml
+checks:
+  - field: loadBalancer.ingress[0].hostname
+    operator: "!="
+    value: ""
+```
+
+---
+
+### Array Index Access
+
+Access specific array elements using `[index]` notation:
+
+```yaml
+# Access first container's restart count
+checks:
+  - field: containerStatuses[0].restartCount
+    operator: "<"
+    value: 5
+
+# Access second container's ready state
+  - field: containerStatuses[1].ready
+    operator: "=="
+    value: true
+```
+
+**Bounds checking**: The system validates array bounds at runtime and returns a clear error if the index is out of range.
+
+---
+
+### Array Filtering
+
+Filter arrays by field value using `[field=value]` notation:
+
+```yaml
+# Find condition by type and check its status
+checks:
+  - field: conditions[type=Ready].status
+    operator: "=="
+    value: "True"
+
+# Check Available condition
+  - field: conditions[type=Available].status
+    operator: "=="
+    value: "True"
+
+# Check Progressing condition reason
+  - field: conditions[type=Progressing].reason
+    operator: "=="
+    value: "NewReplicaSetAvailable"
+```
+
+**When to use**: Array filtering is useful when the array order is not guaranteed, which is common for Kubernetes conditions.
+
+---
+
+### Complex Path Examples
+
+Combining multiple syntax features:
+
+```yaml
+validations:
+  - key: complex-check
+    title: "Complex Status Check"
+    type: status
+    spec:
+      target:
+        kind: Pod
+        name: my-pod
+      checks:
+        # First container must be ready
+        - field: containerStatuses[0].ready
+          operator: "=="
+          value: true
+
+        # Ready condition must be True
+        - field: conditions[type=Ready].status
+          operator: "=="
+          value: "True"
+
+        # No restarts on first container
+        - field: containerStatuses[0].restartCount
+          operator: "=="
+          value: 0
+
+        # Pod must be in Running phase
+        - field: phase
+          operator: "=="
+          value: "Running"
+```
+
+---
+
+### Supported Value Types
+
+| Type | YAML Example | Operators |
+|------|--------------|-----------|
+| String | `value: "Running"` | `==`, `!=` |
+| Integer | `value: 3` | `==`, `!=`, `>`, `<`, `>=`, `<=` |
+| Boolean | `value: true` | `==`, `!=` |
+| Float | `value: 0.95` | `==`, `!=`, `>`, `<`, `>=`, `<=` |
+
+**Type coercion**: Integer and float values are coerced for comparison (e.g., `3` equals `3.0`).
+
+---
+
+### Available Operators
+
+| Operator | Description | Supported Types |
+|----------|-------------|-----------------|
+| `==` | Equal | All types |
+| `!=` | Not equal | All types |
+| `>` | Greater than | Integer, Float |
+| `<` | Less than | Integer, Float |
+| `>=` | Greater than or equal | Integer, Float |
+| `<=` | Less than or equal | Integer, Float |
+
+---
+
+### Field Validation Errors
+
+Field paths are validated at parse time using Go reflection. If a field doesn't exist, you'll get a helpful error message:
+
+```
+Error: check 0: field "readyReplica" not found in DeploymentStatus
+  Available fields: availableReplicas, collisionCount, conditions, observedGeneration, readyReplicas, replicas, unavailableReplicas, updatedReplicas
+```
+
+**Common mistakes**:
+- Typo in field name: `readyReplica` instead of `readyReplicas`
+- Wrong case: `ReadyReplicas` instead of `readyReplicas`
+- Including `status.` prefix: `status.readyReplicas` instead of `readyReplicas`
 
 ---
 
@@ -689,6 +855,81 @@ objectives:
         - CrashLoopBackOff
       sinceSeconds: 600
 ```
+
+---
+
+## Metrics Validation (REMOVED)
+
+**Breaking Change**: The `metrics` validation type has been removed in v2.0.0.
+
+### Why Was It Removed?
+
+The `metrics` type was redundant with the enhanced `status` type:
+- Both validated status fields with operators
+- The `status` type now supports all the same functionality
+- Removing `metrics` simplifies the codebase and reduces confusion
+
+### Migration Guide
+
+Migrate from `metrics` to `status` by:
+1. Change `type: metrics` to `type: status`
+2. **Remove** the `status.` prefix from field paths
+3. Keep `checks` array unchanged (same structure)
+
+**Before (v1.x):**
+
+```yaml
+type: metrics
+spec:
+  target:
+    kind: Deployment
+    name: web-app
+  checks:
+    - field: status.readyReplicas
+      operator: ">="
+      value: 3
+    - field: status.availableReplicas
+      operator: "=="
+      value: 3
+```
+
+**After (v2.0+):**
+
+```yaml
+type: status
+spec:
+  target:
+    kind: Deployment
+    name: web-app
+  checks:
+    - field: readyReplicas      # No "status." prefix!
+      operator: ">="
+      value: 3
+    - field: availableReplicas  # No "status." prefix!
+      operator: "=="
+      value: 3
+```
+
+### Migration Checklist
+
+- [ ] Find all `type: metrics` in your challenge.yaml files
+- [ ] Replace `type: metrics` with `type: status`
+- [ ] Remove `status.` prefix from all field paths
+- [ ] Test your validations with `kubeasy challenge submit`
+
+### Automated Migration
+
+You can use this sed command to help migrate:
+
+```bash
+# Replace type: metrics with type: status
+sed -i 's/type: metrics/type: status/g' challenge.yaml
+
+# Remove status. prefix from field paths (manual review recommended)
+sed -i 's/field: status\./field: /g' challenge.yaml
+```
+
+**Note**: Always review changes manually after automated migration.
 
 ---
 

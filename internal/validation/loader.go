@@ -153,6 +153,18 @@ func parseSpec(v *Validation) error {
 			if !containsString(validOperators, check.Operator) {
 				return fmt.Errorf("check %d: invalid operator %s (valid: %v)", i, check.Operator, validOperators)
 			}
+			// Validate field path exists in Kind's Status using reflection.
+			// Only validate for supported kinds (skip for custom resources).
+			// Note: This validates that the field EXISTS in the Go type definition,
+			// but some fields are conditionally populated at runtime (e.g., containerStatuses
+			// only exists after containers start). Such fields pass parse-time validation
+			// but may still fail at runtime if the resource isn't in the expected state.
+			// See docs/VALIDATION_EXAMPLES.md "Troubleshooting" section for details.
+			if IsKindSupported(spec.Target.Kind) {
+				if err := ValidateFieldPath(spec.Target.Kind, check.Field); err != nil {
+					return fmt.Errorf("check %d (field %q): %w", i, check.Field, err)
+				}
+			}
 		}
 		v.Spec = spec
 

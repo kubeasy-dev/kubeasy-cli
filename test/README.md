@@ -11,9 +11,11 @@ test/
 ├── helpers/                     # Test helpers and utilities
 │   └── envtest.go              # EnvTest setup and K8s helpers
 └── integration/                 # Integration tests
-    ├── status_validation_test.go
+    ├── argocd_install_test.go
+    ├── connectivity_validation_test.go
     ├── event_validation_test.go
-    └── metrics_validation_test.go
+    ├── log_validation_test.go
+    └── status_validation_test.go
 ```
 
 ## Prerequisites

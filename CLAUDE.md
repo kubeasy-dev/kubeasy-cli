@@ -105,7 +105,7 @@ go run main.go --debug [command]
   - `login.go` - Stores API key in system keyring (uses `zalando/go-keyring`)
   - `challenge` (parent command in `challenge.go`):
     - `start.go` - Deploys challenge via ArgoCD, creates namespace, tracks progress
-    - `submit.go` - Validates solutions by fetching all 6 validation CRD types and submitting results
+    - `submit.go` - Validates solutions by loading validation specs and submitting results
     - `reset.go` - Deletes resources and resets progress in backend
     - `clean.go` - Removes challenge resources without resetting backend
     - `get.go` - Displays challenge details
@@ -142,12 +142,12 @@ go run main.go --debug [command]
   - `NewExecutor(clientset, dynamicClient, restConfig, namespace)` - Creates executor
   - `ExecuteAll(ctx, validations)` - Runs all validations sequentially
   - `Execute(ctx, validation)` - Routes to type-specific executors
-  - Type-specific methods: `executeStatus`, `executeLog`, `executeEvent`, `executeMetrics`, `executeConnectivity`
+  - Type-specific methods: `executeStatus`, `executeCondition`, `executeLog`, `executeEvent`, `executeConnectivity`
 
 - `types.go` - Type definitions for validation configs
   - `ValidationConfig` - Top-level config with validations array
   - `Validation` - Single validation with key, type, and spec
-  - Spec types: `StatusSpec`, `LogSpec`, `EventSpec`, `MetricsSpec`, `ConnectivitySpec`
+  - Spec types: `StatusSpec`, `ConditionSpec`, `LogSpec`, `EventSpec`, `ConnectivitySpec`
   - `Result` - Validation result with key, passed flag, and message
 
 #### `internal/argocd/`
@@ -202,10 +202,10 @@ The CLI now uses a **self-contained validation executor** that loads validation 
 **For complete details, see [docs/VALIDATION_EXAMPLES.md](docs/VALIDATION_EXAMPLES.md)**
 
 **Supported Validation Types** (5 types):
-1. **status** - Checks Pod/Deployment conditions (e.g., Pod Ready, Deployment Available)
-2. **log** - Searches container logs for expected strings
-3. **event** - Detects forbidden Kubernetes events (OOMKilled, Evicted, BackOff)
-4. **metrics** - Validates numeric fields (replicas, restartCount, etc.)
+1. **condition** - Shorthand for checking Kubernetes conditions (e.g., Pod Ready, Deployment Available)
+2. **status** - Validates arbitrary status fields with operators (replicas, restartCount, array access)
+3. **log** - Searches container logs for expected strings
+4. **event** - Detects forbidden Kubernetes events (OOMKilled, Evicted, BackOff)
 5. **connectivity** - Tests HTTP connectivity between pods
 
 **Key Components**:

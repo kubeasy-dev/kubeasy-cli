@@ -638,3 +638,103 @@ func TestConstants(t *testing.T) {
 	assert.Equal(t, 300, DefaultEventSinceSeconds)
 	assert.Equal(t, 5, DefaultConnectivityTimeoutSeconds)
 }
+
+// TestParse_StatusFieldValidation tests that invalid field paths are caught at parse time
+func TestParse_StatusFieldValidation(t *testing.T) {
+	t.Run("valid field path for supported kind", func(t *testing.T) {
+		yaml := `
+objectives:
+  - key: deployment-check
+    type: status
+    spec:
+      target:
+        kind: Deployment
+        name: web-app
+      checks:
+        - field: readyReplicas
+          operator: ">="
+          value: 3
+`
+		config, err := Parse([]byte(yaml))
+		require.NoError(t, err)
+		require.Len(t, config.Validations, 1)
+	})
+
+	t.Run("invalid field path for supported kind", func(t *testing.T) {
+		yaml := `
+objectives:
+  - key: deployment-check
+    type: status
+    spec:
+      target:
+        kind: Deployment
+        name: web-app
+      checks:
+        - field: nonExistentField
+          operator: "=="
+          value: 3
+`
+		_, err := Parse([]byte(yaml))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "check 0")
+		assert.Contains(t, err.Error(), "not found")
+	})
+
+	t.Run("array field path validation", func(t *testing.T) {
+		yaml := `
+objectives:
+  - key: pod-check
+    type: status
+    spec:
+      target:
+        kind: Pod
+        name: my-pod
+      checks:
+        - field: containerStatuses[0].restartCount
+          operator: "<"
+          value: 5
+`
+		config, err := Parse([]byte(yaml))
+		require.NoError(t, err)
+		require.Len(t, config.Validations, 1)
+	})
+
+	t.Run("array filter field path validation", func(t *testing.T) {
+		yaml := `
+objectives:
+  - key: pod-check
+    type: status
+    spec:
+      target:
+        kind: Pod
+        name: my-pod
+      checks:
+        - field: conditions[type=Ready].status
+          operator: "=="
+          value: "True"
+`
+		config, err := Parse([]byte(yaml))
+		require.NoError(t, err)
+		require.Len(t, config.Validations, 1)
+	})
+
+	t.Run("unsupported kind skips field validation", func(t *testing.T) {
+		yaml := `
+objectives:
+  - key: custom-resource-check
+    type: status
+    spec:
+      target:
+        kind: CustomResource
+        name: my-resource
+      checks:
+        - field: anyFieldPath
+          operator: "=="
+          value: "some-value"
+`
+		// Should not error - unsupported kinds skip field validation
+		config, err := Parse([]byte(yaml))
+		require.NoError(t, err)
+		require.Len(t, config.Validations, 1)
+	})
+}

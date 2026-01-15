@@ -153,6 +153,13 @@ func parseSpec(v *Validation) error {
 			if !containsString(validOperators, check.Operator) {
 				return fmt.Errorf("check %d: invalid operator %s (valid: %v)", i, check.Operator, validOperators)
 			}
+			// Validate field path exists in Kind's Status using reflection
+			// Only validate for supported kinds (skip for custom resources)
+			if IsKindSupported(spec.Target.Kind) {
+				if err := ValidateFieldPath(spec.Target.Kind, check.Field); err != nil {
+					return fmt.Errorf("check %d: %w", i, err)
+				}
+			}
 		}
 		v.Spec = spec
 

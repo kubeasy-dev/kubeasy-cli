@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"os"
 
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/ui"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/ui"
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 )

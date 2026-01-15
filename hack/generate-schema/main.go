@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/hypersequent/zen"
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/validation"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/validation"
 )
 
 func main() {
@@ -25,7 +25,7 @@ func main() {
 	// Ne pas ajouter Validation car il a Spec/RawSpec avec interface{}
 
 	output := "// ⚠️ AUTO-GENERATED - DO NOT EDIT\n"
-	output += "// Source: github.com/kubeasy-dev/kubeasy-cli/pkg/validation\n"
+	output += "// Source: github.com/kubeasy-dev/kubeasy-cli/internal/validation\n"
 	output += "// Run: go run hack/generate-schema/main.go > path/to/challengeObjectives.ts\n\n"
 	output += "import { z } from \"zod\";\n\n"
 

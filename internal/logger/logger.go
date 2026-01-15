@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
 	"k8s.io/klog/v2"
 )
 

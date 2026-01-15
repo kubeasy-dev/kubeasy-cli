@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/api"
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/keystore"
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/logger"
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/ui"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/api"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/keystore"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/ui"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )

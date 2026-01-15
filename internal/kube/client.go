@@ -10,8 +10,8 @@ import (
 
 	"k8s.io/client-go/rest"
 
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/logger"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

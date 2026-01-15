@@ -6,11 +6,11 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/api"
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/argocd"
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/kube"
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/ui"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/api"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/argocd"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/kube"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/ui"
 )
 
 // validateChallengeSlug validates that a challenge slug has the correct format

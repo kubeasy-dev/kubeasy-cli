@@ -12,8 +12,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/kube"
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/logger"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/kube"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 )
 
 const (

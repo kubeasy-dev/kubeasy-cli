@@ -1,0 +1,60 @@
+# Codecov configuration for kubeasy-cli
+# https://docs.codecov.com/docs/codecov-yaml
+
+coverage:
+  precision: 2
+  round: down
+  range: "60...100"
+
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 5%
+    patch:
+      default:
+        target: 80%
+
+ignore:
+  # Entry point - no logic to test
+  - "main.go"
+
+  # CLI commands (Cobra setup, typically integration-tested)
+  - "cmd/**/*"
+
+  # Test files and helpers
+  - "test/**/*"
+  - "**/*_test.go"
+
+  # Build/development scripts
+  - "hack/**/*"
+
+  # UI utilities (terminal output, hard to unit test)
+  - "internal/ui/**/*"
+
+  # Logger utilities (infrastructure code)
+  - "internal/logger/**/*"
+
+  # Pure type definitions (no logic)
+  - "internal/api/types.go"
+  - "internal/validation/types.go"
+  - "internal/argocd/const.go"
+
+  # Platform-specific files (only testable on their respective OS)
+  - "internal/keystore/keystore_windows.go"
+  - "internal/keystore/keystore_unix.go"
+
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: true
+
+flags:
+  unit:
+    paths:
+      - "internal/"
+    carryforward: true
+  integration:
+    paths:
+      - "test/integration/"
+    carryforward: true

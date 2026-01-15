@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/ui"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/ui"
 	"github.com/spf13/cobra"
 )
 

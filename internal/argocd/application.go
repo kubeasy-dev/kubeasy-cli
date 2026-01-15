@@ -9,8 +9,8 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/logger"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"

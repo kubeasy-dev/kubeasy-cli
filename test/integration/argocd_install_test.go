@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/argocd"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/argocd"
 	"github.com/kubeasy-dev/kubeasy-cli/test/helpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

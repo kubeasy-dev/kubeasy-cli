@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/logger"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 	"github.com/spf13/cobra"
 )
 

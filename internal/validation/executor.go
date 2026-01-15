@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/logger"
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/validation/fieldpath"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/validation/fieldpath"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"

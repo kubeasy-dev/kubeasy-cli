@@ -15,10 +15,10 @@ vars:
     sh: go env GOPATH
   LDFLAGS: >-
     -s -w
-    -X 'github.com/kubeasy-dev/kubeasy-cli/pkg/constants.Version={{.VERSION}}'
-    -X 'github.com/kubeasy-dev/kubeasy-cli/pkg/constants.LogFilePath=/tmp/kubeasy-cli.log'
-    -X 'github.com/kubeasy-dev/kubeasy-cli/pkg/constants.WebsiteURL=https://kubeasy.dev'
-    -X 'github.com/kubeasy-dev/kubeasy-cli/pkg/constants.ExercicesRepoBranch=main'
+    -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.Version={{.VERSION}}'
+    -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.LogFilePath=/tmp/kubeasy-cli.log'
+    -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.WebsiteURL=https://kubeasy.dev'
+    -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.ExercicesRepoBranch=main'
 
 tasks:
   default:

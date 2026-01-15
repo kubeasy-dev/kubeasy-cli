@@ -32,8 +32,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/logger"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 	"github.com/zalando/go-keyring"
 )
 

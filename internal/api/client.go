@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/keystore"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/keystore"
 )
 
 // getAuthToken retrieves the API token from available storage

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/validation"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/validation"
 	"github.com/kubeasy-dev/kubeasy-cli/test/helpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

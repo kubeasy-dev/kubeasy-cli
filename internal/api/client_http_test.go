@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zalando/go-keyring"

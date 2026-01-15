@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kubeasy-dev/kubeasy-cli/pkg/constants"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
 	"github.com/spf13/cobra"
 )
 

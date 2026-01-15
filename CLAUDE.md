@@ -111,9 +111,9 @@ go run main.go --debug [command]
     - `get.go` - Displays challenge details
   - `common.go` - Shared helper functions for commands
 
-### Core Packages (pkg/)
+### Core Packages (internal/)
 
-#### `pkg/api/api.go`
+#### `internal/api/api.go`
 
 - Communicates with backend API (Next.js + tRPC)
 - Authentication via JWT tokens stored in keyring
@@ -128,7 +128,7 @@ go run main.go --debug [command]
     - Sends structured payload: `{results: [{objectiveKey, passed, message}, ...]}`
   - `GetProfile()` - Fetches user profile information
 
-#### `pkg/validation/`
+#### `internal/validation/`
 
 **New in v1.4.0** - CLI-based validation system
 
@@ -150,7 +150,7 @@ go run main.go --debug [command]
   - Spec types: `StatusSpec`, `LogSpec`, `EventSpec`, `MetricsSpec`, `ConnectivitySpec`
   - `Result` - Validation result with key, passed flag, and message
 
-#### `pkg/argocd/`
+#### `internal/argocd/`
 
 - `install.go` - ArgoCD installation and health checking
   - `InstallArgoCD(options)` - Installs core components + App-of-Apps pattern
@@ -159,13 +159,13 @@ go run main.go --debug [command]
 - `application.go` - Challenge deployment management (creates ArgoCD Applications)
 - `const.go` - Constants (namespace, manifest URLs)
 
-#### `pkg/kube/`
+#### `internal/kube/`
 
 - `client.go` - Kubernetes client creation (uses `kind-kubeasy` context)
 - `config.go` - Kubeconfig manipulation (namespace switching, context selection)
 - `manifest.go` - Manifest fetching and applying (supports dynamic resource creation)
 
-#### `pkg/constants/const.go`
+#### `internal/constants/const.go`
 
 - Global constants:
   - `KubeasyClusterContext = "kind-kubeasy"`
@@ -173,7 +173,7 @@ go run main.go --debug [command]
   - `RestAPIUrl` - API endpoint
   - `LogFilePath` - Path for debug logs
 
-#### `pkg/logger/logger.go`
+#### `internal/logger/logger.go`
 
 - Custom logging utility with file output support
 - Levels: DEBUG, INFO, WARN, ERROR
@@ -209,9 +209,9 @@ The CLI now uses a **self-contained validation executor** that loads validation 
 5. **connectivity** - Tests HTTP connectivity between pods
 
 **Key Components**:
-- **pkg/validation/loader.go** - Loads validations from challenge.yaml (local or GitHub)
-- **pkg/validation/executor.go** - Executes validations directly against cluster
-- **pkg/validation/types.go** - Type definitions for all validation specs
+- **internal/validation/loader.go** - Loads validations from challenge.yaml (local or GitHub)
+- **internal/validation/executor.go** - Executes validations directly against cluster
+- **internal/validation/types.go** - Type definitions for all validation specs
 
 **Submit Flow**:
 1. `submit` command loads validations from `challenge.yaml`
@@ -236,7 +236,7 @@ The CLI now uses a **self-contained validation executor** that loads validation 
 
 ### ArgoCD Integration
 
-- **Embedded manifests**: ArgoCD and Kyverno application manifests are embedded at compile time via `pkg/argocd/embed.go`
+- **Embedded manifests**: ArgoCD and Kyverno application manifests are embedded at compile time via `internal/argocd/embed.go`
 - Manifest versions are managed by Renovate using custom regex managers (see `renovate.json`)
 - Challenge apps created in `argocd` namespace, deploy to challenge-specific namespaces
 - `cli-setup` repository is no longer used for manifest distribution (historical reference only)

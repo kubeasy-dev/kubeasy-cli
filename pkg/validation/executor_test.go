@@ -276,7 +276,7 @@ func TestExecuteEvent_NoForbiddenEvents(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, passed)
-	assert.Equal(t, errNoForbiddenEvents, msg)
+	assert.Equal(t, msgNoForbiddenEvents, msg)
 }
 
 func TestExecuteEvent_ForbiddenEventDetected(t *testing.T) {
@@ -360,7 +360,7 @@ func TestExecuteStatus_Success(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, passed)
-	assert.Equal(t, errAllStatusChecksPassed, msg)
+	assert.Equal(t, msgAllStatusChecksPassed, msg)
 }
 
 func TestExecuteStatus_CheckFailed(t *testing.T) {
@@ -1163,7 +1163,7 @@ func TestExecuteEvent_ByLabelSelector(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, passed)
-	assert.Equal(t, errNoForbiddenEvents, msg)
+	assert.Equal(t, msgNoForbiddenEvents, msg)
 }
 
 func TestExecuteEvent_MultipleForbiddenReasons(t *testing.T) {
@@ -1323,7 +1323,7 @@ func TestExecuteEvent_OldEventsIgnored(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, passed)
-	assert.Equal(t, errNoForbiddenEvents, msg)
+	assert.Equal(t, msgNoForbiddenEvents, msg)
 }
 
 func TestExecuteEvent_NoMatchingPods(t *testing.T) {
@@ -1385,7 +1385,7 @@ func TestExecuteEvent_NonPodEventsIgnored(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, passed)
-	assert.Equal(t, errNoForbiddenEvents, msg)
+	assert.Equal(t, msgNoForbiddenEvents, msg)
 }
 
 // =============================================================================
@@ -1744,7 +1744,7 @@ func TestExecuteStatus_MultipleChecks(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, passed)
-	assert.Equal(t, errAllStatusChecksPassed, msg)
+	assert.Equal(t, msgAllStatusChecksPassed, msg)
 }
 
 func TestExecuteStatus_MultipleChecksMixedResults(t *testing.T) {
@@ -1822,7 +1822,7 @@ func TestExecuteStatus_ByLabelSelector(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, passed)
-	assert.Equal(t, errAllStatusChecksPassed, msg)
+	assert.Equal(t, msgAllStatusChecksPassed, msg)
 }
 
 func TestExecuteStatus_FieldNotFound(t *testing.T) {
@@ -1893,7 +1893,7 @@ func TestExecuteStatus_StatefulSet(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, passed)
-	assert.Equal(t, errAllStatusChecksPassed, msg)
+	assert.Equal(t, msgAllStatusChecksPassed, msg)
 }
 
 func TestExecuteStatus_DaemonSet(t *testing.T) {
@@ -1930,7 +1930,7 @@ func TestExecuteStatus_DaemonSet(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, passed)
-	assert.Equal(t, errAllStatusChecksPassed, msg)
+	assert.Equal(t, msgAllStatusChecksPassed, msg)
 }
 
 func TestExecuteStatus_ResourceNotFound(t *testing.T) {
@@ -2544,7 +2544,7 @@ func TestExecuteStatus_MultipleChecksComprehensive(t *testing.T) {
 		passed, msg, err := executor.executeStatus(context.Background(), spec)
 		require.NoError(t, err)
 		assert.True(t, passed)
-		assert.Equal(t, errAllStatusChecksPassed, msg)
+		assert.Equal(t, msgAllStatusChecksPassed, msg)
 	})
 
 	t.Run("one check fails", func(t *testing.T) {

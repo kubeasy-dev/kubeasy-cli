@@ -24,17 +24,20 @@ import (
 )
 
 const (
-	errNoMatchingPods          = "No matching pods found"
-	errNoMatchingSourcePods    = "No matching source pods found"
-	errNoRunningSourcePods     = "No running source pods found"
-	errNoSourcePodSpecified    = "No source pod specified"
-	errNoMatchingResources     = "No matching resources found"
-	errNoTargetSpecified       = "No target name or labelSelector specified"
-	errAllStatusChecksPassed   = "All status checks passed"
-	errAllConnectivityPassed   = "All connectivity checks passed"
-	errAllConditionsMet        = "All %d pod(s) meet the required conditions"
-	errFoundAllExpectedStrings = "Found all expected strings in logs"
-	errNoForbiddenEvents       = "No forbidden events found"
+	// Error messages (validation failures or missing resources)
+	errNoMatchingPods       = "No matching pods found"
+	errNoMatchingSourcePods = "No matching source pods found"
+	errNoRunningSourcePods  = "No running source pods found"
+	errNoSourcePodSpecified = "No source pod specified"
+	errNoMatchingResources  = "No matching resources found"
+	errNoTargetSpecified    = "No target name or labelSelector specified"
+
+	// Success messages (validation passed)
+	msgAllStatusChecksPassed   = "All status checks passed"
+	msgAllConnectivityPassed   = "All connectivity checks passed"
+	msgAllConditionsMet        = "All %d pod(s) meet the required conditions"
+	msgFoundAllExpectedStrings = "Found all expected strings in logs"
+	msgNoForbiddenEvents       = "No forbidden events found"
 )
 
 // Executor executes validations against a Kubernetes cluster
@@ -184,7 +187,7 @@ func (e *Executor) executeStatus(ctx context.Context, spec StatusSpec) (bool, st
 	}
 
 	if allPassed {
-		return true, errAllStatusChecksPassed, nil
+		return true, msgAllStatusChecksPassed, nil
 	}
 	return false, strings.Join(messages, "; "), nil
 }
@@ -232,7 +235,7 @@ func (e *Executor) executeCondition(ctx context.Context, spec ConditionSpec) (bo
 	}
 
 	if allPassed {
-		return true, fmt.Sprintf(errAllConditionsMet, len(pods)), nil
+		return true, fmt.Sprintf(msgAllConditionsMet, len(pods)), nil
 	}
 	return false, strings.Join(messages, "; "), nil
 }
@@ -293,7 +296,7 @@ func (e *Executor) executeLog(ctx context.Context, spec LogSpec) (bool, string, 
 	}
 
 	if len(missingStrings) == 0 {
-		return true, errFoundAllExpectedStrings, nil
+		return true, msgFoundAllExpectedStrings, nil
 	}
 
 	// Include log errors in the failure message if present
@@ -351,7 +354,7 @@ func (e *Executor) executeEvent(ctx context.Context, spec EventSpec) (bool, stri
 	}
 
 	if len(forbiddenFound) == 0 {
-		return true, errNoForbiddenEvents, nil
+		return true, msgNoForbiddenEvents, nil
 	}
 	return false, fmt.Sprintf("Forbidden events detected: %v", forbiddenFound), nil
 }
@@ -405,7 +408,7 @@ func (e *Executor) executeConnectivity(ctx context.Context, spec ConnectivitySpe
 	}
 
 	if allPassed {
-		return true, errAllConnectivityPassed, nil
+		return true, msgAllConnectivityPassed, nil
 	}
 	return false, strings.Join(messages, "; "), nil
 }

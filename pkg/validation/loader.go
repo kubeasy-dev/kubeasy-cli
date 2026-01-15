@@ -15,13 +15,19 @@ const (
 	// ChallengesRepoBaseURL is the base URL for the challenges repository
 	ChallengesRepoBaseURL = "https://raw.githubusercontent.com/kubeasy-dev/challenges/main"
 
-	// DefaultLogSinceSeconds is the default time window for log searches (5 minutes)
+	// DefaultLogSinceSeconds is the default time window for log searches (5 minutes).
+	// 300 seconds balances capturing recent activity while avoiding false positives
+	// from old logs. Most K8s applications complete startup within this window.
 	DefaultLogSinceSeconds = 300
 
-	// DefaultEventSinceSeconds is the default time window for event searches (5 minutes)
+	// DefaultEventSinceSeconds is the default time window for event searches (5 minutes).
+	// Matches log window for consistency. Events older than this are typically
+	// resolved or no longer relevant to the current validation attempt.
 	DefaultEventSinceSeconds = 300
 
-	// DefaultConnectivityTimeoutSeconds is the default timeout for connectivity checks
+	// DefaultConnectivityTimeoutSeconds is the default timeout for connectivity checks.
+	// 5 seconds is sufficient for healthy in-cluster HTTP requests while detecting
+	// network issues without making validations excessively slow.
 	DefaultConnectivityTimeoutSeconds = 5
 )
 

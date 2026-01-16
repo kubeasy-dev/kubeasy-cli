@@ -58,9 +58,43 @@ jobs:
           git config --local user.name "${{ steps.app-token.outputs.app-slug }}[bot]"
           git config --local user.email "${{ steps.get-user-id.outputs.user-id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
 
-      - name: Commit and push
+      - name: Create or update PR with schema update
         working-directory: website
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
+          BRANCH_NAME="chore/update-schema-from-cli"
+
+          # Fetch all branches
+          git fetch origin
+
+          # Check if branch exists remotely
+          if git ls-remote --exit-code --heads origin "$BRANCH_NAME" >/dev/null 2>&1; then
+            # Branch exists, checkout and update
+            git checkout "$BRANCH_NAME"
+            git pull origin "$BRANCH_NAME"
+          else
+            # Create new branch
+            git checkout -b "$BRANCH_NAME"
+          fi
+
+          # Add and commit changes
           git add schemas/challengeObjectives.ts
-          git diff --staged --quiet || git commit -m "chore: update challengeObjectives.ts from CLI"
-          git push
+
+          # Only proceed if there are changes
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          git commit -m "chore: update challengeObjectives.ts from CLI"
+
+          # Push branch (force push to update if exists)
+          git push origin "$BRANCH_NAME" --force
+
+          # Create PR if it doesn't exist (will fail silently if PR already exists)
+          gh pr create \
+            --title "chore: update challengeObjectives.ts from CLI" \
+            --body "To be merged at next kubeasy-cli release" \
+            --base main \
+            --head "$BRANCH_NAME" || echo "PR already exists, updated with new commits"

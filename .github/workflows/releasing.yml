@@ -110,3 +110,48 @@ jobs:
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  merge-schema-pr:
+    name: Merge schema update PR
+    needs: [publish-npm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Generate GitHub App token
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
+        id: app-token
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: website
+
+      - name: Merge schema update PR
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          BRANCH_NAME="chore/update-schema-from-cli"
+
+          # Check if PR exists
+          PR_NUMBER=$(gh pr list \
+            --repo kubeasy-dev/website \
+            --head "$BRANCH_NAME" \
+            --base main \
+            --json number \
+            --jq '.[0].number')
+
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No PR found for branch $BRANCH_NAME, skipping merge"
+            exit 0
+          fi
+
+          echo "Found PR #$PR_NUMBER, merging..."
+
+          # Merge the PR
+          gh pr merge "$PR_NUMBER" \
+            --repo kubeasy-dev/website \
+            --squash \
+            --delete-branch \
+            --subject "chore: update challengeObjectives.ts from CLI" \
+            --body "Auto-merged at kubeasy-cli release ${{ github.ref_name }}"

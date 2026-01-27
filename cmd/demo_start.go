@@ -172,58 +172,7 @@ func runDemoStart(cmd *cobra.Command, args []string) error {
 	// 7. Notify backend that demo started (triggers realtime update on frontend)
 	if err := api.SendDemoStart(demoToken); err != nil {
 		logger.Debug("Failed to notify demo start: %v", err)
-		// Not critical, continue anyway
 	}
 
-	// 8. Display instructions
-	ui.Println()
-	ui.Section("Demo Challenge: Create an nginx Pod")
-	ui.Println()
-	ui.Info("Your mission: Create a running nginx pod in the demo namespace")
-	ui.Println()
-	ui.KeyValue("Namespace", demo.DemoNamespace)
-	ui.KeyValue("Pod Name", demo.DemoPodName)
-	ui.KeyValue("Image", "nginx")
-	ui.Println()
-
-	ui.Section("Quick Start")
-	ui.Info("Run this command in another terminal:")
-	ui.Println()
-	fmt.Println("  kubectl run nginx --image=nginx -n demo")
-	ui.Println()
-
-	// 9. Watch for pod creation
-	ui.Info("Waiting for nginx pod to be ready...")
-	ui.Info("(Press Ctrl+C to exit and submit manually later)")
-	ui.Println()
-
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			ui.Println()
-			ui.Info("Exited. Run 'kubeasy demo submit' when ready.")
-			return nil
-		case <-ticker.C:
-			if demo.IsPodReady(ctx, clientset) {
-				ui.Println()
-				ui.Success("Pod nginx is running!")
-
-				// Notify backend
-				if err := api.SendDemoPodCreated(demoToken); err != nil {
-					logger.Debug("Failed to notify pod created: %v", err)
-				}
-
-				ui.Println()
-				ui.Section("Final Step")
-				ui.Info("Submit your solution:")
-				ui.Println()
-				fmt.Println("  kubeasy demo submit")
-				ui.Println()
-				return nil
-			}
-		}
-	}
+	return nil
 }

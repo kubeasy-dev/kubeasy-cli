@@ -54,25 +54,6 @@ func ValidateDemo(ctx context.Context, clientset kubernetes.Interface) []Objecti
 	return results
 }
 
-// IsPodReady checks if the nginx pod exists and is ready
-func IsPodReady(ctx context.Context, clientset kubernetes.Interface) bool {
-	pod, err := clientset.CoreV1().Pods(DemoNamespace).Get(ctx, DemoPodName, metav1.GetOptions{})
-	if err != nil {
-		return false
-	}
-
-	if pod.Status.Phase != corev1.PodRunning {
-		return false
-	}
-
-	for _, cond := range pod.Status.Conditions {
-		if cond.Type == corev1.PodReady && cond.Status == corev1.ConditionTrue {
-			return true
-		}
-	}
-	return false
-}
-
 // validateNginxPod checks if the nginx pod is running in the demo namespace
 func validateNginxPod(ctx context.Context, clientset kubernetes.Interface) ObjectiveResult {
 	result := ObjectiveResult{

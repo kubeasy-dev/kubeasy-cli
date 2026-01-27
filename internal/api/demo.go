@@ -58,18 +58,7 @@ func VerifyDemoToken(token string) (*DemoSessionResponse, error) {
 // SendDemoStart notifies the backend that demo has started
 // This triggers a realtime event for the frontend to update
 func SendDemoStart(token string) error {
-	return sendDemoEvent(token, "start")
-}
-
-// SendDemoPodCreated notifies the backend that the demo pod was created
-// This triggers a realtime event for the frontend to update
-func SendDemoPodCreated(token string) error {
-	return sendDemoEvent(token, "pod-created")
-}
-
-// sendDemoEvent sends a demo lifecycle event to the backend
-func sendDemoEvent(token string, event string) error {
-	url := fmt.Sprintf("%s/api/demo/%s", constants.WebsiteURL, event)
+	url := fmt.Sprintf("%s/api/demo/start", constants.WebsiteURL)
 
 	payload := map[string]string{"token": token}
 	body, err := json.Marshal(payload)
@@ -79,7 +68,7 @@ func sendDemoEvent(token string, event string) error {
 
 	resp, err := http.Post(url, "application/json", bytes.NewReader(body)) //nolint:gosec // URL is constructed from trusted constant
 	if err != nil {
-		return fmt.Errorf("failed to notify %s: %w", event, err)
+		return fmt.Errorf("failed to start demo: %w", err)
 	}
 	defer resp.Body.Close()
 

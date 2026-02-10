@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/api"
-	"github.com/kubeasy-dev/kubeasy-cli/internal/argocd"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/deployer"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/kube"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/ui"
 	"github.com/spf13/cobra"
@@ -78,13 +78,13 @@ var startChallengeCmd = &cobra.Command{
 			return fmt.Errorf("failed to create namespace: %w", err)
 		}
 
-		// Step 2: Deploy ArgoCD app
-		err = ui.WaitMessage("Deploying ArgoCD application", func() error {
-			return argocd.CreateOrUpdateChallengeApplication(ctx, dynamicClient, challengeSlug)
+		// Step 2: Deploy challenge via OCI
+		err = ui.WaitMessage("Deploying challenge", func() error {
+			return deployer.DeployChallenge(ctx, staticClient, dynamicClient, challengeSlug)
 		})
 		if err != nil {
-			ui.Error("Failed to install ArgoCD application")
-			return fmt.Errorf("failed to install ArgoCD application: %w", err)
+			ui.Error("Failed to deploy challenge")
+			return fmt.Errorf("failed to deploy challenge: %w", err)
 		}
 
 		// Step 3: Configure context

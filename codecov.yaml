@@ -38,8 +38,6 @@ ignore:
   # Pure type definitions (no logic)
   - "internal/api/types.go"
   - "internal/validation/types.go"
-  - "internal/argocd/const.go"
-
   # Platform-specific files (only testable on their respective OS)
   - "internal/keystore/keystore_windows.go"
   - "internal/keystore/keystore_unix.go"

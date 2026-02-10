@@ -2,11 +2,10 @@ package cmd
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/api"
-	"github.com/kubeasy-dev/kubeasy-cli/internal/argocd"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/deployer"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/keystore"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/kube"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
@@ -35,7 +34,7 @@ func checkClusterExists() (bool, error) {
 var setupCmd = &cobra.Command{
 	Use:   "setup",
 	Short: "Setup",
-	Long:  "It will setup a local cluster for the Kubeasy challenges and install ArgoCD",
+	Long:  "It will setup a local cluster for the Kubeasy challenges and install infrastructure components",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ui.PrintLogo()
 		ui.Section("Kubeasy Environment Setup")
@@ -88,40 +87,21 @@ var setupCmd = &cobra.Command{
 			}
 		}
 
-		// Step 2: Install ArgoCD
-		isInstalled, err := argocd.IsArgoCDInstalled()
+		// Step 2: Install infrastructure (Kyverno + local-path-provisioner)
+		isReady, err := deployer.IsInfrastructureReady()
 		if err != nil {
-			ui.Error("Error checking ArgoCD installation status")
-			return fmt.Errorf("failed to check ArgoCD installation: %w", err)
+			ui.Error("Error checking infrastructure status")
+			return fmt.Errorf("failed to check infrastructure status: %w", err)
 		}
 
-		if isInstalled {
-			ui.Success("ArgoCD is already installed")
-			// Ensure default project and app-of-apps exist even if ArgoCD was already installed
-			err := ui.TimedSpinner("Ensuring ArgoCD resources", argocd.EnsureArgoCDResources)
-			if err != nil {
-				ui.Error("Error ensuring ArgoCD resources")
-				return fmt.Errorf("failed to ensure ArgoCD resources: %w", err)
-			}
+		if isReady {
+			ui.Success("Infrastructure is already installed")
 		} else {
-			err := ui.TimedSpinner("Installing ArgoCD", func() error {
-				options := argocd.DefaultInstallOptions()
-				return argocd.InstallArgoCD(options)
-			})
+			err := ui.TimedSpinner("Installing infrastructure (Kyverno + local-path-provisioner)", deployer.SetupInfrastructure)
 			if err != nil {
-				ui.Error("Error installing ArgoCD")
-				return fmt.Errorf("failed to install ArgoCD: %w", err)
+				ui.Error("Error installing infrastructure")
+				return fmt.Errorf("failed to install infrastructure: %w", err)
 			}
-		}
-
-		// Step 3: Wait for apps (kyverno, argocd, and local-path-provisioner are applied directly from embedded manifests)
-		apps := []string{"kyverno", "argocd", "local-path-provisioner"}
-		err = ui.TimedSpinner("Waiting for ArgoCD applications to be ready", func() error {
-			return argocd.WaitForArgoCDAppsReadyCore(apps, 8*time.Minute)
-		})
-		if err != nil {
-			ui.Error("Error waiting for ArgoCD apps")
-			return fmt.Errorf("failed to wait for ArgoCD apps: %w", err)
 		}
 
 		ui.Println()

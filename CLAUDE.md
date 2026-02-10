@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-`kubeasy-cli` is a command-line tool built with Go and Cobra that helps developers learn Kubernetes through practical challenges. It manages local Kind clusters, deploys challenges via ArgoCD, and validates solutions using a **CLI-based validation system** (as of v2.0.0).
+`kubeasy-cli` is a command-line tool built with Go and Cobra that helps developers learn Kubernetes through practical challenges. It manages local Kind clusters, deploys challenges via OCI artifacts, and validates solutions using a **CLI-based validation system** (as of v2.0.0).
 
 ## Documentation
 
@@ -101,10 +101,10 @@ go run main.go --debug [command]
 - **Entry point**: `main.go` → `cmd.Execute()`
 - **Root command**: `cmd/root.go` - Initializes logging, supports `--debug` flag
 - **Commands organized under `cmd/`**:
-  - `setup.go` - Creates Kind cluster "kubeasy" and installs ArgoCD + dependencies
+  - `setup.go` - Creates Kind cluster "kubeasy" and installs infrastructure (Kyverno + local-path-provisioner)
   - `login.go` - Stores API key in system keyring (uses `zalando/go-keyring`)
   - `challenge` (parent command in `challenge.go`):
-    - `start.go` - Deploys challenge via ArgoCD, creates namespace, tracks progress
+    - `start.go` - Deploys challenge via OCI artifact, creates namespace, tracks progress
     - `submit.go` - Validates solutions by loading validation specs and submitting results
     - `reset.go` - Deletes resources and resets progress in backend
     - `clean.go` - Removes challenge resources without resetting backend
@@ -128,6 +128,19 @@ go run main.go --debug [command]
     - Sends structured payload: `{results: [{objectiveKey, passed, message}, ...]}`
   - `GetProfile()` - Fetches user profile information
 
+#### `internal/deployer/`
+
+Handles direct deployment of infrastructure and challenges without ArgoCD.
+
+- `infrastructure.go` - Installs Kyverno and local-path-provisioner directly via HTTP manifests
+  - `SetupInfrastructure()` - Downloads and applies install manifests, waits for readiness
+  - `IsInfrastructureReady()` - Checks if all infrastructure deployments are running
+  - `IsInfrastructureReadyWithClient(ctx, clientset)` - Testable version with injected client
+- `challenge.go` - Deploys challenges via OCI artifacts from ghcr.io
+  - `DeployChallenge(ctx, clientset, dynamicClient, slug)` - Pulls OCI artifact, applies manifests, waits for ready
+- `cleanup.go` - Cleans up challenge resources
+  - `CleanupChallenge(ctx, clientset, slug)` - Deletes namespace and restores kubectl context
+
 #### `internal/validation/`
 
 **New in v1.4.0** - CLI-based validation system
@@ -150,15 +163,6 @@ go run main.go --debug [command]
   - Spec types: `StatusSpec`, `ConditionSpec`, `LogSpec`, `EventSpec`, `ConnectivitySpec`
   - `Result` - Validation result with key, passed flag, and message
 
-#### `internal/argocd/`
-
-- `install.go` - ArgoCD installation and health checking
-  - `InstallArgoCD(options)` - Installs core components + App-of-Apps pattern
-  - `WaitForArgoCDAppsReadyCore(appNames, timeout)` - Waits for apps to be Healthy/Synced
-  - `IsArgoCDInstalled()` - Checks if ArgoCD is already present
-- `application.go` - Challenge deployment management (creates ArgoCD Applications)
-- `const.go` - Constants (namespace, manifest URLs)
-
 #### `internal/kube/`
 
 - `client.go` - Kubernetes client creation (uses `kind-kubeasy` context)
@@ -172,6 +176,9 @@ go run main.go --debug [command]
   - `KeyringServiceName = "kubeasy-cli"`
   - `RestAPIUrl` - API endpoint
   - `LogFilePath` - Path for debug logs
+  - `ChallengesOCIRegistry` - OCI registry for challenge artifacts (ghcr.io)
+  - `KyvernoVersion` - Kyverno release version (Renovate-managed)
+  - `LocalPathProvisionerVersion` - local-path-provisioner version (Renovate-managed)
 
 #### `internal/logger/logger.go`
 
@@ -183,11 +190,11 @@ go run main.go --debug [command]
 
 #### Challenge Lifecycle
 
-1. **Setup**: `kubeasy setup` → Creates Kind cluster → Installs ArgoCD + Kyverno
-2. **Start**: `kubeasy challenge start <slug>` → Creates namespace → Deploys ArgoCD app → Tracks progress
+1. **Setup**: `kubeasy setup` → Creates Kind cluster → Installs Kyverno + local-path-provisioner
+2. **Start**: `kubeasy challenge start <slug>` → Creates namespace → Pulls OCI artifact → Applies manifests → Tracks progress
 3. **Work**: User modifies cluster resources manually
 4. **Submit**: `kubeasy challenge submit <slug>` → Loads validations from challenge.yaml → Executes checks → Sends results to API
-5. **Clean/Reset**: `kubeasy challenge clean/reset <slug>` → Deletes resources ± backend data
+5. **Clean/Reset**: `kubeasy challenge clean/reset <slug>` → Deletes namespace ± backend data
 
 #### Authentication Flow
 
@@ -234,16 +241,15 @@ The CLI now uses a **self-contained validation executor** that loads validation 
 - Namespace is set per-challenge in kubeconfig context
 - `kube.SetNamespaceForContext()` updates namespace without changing context
 
-### ArgoCD Integration
+### Infrastructure Deployment
 
-- **Embedded manifests**: ArgoCD and Kyverno application manifests are embedded at compile time via `internal/argocd/embed.go`
-- Manifest versions are managed by Renovate using custom regex managers (see `renovate.json`)
-- Challenge apps created in `argocd` namespace, deploy to challenge-specific namespaces
-- `cli-setup` repository is no longer used for manifest distribution (historical reference only)
+- **Direct deployment**: Kyverno and local-path-provisioner are installed by downloading official install manifests and applying via `kube.ApplyManifest()`
+- **Challenge deployment**: Challenges are distributed as OCI artifacts via `ghcr.io/kubeasy-dev/challenges/<slug>:latest` and pulled using `oras-go`
+- Version constants are managed by Renovate using custom regex managers (see `renovate.json`)
 
 ### Error Handling
 
-- Commands use `getChallengeOrExit(slug)` for consistent error handling
+- Commands use `getChallenge(slug)` for consistent error handling
 - API errors suggest running `kubeasy login` when authentication fails
 - Logging via `logger` package writes to file when `--debug` is enabled
 
@@ -266,6 +272,5 @@ The CLI now uses a **self-contained validation executor** that loads validation 
 ## Related Repositories
 
 - **challenges** - Repository containing all challenge definitions with validation specs
-- **cli-setup** - ArgoCD manifests for bootstrapping local environment
 - **website** - Next.js frontend for browsing challenges and tracking progress
 - **documentation** - Fumadocs documentation site (user guides, developer docs)

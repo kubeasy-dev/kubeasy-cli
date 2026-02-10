@@ -7,8 +7,7 @@ import (
 	"time"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/api"
-	"github.com/kubeasy-dev/kubeasy-cli/internal/argocd"
-	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/deployer"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/kube"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/ui"
 )
@@ -42,49 +41,29 @@ func getChallenge(slug string) (*api.ChallengeEntity, error) {
 	return challenge, nil
 }
 
-// deleteChallengeResources deletes ArgoCD Application and all subresources for a challenge
+// deleteChallengeResources deletes all resources for a challenge
 func deleteChallengeResources(ctx context.Context, challengeSlug string) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 
 	ui.Println()
 
-	// Step 1: Delete ArgoCD Application
-	dynamicClient, err := kube.GetDynamicClient()
-	if err != nil {
-		ui.Error("Failed to get Kubernetes dynamic client")
-		return fmt.Errorf("failed to get Kubernetes dynamic client: %w", err)
-	}
-
-	err = ui.TimedSpinner("Deleting ArgoCD application", func() error {
-		return argocd.DeleteChallengeApplication(ctx, dynamicClient, challengeSlug, argocd.ArgoCDNamespace)
-	})
-	if err != nil {
-		ui.Error("Failed to delete ArgoCD application")
-		return fmt.Errorf("failed to delete ArgoCD application: %w", err)
-	}
-
-	// Step 2: Delete namespace
+	// Get Kubernetes clientset
 	clientset, err := kube.GetKubernetesClient()
 	if err != nil {
 		ui.Error("Failed to get Kubernetes clientset")
 		return fmt.Errorf("failed to get Kubernetes clientset: %w", err)
 	}
 
-	err = ui.TimedSpinner("Deleting namespace", func() error {
-		return kube.DeleteNamespace(ctx, clientset, challengeSlug)
+	// Delete namespace and restore context
+	err = ui.TimedSpinner("Deleting challenge resources", func() error {
+		return deployer.CleanupChallenge(ctx, clientset, challengeSlug)
 	})
 	if err != nil {
-		ui.Error("Failed to delete namespace")
-		return fmt.Errorf("failed to delete namespace: %w", err)
+		ui.Error("Failed to delete challenge resources")
+		return fmt.Errorf("failed to delete challenge resources: %w", err)
 	}
 
-	// Step 3: Switch to default namespace
-	if err := kube.SetNamespaceForContext(constants.KubeasyClusterContext, "default"); err != nil {
-		ui.Error("Failed to switch to default namespace")
-		return fmt.Errorf("failed to switch to default namespace: %w", err)
-	}
-	ui.Success("Switched to default namespace")
-
+	ui.Success("Challenge resources deleted")
 	return nil
 }

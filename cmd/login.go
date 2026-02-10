@@ -71,6 +71,7 @@ After successful login, you will be able to use commands requiring authenticatio
 						ui.KeyValue("Profile", fullName)
 					}
 					ui.Success("Already logged in!")
+					api.TrackEvent("/track/login")
 					return nil
 				}
 			}
@@ -129,6 +130,7 @@ After successful login, you will be able to use commands requiring authenticatio
 		profile, err := api.GetProfile()
 		if err != nil {
 			ui.Warning("Logged in, but failed to fetch profile")
+			logger.Error("Failed to fetch profile after login: %v", err)
 		} else {
 			lastName := ""
 			if profile.LastName != nil {
@@ -143,6 +145,8 @@ After successful login, you will be able to use commands requiring authenticatio
 		ui.Println()
 		ui.Success("Login successful!")
 		ui.Info("You can now use Kubeasy commands")
+
+		api.TrackEvent("/track/login")
 
 		return nil
 	},

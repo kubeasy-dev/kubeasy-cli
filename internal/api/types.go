@@ -88,6 +88,19 @@ type ErrorResponse struct {
 	Details *string `json:"details,omitempty"`
 }
 
+// TrackRequest represents the request body for POST /api/cli/track/*
+type TrackRequest struct {
+	CLIVersion string `json:"cliVersion"`
+	OS         string `json:"os"`
+	Arch       string `json:"arch"`
+}
+
+// TrackResponse represents the response from POST /api/cli/track/*
+type TrackResponse struct {
+	Success   bool `json:"success"`
+	FirstTime bool `json:"firstTime"`
+}
+
 // Type aliases for backward compatibility with existing CLI code
 type UserProfile = UserResponse
 type ChallengeEntity = ChallengeResponse

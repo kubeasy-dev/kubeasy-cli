@@ -2,14 +2,17 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"runtime"
 	"time"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/keystore"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 )
 
 // getAuthToken retrieves the API token from available storage
@@ -267,6 +270,49 @@ func ResetChallenge(slug string) (*ChallengeResetResponse, error) {
 	}
 
 	return &result, nil
+}
+
+// TrackEvent sends a tracking event to the given path in a fire-and-forget manner.
+// Uses a short timeout to avoid blocking the CLI. Errors are logged at debug level.
+func TrackEvent(path string) {
+	token, err := getAuthToken()
+	if err != nil {
+		logger.Debug("Failed to get auth token for tracking: %v", err)
+		return
+	}
+
+	body := TrackRequest{
+		CLIVersion: constants.Version,
+		OS:         runtime.GOOS,
+		Arch:       runtime.GOARCH,
+	}
+	jsonData, err := json.Marshal(body)
+	if err != nil {
+		logger.Debug("Failed to marshal tracking request: %v", err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "POST", constants.RestAPIUrl+path, bytes.NewBuffer(jsonData))
+	if err != nil {
+		logger.Debug("Failed to create tracking request: %v", err)
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		logger.Debug("Failed to send tracking event to %s: %v", path, err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		logger.Debug("Tracking event to %s returned status %d", path, resp.StatusCode)
+	}
 }
 
 // ResetChallengeProgress is a wrapper for ResetChallenge for backward compatibility

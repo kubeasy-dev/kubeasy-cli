@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kubeasy-dev/kubeasy-cli/internal/api"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/argocd"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/keystore"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/kube"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/ui"
@@ -38,6 +40,13 @@ var setupCmd = &cobra.Command{
 		ui.PrintLogo()
 		ui.Section("Kubeasy Environment Setup")
 		ui.Println()
+
+		// Require authentication
+		if token, err := keystore.Get(); err != nil || token == "" {
+			ui.Error("You must be logged in to set up Kubeasy")
+			ui.Info("Run 'kubeasy login' first")
+			return nil
+		}
 
 		// Step 1: Check/Create cluster
 		exists, err := checkClusterExists()
@@ -118,6 +127,9 @@ var setupCmd = &cobra.Command{
 		ui.Println()
 		ui.Success("Kubeasy environment is ready!")
 		ui.Info("You can now start challenges with 'kubeasy challenge start <slug>'")
+
+		api.TrackEvent("/track/setup")
+
 		return nil
 	},
 }

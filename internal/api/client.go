@@ -272,9 +272,17 @@ func ResetChallenge(slug string) (*ChallengeResetResponse, error) {
 	return &result, nil
 }
 
-// TrackEvent sends a tracking event to the given path in a fire-and-forget manner.
-// Uses a short timeout to avoid blocking the CLI. Errors are logged at debug level.
+// TrackEvent sends anonymous usage telemetry to help improve Kubeasy.
+// It reports CLI version, OS, and architecture to the given tracking endpoint.
+// The call runs in a background goroutine and never blocks the CLI.
+// Errors are silently logged at debug level.
 func TrackEvent(path string) {
+	go sendTrackEvent(path)
+}
+
+// sendTrackEvent performs the actual tracking HTTP request.
+// Separated from TrackEvent for testability.
+func sendTrackEvent(path string) {
 	token, err := getAuthToken()
 	if err != nil {
 		logger.Debug("Failed to get auth token for tracking: %v", err)

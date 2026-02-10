@@ -95,12 +95,6 @@ type TrackRequest struct {
 	Arch       string `json:"arch"`
 }
 
-// TrackResponse represents the response from POST /api/cli/track/*
-type TrackResponse struct {
-	Success   bool `json:"success"`
-	FirstTime bool `json:"firstTime"`
-}
-
 // Type aliases for backward compatibility with existing CLI code
 type UserProfile = UserResponse
 type ChallengeEntity = ChallengeResponse

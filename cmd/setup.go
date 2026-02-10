@@ -45,7 +45,7 @@ var setupCmd = &cobra.Command{
 		if token, err := keystore.Get(); err != nil || token == "" {
 			ui.Error("You must be logged in to set up Kubeasy")
 			ui.Info("Run 'kubeasy login' first")
-			return nil
+			return fmt.Errorf("authentication required: run 'kubeasy login' first")
 		}
 
 		// Step 1: Check/Create cluster

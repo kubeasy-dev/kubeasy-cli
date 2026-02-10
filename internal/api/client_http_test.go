@@ -567,6 +567,62 @@ func TestGetChallengeProgress_Alias(t *testing.T) {
 	assert.Equal(t, "completed", status.Status)
 }
 
+func TestSendTrackEvent_Success(t *testing.T) {
+	setupKeyring(t, "test-token")
+	defer cleanupKeyring(t)
+
+	server := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "POST", r.Method)
+		assert.Equal(t, "/track/login", r.URL.Path)
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		// Verify request body
+		var req TrackRequest
+		err := json.NewDecoder(r.Body).Decode(&req)
+		require.NoError(t, err)
+		assert.NotEmpty(t, req.CLIVersion)
+		assert.NotEmpty(t, req.OS)
+		assert.NotEmpty(t, req.Arch)
+
+		w.WriteHeader(http.StatusOK)
+	})
+	defer server.Close()
+
+	oldAPIURL := constants.RestAPIUrl
+	constants.RestAPIUrl = server.URL
+	defer func() { constants.RestAPIUrl = oldAPIURL }()
+
+	// Call sendTrackEvent directly (synchronous) for testability
+	sendTrackEvent("/track/login")
+}
+
+func TestSendTrackEvent_ServerError(t *testing.T) {
+	setupKeyring(t, "test-token")
+	defer cleanupKeyring(t)
+
+	server := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	defer server.Close()
+
+	oldAPIURL := constants.RestAPIUrl
+	constants.RestAPIUrl = server.URL
+	defer func() { constants.RestAPIUrl = oldAPIURL }()
+
+	// Should not panic on server error
+	sendTrackEvent("/track/setup")
+}
+
+func TestSendTrackEvent_NoAuth(t *testing.T) {
+	// Clean keyring to simulate missing token
+	keyring.MockInit()
+	_ = keyring.Delete(constants.KeyringServiceName, "api_key")
+
+	// Should not panic when no auth token is available
+	sendTrackEvent("/track/login")
+}
+
 // TestGetAuthToken_NoKeyring tests behavior when keyring is not available
 func TestGetAuthToken_NoKeyring(t *testing.T) {
 	// Clean keyring to simulate missing token

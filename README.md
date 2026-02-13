@@ -22,11 +22,11 @@ npm install -g @kubeasy-dev/kubeasy-cli
 ## Usage
 
 ```bash
+# Login with API key (required before setup)
+kubeasy login
+
 # Setup local environment (creates Kind cluster with ArgoCD)
 kubeasy setup
-
-# Login with API key
-kubeasy login
 
 # Get challenge information
 kubeasy challenge get <challenge-slug>
@@ -49,6 +49,19 @@ kubeasy challenge clean <challenge-slug>
 See [online docs](https://docs.kubeasy.dev/developer/contributing) for contribution guidelines, setup instructions, and development workflow.
 
 See [CLAUDE.md](./CLAUDE.md) for detailed architecture and development guidance.
+
+## Telemetry
+
+Kubeasy CLI collects minimal, anonymous usage telemetry to help improve the tool. Tracking events are sent during `login` and `setup` commands when you are authenticated.
+
+**Data collected:**
+- CLI version
+- Operating system (e.g. `linux`, `darwin`)
+- Architecture (e.g. `amd64`, `arm64`)
+
+**No personal information is collected.** Telemetry is only sent when authenticated and never blocks CLI execution (fire-and-forget with a 5s timeout).
+
+If you are not logged in, no telemetry is sent.
 
 ## License
 

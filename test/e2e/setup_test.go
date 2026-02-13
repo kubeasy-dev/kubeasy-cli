@@ -14,6 +14,7 @@ import (
 	"github.com/kubeasy-dev/kubeasy-cli/internal/kube"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/kind/pkg/cluster"
 )
@@ -49,6 +50,10 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+// =============================================================================
+// Cluster connectivity
+// =============================================================================
+
 func TestKindClusterReachable(t *testing.T) {
 	clientset, err := kube.GetKubernetesClient()
 	require.NoError(t, err, "should get a Kubernetes client for %s context", constants.KubeasyClusterContext)
@@ -71,6 +76,10 @@ func TestKubernetesVersion(t *testing.T) {
 		"server version %s should be compatible with expected %s", serverVersion, expectedVersion,
 	)
 }
+
+// =============================================================================
+// Infrastructure setup
+// =============================================================================
 
 func TestInfrastructureNotReadyBeforeSetup(t *testing.T) {
 	ready, err := deployer.IsInfrastructureReady()
@@ -132,4 +141,66 @@ func TestSetupIdempotency(t *testing.T) {
 	ready, err := deployer.IsInfrastructureReady()
 	require.NoError(t, err)
 	assert.True(t, ready, "infrastructure should still be ready after re-running setup")
+}
+
+// =============================================================================
+// Challenge deploy & cleanup
+// =============================================================================
+
+const testChallengeSlug = "pod-evicted"
+
+func TestDeployChallenge(t *testing.T) {
+	clientset, err := kube.GetKubernetesClient()
+	require.NoError(t, err)
+
+	dynamicClient, err := kube.GetDynamicClient()
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	// Create the challenge namespace (same as cmd/start.go flow)
+	err = kube.CreateNamespace(ctx, clientset, testChallengeSlug)
+	require.NoError(t, err, "should create challenge namespace")
+
+	// Deploy the challenge from OCI registry
+	err = deployer.DeployChallenge(ctx, clientset, dynamicClient, testChallengeSlug)
+	require.NoError(t, err, "DeployChallenge should succeed")
+
+	// Verify namespace exists
+	ns, err := clientset.CoreV1().Namespaces().Get(ctx, testChallengeSlug, metav1.GetOptions{})
+	require.NoError(t, err, "challenge namespace should exist")
+	assert.Equal(t, testChallengeSlug, ns.Name)
+
+	// Verify at least one resource was created in the namespace
+	pods, err := clientset.CoreV1().Pods(testChallengeSlug).List(ctx, metav1.ListOptions{})
+	require.NoError(t, err, "should list pods in challenge namespace")
+
+	deployments, err := clientset.AppsV1().Deployments(testChallengeSlug).List(ctx, metav1.ListOptions{})
+	require.NoError(t, err, "should list deployments in challenge namespace")
+
+	assert.True(t, len(pods.Items) > 0 || len(deployments.Items) > 0,
+		"challenge should have created at least one pod or deployment")
+}
+
+func TestCleanupChallenge(t *testing.T) {
+	clientset, err := kube.GetKubernetesClient()
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	// Ensure the namespace exists before cleanup (from previous test)
+	_, err = clientset.CoreV1().Namespaces().Get(ctx, testChallengeSlug, metav1.GetOptions{})
+	require.NoError(t, err, "challenge namespace should exist before cleanup")
+
+	// Run cleanup
+	err = deployer.CleanupChallenge(ctx, clientset, testChallengeSlug)
+	require.NoError(t, err, "CleanupChallenge should succeed")
+
+	// Wait for namespace to actually disappear (deletion is async)
+	assert.Eventually(t, func() bool {
+		_, err := clientset.CoreV1().Namespaces().Get(ctx, testChallengeSlug, metav1.GetOptions{})
+		return apierrors.IsNotFound(err)
+	}, 2*time.Minute, 2*time.Second, "challenge namespace should be deleted after cleanup")
 }

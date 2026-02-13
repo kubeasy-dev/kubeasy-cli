@@ -121,6 +121,42 @@ func TestIsInfrastructureReady_LocalPathNamespaceMissing(t *testing.T) {
 	assert.False(t, ready, "should be false when local-path-storage namespace is missing")
 }
 
+func TestIsInfrastructureReady_MultipleReplicas(t *testing.T) {
+	clientset := fake.NewClientset(
+		makeNamespace(kyvernoNamespace),
+		makeNamespace(localPathStorageNamespace),
+		makeDeployment(kyvernoNamespace, "kyverno-admission-controller", 3, true),
+		makeDeployment(kyvernoNamespace, "kyverno-background-controller", 2, true),
+		makeDeployment(kyvernoNamespace, "kyverno-cleanup-controller", 1, true),
+		makeDeployment(kyvernoNamespace, "kyverno-reports-controller", 1, true),
+		makeDeployment(localPathStorageNamespace, "local-path-provisioner", 2, true),
+	)
+
+	ready, err := IsInfrastructureReadyWithClient(context.Background(), clientset)
+	require.NoError(t, err)
+	assert.True(t, ready, "should be true when all deployments have all replicas ready")
+}
+
+func TestIsInfrastructureReady_MultipleReplicasPartiallyReady(t *testing.T) {
+	// 3 desired but only 1 ready
+	dep := makeDeployment(kyvernoNamespace, "kyverno-admission-controller", 3, false)
+	dep.Status.ReadyReplicas = 1
+
+	clientset := fake.NewClientset(
+		makeNamespace(kyvernoNamespace),
+		makeNamespace(localPathStorageNamespace),
+		dep,
+		makeDeployment(kyvernoNamespace, "kyverno-background-controller", 1, true),
+		makeDeployment(kyvernoNamespace, "kyverno-cleanup-controller", 1, true),
+		makeDeployment(kyvernoNamespace, "kyverno-reports-controller", 1, true),
+		makeDeployment(localPathStorageNamespace, "local-path-provisioner", 1, true),
+	)
+
+	ready, err := IsInfrastructureReadyWithClient(context.Background(), clientset)
+	require.NoError(t, err)
+	assert.False(t, ready, "should be false when ReadyReplicas < Replicas")
+}
+
 func TestInfrastructureURLs(t *testing.T) {
 	t.Run("kyverno URL is HTTPS", func(t *testing.T) {
 		url := kyvernoInstallURL()
@@ -134,5 +170,17 @@ func TestInfrastructureURLs(t *testing.T) {
 		assert.Contains(t, url, "https://")
 		assert.Contains(t, url, "rancher/local-path-provisioner")
 		assert.Contains(t, url, "local-path-storage.yaml")
+	})
+
+	t.Run("kyverno URL embeds version", func(t *testing.T) {
+		url := kyvernoInstallURL()
+		assert.Contains(t, url, KyvernoVersion,
+			"kyverno install URL should contain the configured version")
+	})
+
+	t.Run("local-path-provisioner URL embeds version", func(t *testing.T) {
+		url := localPathProvisionerInstallURL()
+		assert.Contains(t, url, LocalPathProvisionerVersion,
+			"local-path-provisioner install URL should contain the configured version")
 	})
 }

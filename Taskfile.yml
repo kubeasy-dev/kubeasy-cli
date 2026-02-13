@@ -163,6 +163,12 @@ tasks:
           go tool cover -func=coverage-integration.out | tail -1
         fi
 
+  test:e2e:
+    desc: Run Kind integration tests (requires Docker)
+    cmds:
+      - echo "Running Kind integration tests..."
+      - go test -v -tags=kindintegration -count=1 ./test/e2e/... -timeout 20m
+
   test:coverage:
     desc: Generate combined coverage report
     deps: [install:gocovmerge]

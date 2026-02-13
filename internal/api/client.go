@@ -62,7 +62,7 @@ func makeAuthenticatedRequest(method, path string, body interface{}) (*http.Resp
 	return resp, nil
 }
 
-// GetProfile fetches the current user's profile (main function name for compatibility)
+// GetProfile fetches the current user's profile via GET /user
 func GetProfile() (*UserProfile, error) {
 	resp, err := makeAuthenticatedRequest("GET", "/user", nil)
 	if err != nil {
@@ -84,6 +84,37 @@ func GetProfile() (*UserProfile, error) {
 	}
 
 	return &user, nil
+}
+
+// Login sends a POST /user with CLI metadata, combining profile fetch and login tracking
+// in a single call. Returns the user profile along with a firstLogin indicator.
+func Login() (*LoginResponse, error) {
+	body := TrackRequest{
+		CLIVersion: constants.Version,
+		OS:         runtime.GOOS,
+		Arch:       runtime.GOARCH,
+	}
+
+	resp, err := makeAuthenticatedRequest("POST", "/user", body)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var errResp ErrorResponse
+		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
+			return nil, fmt.Errorf("request failed with status %d", resp.StatusCode)
+		}
+		return nil, fmt.Errorf("API error: %s", errResp.Error)
+	}
+
+	var result LoginResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
 }
 
 // GetUserProfile is an alias for GetProfile for consistency with type names

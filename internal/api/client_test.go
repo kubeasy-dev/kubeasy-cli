@@ -266,6 +266,52 @@ func TestResponseUnmarshaling(t *testing.T) {
 		require.NotNil(t, resp.Message)
 		assert.Equal(t, "Challenge started successfully", *resp.Message)
 	})
+
+	t.Run("LoginResponse with firstLogin", func(t *testing.T) {
+		jsonData := `{
+			"firstName": "Paul",
+			"lastName": "Brissaud",
+			"firstLogin": true
+		}`
+
+		var resp LoginResponse
+		err := json.Unmarshal([]byte(jsonData), &resp)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Paul", resp.FirstName)
+		require.NotNil(t, resp.LastName)
+		assert.Equal(t, "Brissaud", *resp.LastName)
+		require.NotNil(t, resp.FirstLogin)
+		assert.True(t, *resp.FirstLogin)
+	})
+
+	t.Run("LoginResponse without firstLogin", func(t *testing.T) {
+		jsonData := `{
+			"firstName": "Jane"
+		}`
+
+		var resp LoginResponse
+		err := json.Unmarshal([]byte(jsonData), &resp)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Jane", resp.FirstName)
+		assert.Nil(t, resp.LastName)
+		assert.Nil(t, resp.FirstLogin)
+	})
+
+	t.Run("TrackRequest marshaling", func(t *testing.T) {
+		req := TrackRequest{
+			CLIVersion: "2.5.0",
+			OS:         "darwin",
+			Arch:       "arm64",
+		}
+
+		data, err := json.Marshal(req)
+		require.NoError(t, err)
+		assert.Contains(t, string(data), `"cliVersion":"2.5.0"`)
+		assert.Contains(t, string(data), `"os":"darwin"`)
+		assert.Contains(t, string(data), `"arch":"arm64"`)
+	})
 }
 
 // TestObjectiveResultVariations tests different ObjectiveResult scenarios

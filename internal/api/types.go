@@ -9,6 +9,14 @@ type UserResponse struct {
 	LastName  *string `json:"lastName,omitempty"`
 }
 
+// LoginResponse represents the response from POST /api/cli/user
+// Combines user profile with login tracking in a single call.
+type LoginResponse struct {
+	FirstName  string  `json:"firstName"`
+	LastName   *string `json:"lastName,omitempty"`
+	FirstLogin *bool   `json:"firstLogin,omitempty"`
+}
+
 // ChallengeResponse represents the response from GET /api/cli/challenge/[slug]
 type ChallengeResponse struct {
 	ID               int    `json:"id"`

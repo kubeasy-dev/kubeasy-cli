@@ -567,13 +567,80 @@ func TestGetChallengeProgress_Alias(t *testing.T) {
 	assert.Equal(t, "completed", status.Status)
 }
 
+func TestLogin_Success(t *testing.T) {
+	setupKeyring(t, "test-token")
+	defer cleanupKeyring(t)
+
+	server := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "POST", r.Method)
+		assert.Equal(t, "/user", r.URL.Path)
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		// Verify request body contains CLI metadata
+		var req TrackRequest
+		err := json.NewDecoder(r.Body).Decode(&req)
+		require.NoError(t, err)
+		assert.NotEmpty(t, req.CLIVersion)
+		assert.NotEmpty(t, req.OS)
+		assert.NotEmpty(t, req.Arch)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		firstLogin := true
+		response := LoginResponse{
+			FirstName:  "Paul",
+			LastName:   strPtr("Brissaud"),
+			FirstLogin: &firstLogin,
+		}
+		_ = json.NewEncoder(w).Encode(response)
+	})
+	defer server.Close()
+
+	oldAPIURL := constants.RestAPIUrl
+	constants.RestAPIUrl = server.URL
+	defer func() { constants.RestAPIUrl = oldAPIURL }()
+
+	result, err := Login()
+
+	require.NoError(t, err)
+	assert.Equal(t, "Paul", result.FirstName)
+	require.NotNil(t, result.LastName)
+	assert.Equal(t, "Brissaud", *result.LastName)
+	require.NotNil(t, result.FirstLogin)
+	assert.True(t, *result.FirstLogin)
+}
+
+func TestLogin_APIError(t *testing.T) {
+	setupKeyring(t, "test-token")
+	defer cleanupKeyring(t)
+
+	server := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		response := ErrorResponse{Error: "Unauthorized"}
+		_ = json.NewEncoder(w).Encode(response)
+	})
+	defer server.Close()
+
+	oldAPIURL := constants.RestAPIUrl
+	constants.RestAPIUrl = server.URL
+	defer func() { constants.RestAPIUrl = oldAPIURL }()
+
+	result, err := Login()
+
+	require.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "API error: Unauthorized")
+}
+
 func TestSendTrackEvent_Success(t *testing.T) {
 	setupKeyring(t, "test-token")
 	defer cleanupKeyring(t)
 
 	server := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "/track/login", r.URL.Path)
+		assert.Equal(t, "/track/setup", r.URL.Path)
 		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
@@ -594,7 +661,7 @@ func TestSendTrackEvent_Success(t *testing.T) {
 	defer func() { constants.RestAPIUrl = oldAPIURL }()
 
 	// Call sendTrackEvent directly (synchronous) for testability
-	sendTrackEvent("/track/login")
+	sendTrackEvent("/track/setup")
 }
 
 func TestSendTrackEvent_ServerError(t *testing.T) {
@@ -620,7 +687,7 @@ func TestSendTrackEvent_NoAuth(t *testing.T) {
 	_ = keyring.Delete(constants.KeyringServiceName, "api_key")
 
 	// Should not panic when no auth token is available
-	sendTrackEvent("/track/login")
+	sendTrackEvent("/track/setup")
 }
 
 // TestGetAuthToken_NoKeyring tests behavior when keyring is not available

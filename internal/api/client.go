@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"runtime"
 	"time"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/keystore"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 )
 
 // getAuthToken retrieves the API token from available storage
@@ -59,7 +61,7 @@ func makeAuthenticatedRequest(method, path string, body interface{}) (*http.Resp
 	return resp, nil
 }
 
-// GetProfile fetches the current user's profile (main function name for compatibility)
+// GetProfile fetches the current user's profile via GET /user
 func GetProfile() (*UserProfile, error) {
 	resp, err := makeAuthenticatedRequest("GET", "/user", nil)
 	if err != nil {
@@ -81,6 +83,37 @@ func GetProfile() (*UserProfile, error) {
 	}
 
 	return &user, nil
+}
+
+// Login sends a POST /user with CLI metadata, combining profile fetch and login tracking
+// in a single call. Returns the user profile along with a firstLogin indicator.
+func Login() (*LoginResponse, error) {
+	body := TrackRequest{
+		CLIVersion: constants.Version,
+		OS:         runtime.GOOS,
+		Arch:       runtime.GOARCH,
+	}
+
+	resp, err := makeAuthenticatedRequest("POST", "/user", body)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var errResp ErrorResponse
+		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
+			return nil, fmt.Errorf("request failed with status %d", resp.StatusCode)
+		}
+		return nil, fmt.Errorf("API error: %s", errResp.Error)
+	}
+
+	var result LoginResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
 }
 
 // GetUserProfile is an alias for GetProfile for consistency with type names
@@ -267,6 +300,55 @@ func ResetChallenge(slug string) (*ChallengeResetResponse, error) {
 	}
 
 	return &result, nil
+}
+
+// TrackEvent sends anonymous usage telemetry to help improve Kubeasy.
+// It reports CLI version, OS, and architecture to the given tracking endpoint.
+// The call runs in a background goroutine and never blocks the CLI.
+// Errors are silently logged at debug level.
+func TrackEvent(path string) {
+	go sendTrackEvent(path)
+}
+
+// sendTrackEvent performs the actual tracking HTTP request.
+// Separated from TrackEvent for testability.
+func sendTrackEvent(path string) {
+	token, err := getAuthToken()
+	if err != nil {
+		logger.Debug("Failed to get auth token for tracking: %v", err)
+		return
+	}
+
+	body := TrackRequest{
+		CLIVersion: constants.Version,
+		OS:         runtime.GOOS,
+		Arch:       runtime.GOARCH,
+	}
+	jsonData, err := json.Marshal(body)
+	if err != nil {
+		logger.Debug("Failed to marshal tracking request: %v", err)
+		return
+	}
+
+	req, err := http.NewRequest("POST", constants.RestAPIUrl+path, bytes.NewBuffer(jsonData))
+	if err != nil {
+		logger.Debug("Failed to create tracking request: %v", err)
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.Debug("Failed to send tracking event to %s: %v", path, err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		logger.Debug("Tracking event to %s returned status %d", path, resp.StatusCode)
+	}
 }
 
 // ResetChallengeProgress is a wrapper for ResetChallenge for backward compatibility

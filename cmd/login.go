@@ -56,17 +56,17 @@ After successful login, you will be able to use commands requiring authenticatio
 			reuse := ui.Confirmation("Do you want to reuse it?")
 
 			if reuse {
-				// Try to fetch and display profile
-				profile, perr := api.GetProfile()
+				// Try to fetch profile and track login in a single call
+				loginResp, perr := api.Login()
 				if perr != nil {
 					ui.Warning("Token exists but failed to fetch profile")
 					ui.Info("You may need to login again")
 				} else {
 					lastName := ""
-					if profile.LastName != nil {
-						lastName = *profile.LastName
+					if loginResp.LastName != nil {
+						lastName = *loginResp.LastName
 					}
-					fullName := strings.TrimSpace(profile.FirstName + " " + lastName)
+					fullName := strings.TrimSpace(loginResp.FirstName + " " + lastName)
 					if fullName != "" {
 						ui.KeyValue("Profile", fullName)
 					}
@@ -125,16 +125,17 @@ After successful login, you will be able to use commands requiring authenticatio
 			}
 		}
 
-		// Verify by fetching profile
-		profile, err := api.GetProfile()
+		// Verify by fetching profile and track login in a single call
+		loginResp, err := api.Login()
 		if err != nil {
 			ui.Warning("Logged in, but failed to fetch profile")
+			logger.Error("Failed to fetch profile after login: %v", err)
 		} else {
 			lastName := ""
-			if profile.LastName != nil {
-				lastName = *profile.LastName
+			if loginResp.LastName != nil {
+				lastName = *loginResp.LastName
 			}
-			fullName := strings.TrimSpace(profile.FirstName + " " + lastName)
+			fullName := strings.TrimSpace(loginResp.FirstName + " " + lastName)
 			if fullName != "" {
 				ui.KeyValue("Welcome", fullName)
 			}

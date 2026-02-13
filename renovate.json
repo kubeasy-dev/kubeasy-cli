@@ -8,11 +8,6 @@
     ":assignAndReview(pbrissaud)",
     ":automergeLinters"
   ],
-  "argocd": {
-    "managerFilePatterns": [
-      "/pkg/argocd/manifests/.*\\.yaml$/"
-    ]
-  },
   "customManagers": [
     {
       "customType": "regex",
@@ -29,10 +24,21 @@
       "customType": "regex",
       "description": "Update Kind node image in Go constants (single source of truth for K8s version)",
       "managerFilePatterns": [
-        "/^pkg/constants/const\\.go$/"
+        "/^internal/constants/const\\.go$/"
       ],
       "matchStrings": [
         "//\\s*renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)\\s*\\nvar\\s+KindNodeImage\\s*=\\s*\"kindest/node:v?(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\""
+      ],
+      "extractVersionTemplate": "^v?(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Update infrastructure component versions in deployer constants",
+      "managerFilePatterns": [
+        "/^internal/deployer/const\\.go$/"
+      ],
+      "matchStrings": [
+        "//\\s*renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)\\s*\\nvar\\s+\\w+Version\\s*=\\s*\"v?(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\""
       ],
       "extractVersionTemplate": "^v?(?<version>.*)$"
     }
@@ -92,15 +98,6 @@
         "github-actions"
       ],
       "pinDigests": false
-    },
-    {
-      "description": "Group all embedded ArgoCD manifests updates",
-      "matchManagers": [
-        "argocd"
-      ],
-      "groupName": "Embedded ArgoCD manifests",
-      "separateMajorMinor": false,
-      "separateMinorPatch": false
     },
     {
       "description": "Group all Kubernetes-related updates together (manual merge required)",

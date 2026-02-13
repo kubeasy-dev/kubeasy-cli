@@ -12,6 +12,7 @@ import (
 	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/deployer"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/kube"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/validation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -181,6 +182,55 @@ func TestDeployChallenge(t *testing.T) {
 
 	assert.True(t, len(pods.Items) > 0 || len(deployments.Items) > 0,
 		"challenge should have created at least one pod or deployment")
+}
+
+func TestValidateChallenge(t *testing.T) {
+	// Load validations for the challenge (from GitHub)
+	config, err := validation.LoadForChallenge(testChallengeSlug)
+	require.NoError(t, err, "should load validations for %s", testChallengeSlug)
+	require.NotEmpty(t, config.Validations, "challenge should have at least one validation")
+
+	// Get all clients needed by the executor
+	clientset, err := kube.GetKubernetesClient()
+	require.NoError(t, err)
+
+	dynamicClient, err := kube.GetDynamicClient()
+	require.NoError(t, err)
+
+	restConfig, err := kube.GetRestConfig()
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	// Execute validations against the deployed (broken) challenge
+	executor := validation.NewExecutor(clientset, dynamicClient, restConfig, testChallengeSlug)
+	results := executor.ExecuteAll(ctx, config.Validations)
+
+	// Every validation should produce a result with the correct key
+	require.Len(t, results, len(config.Validations), "should have one result per validation")
+
+	resultKeys := make(map[string]bool)
+	for _, r := range results {
+		assert.NotEmpty(t, r.Key, "result key should not be empty")
+		assert.NotEmpty(t, r.Message, "result message should not be empty")
+		resultKeys[r.Key] = true
+	}
+
+	// Verify all expected keys are present
+	for _, v := range config.Validations {
+		assert.True(t, resultKeys[v.Key], "result should contain key %s", v.Key)
+	}
+
+	// The challenge is deployed broken — not all validations should pass
+	allPassed := true
+	for _, r := range results {
+		if !r.Passed {
+			allPassed = false
+			break
+		}
+	}
+	assert.False(t, allPassed, "not all validations should pass on a broken challenge")
 }
 
 func TestCleanupChallenge(t *testing.T) {

@@ -2,7 +2,6 @@ package api
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -331,10 +330,7 @@ func sendTrackEvent(path string) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, "POST", constants.RestAPIUrl+path, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", constants.RestAPIUrl+path, bytes.NewBuffer(jsonData))
 	if err != nil {
 		logger.Debug("Failed to create tracking request: %v", err)
 		return
@@ -342,7 +338,8 @@ func sendTrackEvent(path string) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		logger.Debug("Failed to send tracking event to %s: %v", path, err)
 		return

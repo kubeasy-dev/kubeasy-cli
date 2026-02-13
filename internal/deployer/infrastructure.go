@@ -15,7 +15,7 @@ import (
 const (
 	kyvernoNamespace             = "kyverno"
 	localPathStorageNamespace    = "local-path-storage"
-	defaultInfrastructureTimeout = 5 * time.Minute
+	defaultInfrastructureTimeout = 10 * time.Minute
 )
 
 // kyvernoInstallURL returns the URL for the Kyverno install manifest.

@@ -7,6 +7,7 @@ import (
 	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/deployer"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/kube"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -88,8 +89,12 @@ var startChallengeCmd = &cobra.Command{
 		}
 
 		// Step 3: Configure context
-		_ = kube.SetNamespaceForContext(constants.KubeasyClusterContext, challengeSlug)
-		ui.Success("Kubectl context configured")
+		if err := kube.SetNamespaceForContext(constants.KubeasyClusterContext, challengeSlug); err != nil {
+			logger.Debug("Failed to set namespace for context: %v", err)
+			ui.Warning("Could not configure kubectl context namespace")
+		} else {
+			ui.Success("Kubectl context configured")
+		}
 
 		// Step 4: Register progress
 		err = ui.WaitMessage("Registering challenge progress", func() error {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"oras.land/oras-go/v2"
 	"oras.land/oras-go/v2/content/file"
@@ -45,16 +46,19 @@ func DeployChallenge(ctx context.Context, clientset *kubernetes.Clientset, dynam
 			continue
 		}
 
-		files, err := filepath.Glob(filepath.Join(dirPath, "**", "*.yaml"))
+		var files []string
+		err := filepath.WalkDir(dirPath, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if !d.IsDir() && strings.HasSuffix(path, ".yaml") {
+				files = append(files, path)
+			}
+			return nil
+		})
 		if err != nil {
-			return fmt.Errorf("failed to glob %s/*.yaml: %w", dir, err)
+			return fmt.Errorf("failed to walk %s: %w", dir, err)
 		}
-		// Also match files directly in the directory (Glob ** doesn't match current dir)
-		directFiles, err := filepath.Glob(filepath.Join(dirPath, "*.yaml"))
-		if err != nil {
-			return fmt.Errorf("failed to glob %s/*.yaml: %w", dir, err)
-		}
-		files = appendUnique(files, directFiles)
 
 		for _, f := range files {
 			logger.Debug("Applying manifest: %s", f)
@@ -134,18 +138,4 @@ func waitForChallengeReady(ctx context.Context, clientset *kubernetes.Clientset,
 	}
 
 	return nil
-}
-
-// appendUnique appends items from src to dst, skipping duplicates.
-func appendUnique(dst, src []string) []string {
-	seen := make(map[string]struct{}, len(dst))
-	for _, s := range dst {
-		seen[s] = struct{}{}
-	}
-	for _, s := range src {
-		if _, ok := seen[s]; !ok {
-			dst = append(dst, s)
-		}
-	}
-	return dst
 }

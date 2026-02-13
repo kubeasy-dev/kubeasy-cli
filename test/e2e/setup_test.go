@@ -18,50 +18,32 @@ import (
 	"sigs.k8s.io/kind/pkg/cluster"
 )
 
-// clusterPreExisted tracks whether the Kind cluster existed before the test run.
-// If true, we skip deletion on teardown (useful for local development).
-var clusterPreExisted bool
+const e2eClusterName = "kubeasy-e2e"
 
 func TestMain(m *testing.M) {
+	// Override the cluster context so all internal packages target the e2e cluster
+	constants.KubeasyClusterContext = "kind-" + e2eClusterName
+
 	provider := cluster.NewProvider()
 
-	// Check if cluster already exists
-	clusters, err := provider.List()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to list Kind clusters: %v\n", err)
+	// Always create a fresh cluster for the test run
+	fmt.Printf("Creating Kind cluster '%s'...\n", e2eClusterName)
+	if err := provider.Create(
+		e2eClusterName,
+		cluster.CreateWithNodeImage(constants.KindNodeImage),
+	); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create Kind cluster: %v\n", err)
 		os.Exit(1)
 	}
-	for _, c := range clusters {
-		if c == "kubeasy" {
-			clusterPreExisted = true
-			break
-		}
-	}
-
-	// Create cluster if it doesn't exist
-	if !clusterPreExisted {
-		fmt.Println("Creating Kind cluster 'kubeasy'...")
-		if err := provider.Create(
-			"kubeasy",
-			cluster.CreateWithNodeImage(constants.KindNodeImage),
-		); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to create Kind cluster: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Println("Kind cluster 'kubeasy' created successfully.")
-	} else {
-		fmt.Println("Kind cluster 'kubeasy' already exists, reusing it.")
-	}
+	fmt.Printf("Kind cluster '%s' created successfully.\n", e2eClusterName)
 
 	// Run tests
 	code := m.Run()
 
-	// Teardown: only delete if we created the cluster
-	if !clusterPreExisted {
-		fmt.Println("Deleting Kind cluster 'kubeasy'...")
-		if err := provider.Delete("kubeasy", ""); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to delete Kind cluster: %v\n", err)
-		}
+	// Always clean up after ourselves
+	fmt.Printf("Deleting Kind cluster '%s'...\n", e2eClusterName)
+	if err := provider.Delete(e2eClusterName, ""); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to delete Kind cluster: %v\n", err)
 	}
 
 	os.Exit(code)
@@ -69,7 +51,7 @@ func TestMain(m *testing.M) {
 
 func TestKindClusterReachable(t *testing.T) {
 	clientset, err := kube.GetKubernetesClient()
-	require.NoError(t, err, "should get a Kubernetes client for kind-kubeasy context")
+	require.NoError(t, err, "should get a Kubernetes client for %s context", constants.KubeasyClusterContext)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -91,15 +73,8 @@ func TestKubernetesVersion(t *testing.T) {
 }
 
 func TestInfrastructureNotReadyBeforeSetup(t *testing.T) {
-	// On a fresh cluster (CI), infrastructure should not be ready yet.
-	// On a reused cluster (local dev), it may already be ready — skip in that case.
 	ready, err := deployer.IsInfrastructureReady()
 	require.NoError(t, err, "IsInfrastructureReady should not error")
-
-	if clusterPreExisted && ready {
-		t.Skip("cluster was pre-existing with infrastructure already installed")
-	}
-
 	assert.False(t, ready, "infrastructure should not be ready on a fresh cluster")
 }
 

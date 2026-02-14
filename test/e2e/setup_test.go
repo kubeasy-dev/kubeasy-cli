@@ -24,8 +24,13 @@ import (
 const e2eClusterName = "kubeasy-e2e"
 
 func TestMain(m *testing.M) {
-	// Override the cluster context so all internal packages target the e2e cluster
+	// Override the cluster context so all internal packages (kube.GetKubernetesClient, etc.)
+	// target the dedicated e2e cluster instead of the user's dev cluster.
+	// This is safe because TestMain runs in its own process and the original value
+	// is never needed after the test binary exits.
+	originalContext := constants.KubeasyClusterContext
 	constants.KubeasyClusterContext = "kind-" + e2eClusterName
+	defer func() { constants.KubeasyClusterContext = originalContext }()
 
 	provider := cluster.NewProvider()
 
@@ -46,7 +51,8 @@ func TestMain(m *testing.M) {
 	// Always clean up after ourselves
 	fmt.Printf("Deleting Kind cluster '%s'...\n", e2eClusterName)
 	if err := provider.Delete(e2eClusterName, ""); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to delete Kind cluster: %v\n", err)
+		fmt.Fprintf(os.Stderr, "⚠️  WARNING: failed to delete Kind cluster '%s': %v\n", e2eClusterName, err)
+		fmt.Fprintf(os.Stderr, "    Manual cleanup: kind delete cluster --name %s\n", e2eClusterName)
 	}
 
 	os.Exit(code)
@@ -143,6 +149,8 @@ func TestInfrastructureSetup(t *testing.T) {
 
 // testChallengeSlug uses a "build" type challenge (empty namespace, no manifests).
 // This guarantees validations always fail: the resources the user must create don't exist yet.
+// NOTE: This challenge must exist as an OCI artifact in ghcr.io/kubeasy-dev/challenges/
+// and its challenge.yaml must be published in the challenges repository on GitHub.
 const testChallengeSlug = "first-deployment"
 
 // TestChallengeLifecycle validates deploy → validate → cleanup using ordered subtests.

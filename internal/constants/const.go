@@ -29,7 +29,7 @@ const UnknownVersion = "unknown"
 // Note: This is a var (not const) to allow Renovate to update it automatically.
 // IMPORTANT: The comment format below is required for Renovate. Do not modify.
 // renovate: datasource=docker depName=kindest/node
-var KindNodeImage = "kindest/node:v1.35.0"
+var KindNodeImage = "kindest/node:v1.35.1"
 
 // GetKubernetesVersion extracts the Kubernetes version from KindNodeImage.
 // Returns the version without the "v" prefix (e.g., "1.35.0").

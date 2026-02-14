@@ -52,11 +52,11 @@ func TestWaitForDeploymentsReady_AllReady(t *testing.T) {
 
 		// Simulate ready status (envtest doesn't run controllers)
 		created.Status = appsv1.DeploymentStatus{
-			Replicas:            1,
-			ReadyReplicas:       1,
-			UpdatedReplicas:     1,
-			AvailableReplicas:   1,
-			ObservedGeneration:  created.Generation,
+			Replicas:           1,
+			ReadyReplicas:      1,
+			UpdatedReplicas:    1,
+			AvailableReplicas:  1,
+			ObservedGeneration: created.Generation,
 		}
 		_, err = env.Clientset.AppsV1().Deployments(env.Namespace).UpdateStatus(ctx, created, metav1.UpdateOptions{})
 		require.NoError(t, err)
@@ -157,11 +157,11 @@ func TestWaitForDeploymentsReady_MultipleReplicas(t *testing.T) {
 	require.NoError(t, err)
 
 	created.Status = appsv1.DeploymentStatus{
-		Replicas:            3,
-		ReadyReplicas:       3,
-		UpdatedReplicas:     3,
-		AvailableReplicas:   3,
-		ObservedGeneration:  created.Generation,
+		Replicas:           3,
+		ReadyReplicas:      3,
+		UpdatedReplicas:    3,
+		AvailableReplicas:  3,
+		ObservedGeneration: created.Generation,
 	}
 	_, err = env.Clientset.AppsV1().Deployments(env.Namespace).UpdateStatus(ctx, created, metav1.UpdateOptions{})
 	require.NoError(t, err)

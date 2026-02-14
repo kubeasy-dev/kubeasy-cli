@@ -1,0 +1,249 @@
+//go:build kindintegration
+// +build kindintegration
+
+package e2e
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"testing"
+	"time"
+
+	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/deployer"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/kube"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/validation"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/kind/pkg/cluster"
+)
+
+const e2eClusterName = "kubeasy-e2e"
+
+func TestMain(m *testing.M) {
+	// Override the cluster context so all internal packages (kube.GetKubernetesClient, etc.)
+	// target the dedicated e2e cluster instead of the user's dev cluster.
+	// This is safe because TestMain runs in its own process and the original value
+	// is never needed after the test binary exits.
+	originalContext := constants.KubeasyClusterContext
+	constants.KubeasyClusterContext = "kind-" + e2eClusterName
+	defer func() { constants.KubeasyClusterContext = originalContext }()
+
+	provider := cluster.NewProvider()
+
+	// Always create a fresh cluster for the test run
+	fmt.Printf("Creating Kind cluster '%s'...\n", e2eClusterName)
+	if err := provider.Create(
+		e2eClusterName,
+		cluster.CreateWithNodeImage(constants.KindNodeImage),
+	); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create Kind cluster: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("Kind cluster '%s' created successfully.\n", e2eClusterName)
+
+	// Run tests
+	code := m.Run()
+
+	// Always clean up after ourselves
+	fmt.Printf("Deleting Kind cluster '%s'...\n", e2eClusterName)
+	if err := provider.Delete(e2eClusterName, ""); err != nil {
+		fmt.Fprintf(os.Stderr, "⚠️  WARNING: failed to delete Kind cluster '%s': %v\n", e2eClusterName, err)
+		fmt.Fprintf(os.Stderr, "    Manual cleanup: kind delete cluster --name %s\n", e2eClusterName)
+	}
+
+	os.Exit(code)
+}
+
+// TestInfrastructureSetup validates the full infrastructure lifecycle using ordered subtests.
+// Subtests run sequentially; if a critical step fails, subsequent subtests are skipped.
+func TestInfrastructureSetup(t *testing.T) {
+	t.Run("cluster-reachable", func(t *testing.T) {
+		clientset, err := kube.GetKubernetesClient()
+		require.NoError(t, err, "should get a Kubernetes client for %s context", constants.KubeasyClusterContext)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		namespaces, err := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+		require.NoError(t, err, "should be able to list namespaces")
+		assert.NotEmpty(t, namespaces.Items, "cluster should have at least one namespace")
+	})
+
+	t.Run("kubernetes-version", func(t *testing.T) {
+		serverVersion, err := kube.GetServerVersion()
+		require.NoError(t, err, "should get server version")
+
+		expectedVersion := constants.GetKubernetesVersion()
+		assert.True(t,
+			constants.VersionsCompatible(serverVersion, expectedVersion),
+			"server version %s should be compatible with expected %s", serverVersion, expectedVersion,
+		)
+	})
+
+	t.Run("not-ready-before-setup", func(t *testing.T) {
+		ready, err := deployer.IsInfrastructureReady()
+		require.NoError(t, err, "IsInfrastructureReady should not error")
+		assert.False(t, ready, "infrastructure should not be ready on a fresh cluster")
+	})
+
+	t.Run("setup-infrastructure", func(t *testing.T) {
+		err := deployer.SetupInfrastructure()
+		require.NoError(t, err, "SetupInfrastructure should succeed")
+
+		clientset, err := kube.GetKubernetesClient()
+		require.NoError(t, err)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		// Verify kyverno namespace and deployments
+		_, err = clientset.CoreV1().Namespaces().Get(ctx, "kyverno", metav1.GetOptions{})
+		require.NoError(t, err, "kyverno namespace should exist")
+
+		kyvernoDeployments := []string{
+			"kyverno-admission-controller",
+			"kyverno-background-controller",
+			"kyverno-cleanup-controller",
+			"kyverno-reports-controller",
+		}
+		for _, name := range kyvernoDeployments {
+			dep, err := clientset.AppsV1().Deployments("kyverno").Get(ctx, name, metav1.GetOptions{})
+			require.NoError(t, err, "deployment %s should exist", name)
+			assert.Greater(t, dep.Status.ReadyReplicas, int32(0),
+				"deployment %s should have ready replicas", name)
+			assert.Equal(t, dep.Status.Replicas, dep.Status.ReadyReplicas,
+				"deployment %s should have all replicas ready", name)
+		}
+
+		// Verify local-path-storage namespace and deployment
+		_, err = clientset.CoreV1().Namespaces().Get(ctx, "local-path-storage", metav1.GetOptions{})
+		require.NoError(t, err, "local-path-storage namespace should exist")
+
+		dep, err := clientset.AppsV1().Deployments("local-path-storage").Get(ctx, "local-path-provisioner", metav1.GetOptions{})
+		require.NoError(t, err, "local-path-provisioner deployment should exist")
+		assert.Greater(t, dep.Status.ReadyReplicas, int32(0),
+			"local-path-provisioner should have ready replicas")
+		assert.Equal(t, dep.Status.Replicas, dep.Status.ReadyReplicas,
+			"local-path-provisioner should have all replicas ready")
+	})
+
+	t.Run("ready-after-setup", func(t *testing.T) {
+		ready, err := deployer.IsInfrastructureReady()
+		require.NoError(t, err, "IsInfrastructureReady should not error")
+		assert.True(t, ready, "infrastructure should be ready after setup")
+	})
+
+	t.Run("setup-idempotency", func(t *testing.T) {
+		err := deployer.SetupInfrastructure()
+		require.NoError(t, err, "SetupInfrastructure should be idempotent")
+
+		ready, err := deployer.IsInfrastructureReady()
+		require.NoError(t, err)
+		assert.True(t, ready, "infrastructure should still be ready after re-running setup")
+	})
+}
+
+// testChallengeSlug uses a "build" type challenge (empty namespace, no manifests).
+// This guarantees validations always fail: the resources the user must create don't exist yet.
+// NOTE: This challenge must exist as an OCI artifact in ghcr.io/kubeasy-dev/challenges/
+// and its challenge.yaml must be published in the challenges repository on GitHub.
+const testChallengeSlug = "first-deployment"
+
+// TestChallengeLifecycle validates deploy → validate → cleanup using ordered subtests.
+func TestChallengeLifecycle(t *testing.T) {
+	t.Run("deploy", func(t *testing.T) {
+		clientset, err := kube.GetKubernetesClient()
+		require.NoError(t, err)
+
+		dynamicClient, err := kube.GetDynamicClient()
+		require.NoError(t, err)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+
+		// Create the challenge namespace (same as cmd/start.go flow)
+		err = kube.CreateNamespace(ctx, clientset, testChallengeSlug)
+		require.NoError(t, err, "should create challenge namespace")
+
+		// Deploy the challenge from OCI registry
+		// Build challenges have no manifests, so this is essentially a no-op after pulling the artifact.
+		err = deployer.DeployChallenge(ctx, clientset, dynamicClient, testChallengeSlug)
+		require.NoError(t, err, "DeployChallenge should succeed")
+
+		// Verify namespace exists and is empty (build challenge — user must create resources)
+		ns, err := clientset.CoreV1().Namespaces().Get(ctx, testChallengeSlug, metav1.GetOptions{})
+		require.NoError(t, err, "challenge namespace should exist")
+		assert.Equal(t, testChallengeSlug, ns.Name)
+	})
+
+	t.Run("validate", func(t *testing.T) {
+		// Load validations for the challenge (from GitHub)
+		config, err := validation.LoadForChallenge(testChallengeSlug)
+		require.NoError(t, err, "should load validations for %s", testChallengeSlug)
+		require.NotEmpty(t, config.Validations, "challenge should have at least one validation")
+
+		// Get all clients needed by the executor
+		clientset, err := kube.GetKubernetesClient()
+		require.NoError(t, err)
+
+		dynamicClient, err := kube.GetDynamicClient()
+		require.NoError(t, err)
+
+		restConfig, err := kube.GetRestConfig()
+		require.NoError(t, err)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
+		// Execute validations against the empty namespace (build challenge, nothing created yet)
+		executor := validation.NewExecutor(clientset, dynamicClient, restConfig, testChallengeSlug)
+		results := executor.ExecuteAll(ctx, config.Validations)
+
+		// Every validation should produce a result with the correct key and a message
+		require.Len(t, results, len(config.Validations), "should have one result per validation")
+
+		resultKeys := make(map[string]bool)
+		for _, r := range results {
+			assert.NotEmpty(t, r.Key, "result key should not be empty")
+			assert.NotEmpty(t, r.Message, "result message should not be empty")
+			resultKeys[r.Key] = true
+			t.Logf("  %s: passed=%v message=%q", r.Key, r.Passed, r.Message)
+		}
+
+		// Verify all expected keys are present
+		for _, v := range config.Validations {
+			assert.True(t, resultKeys[v.Key], "result should contain key %s", v.Key)
+		}
+
+		// Build challenge with empty namespace: no resources exist, so all validations must fail
+		for _, r := range results {
+			assert.False(t, r.Passed, "validation %s should fail on empty namespace", r.Key)
+		}
+	})
+
+	t.Run("cleanup", func(t *testing.T) {
+		clientset, err := kube.GetKubernetesClient()
+		require.NoError(t, err)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
+		// Ensure the namespace exists before cleanup
+		_, err = clientset.CoreV1().Namespaces().Get(ctx, testChallengeSlug, metav1.GetOptions{})
+		require.NoError(t, err, "challenge namespace should exist before cleanup")
+
+		// Run cleanup
+		err = deployer.CleanupChallenge(ctx, clientset, testChallengeSlug)
+		require.NoError(t, err, "CleanupChallenge should succeed")
+
+		// Wait for namespace to actually disappear (deletion is async)
+		assert.Eventually(t, func() bool {
+			_, err := clientset.CoreV1().Namespaces().Get(ctx, testChallengeSlug, metav1.GetOptions{})
+			return apierrors.IsNotFound(err)
+		}, 2*time.Minute, 2*time.Second, "challenge namespace should be deleted after cleanup")
+	})
+}

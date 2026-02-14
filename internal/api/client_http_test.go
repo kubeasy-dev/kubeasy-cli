@@ -690,6 +690,29 @@ func TestSendTrackEvent_NoAuth(t *testing.T) {
 	sendTrackEvent("/track/setup")
 }
 
+func TestTrackEventSync(t *testing.T) {
+	setupKeyring(t, "test-token")
+	defer cleanupKeyring(t)
+
+	called := false
+	server := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		assert.Equal(t, "POST", r.Method)
+		assert.Equal(t, "/track/setup", r.URL.Path)
+		w.WriteHeader(http.StatusOK)
+	})
+	defer server.Close()
+
+	oldAPIURL := constants.RestAPIUrl
+	constants.RestAPIUrl = server.URL
+	defer func() { constants.RestAPIUrl = oldAPIURL }()
+
+	TrackEventSync("/track/setup")
+
+	// Request must have completed synchronously before this assertion
+	assert.True(t, called, "expected tracking request to be sent synchronously")
+}
+
 // TestGetAuthToken_NoKeyring tests behavior when keyring is not available
 func TestGetAuthToken_NoKeyring(t *testing.T) {
 	// Clean keyring to simulate missing token

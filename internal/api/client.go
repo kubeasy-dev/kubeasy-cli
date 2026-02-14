@@ -310,6 +310,12 @@ func TrackEvent(path string) {
 	go sendTrackEvent(path)
 }
 
+// TrackEventSync sends a tracking event synchronously.
+// Use this when the process may exit immediately after the call.
+func TrackEventSync(path string) {
+	sendTrackEvent(path)
+}
+
 // sendTrackEvent performs the actual tracking HTTP request.
 // Separated from TrackEvent for testability.
 func sendTrackEvent(path string) {

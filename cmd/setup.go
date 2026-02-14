@@ -108,7 +108,7 @@ var setupCmd = &cobra.Command{
 		ui.Success("Kubeasy environment is ready!")
 		ui.Info("You can now start challenges with 'kubeasy challenge start <slug>'")
 
-		api.TrackEvent("/track/setup")
+		api.TrackEventSync("/track/setup")
 
 		return nil
 	},

@@ -3,6 +3,9 @@ version: 2
 # Docs: https://goreleaser.com/customization/build/
 
 project_name: kubeasy-cli
+before:
+  hooks:
+    - sh -c 'echo {{ .Tag }} > /tmp/latest'
 release:
   github:
     owner: kubeasy-dev
@@ -40,6 +43,40 @@ blobs:
       - checksums
     endpoint: https://57e2edb42742bf00d9a2526736f3ea36.r2.cloudflarestorage.com
     acl: public-read
+    extra_files:
+      - glob: scripts/install.sh
+        name_template: install.sh
+      - glob: /tmp/latest
+        name_template: latest
+homebrew_casks:
+  - name: kubeasy
+    repository:
+      owner: kubeasy-dev
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    directory: Casks
+    binaries:
+      - kubeasy
+    commit_msg_template: "chore: update cask for {{ .ProjectName }} {{ .Tag }}"
+    homepage: "https://kubeasy.dev"
+    description: "CLI tool to learn Kubernetes through practical challenges"
+    license: "MIT"
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/kubeasy"]
+          end
+scoops:
+  - name: kubeasy
+    repository:
+      owner: kubeasy-dev
+      name: scoop-bucket
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    commit_msg_template: "chore: update manifest for {{ .ProjectName }} {{ .Tag }}"
+    homepage: "https://kubeasy.dev"
+    description: "CLI tool to learn Kubernetes through practical challenges"
+    license: "MIT"
 snapshot: {}
 changelog:
   use: github

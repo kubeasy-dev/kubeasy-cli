@@ -148,7 +148,9 @@ func TestSetupIdempotency(t *testing.T) {
 // Challenge deploy & cleanup
 // =============================================================================
 
-const testChallengeSlug = "pod-evicted"
+// testChallengeSlug uses a "build" type challenge (empty namespace, no manifests).
+// This guarantees validations always fail: the resources the user must create don't exist yet.
+const testChallengeSlug = "first-deployment"
 
 func TestDeployChallenge(t *testing.T) {
 	clientset, err := kube.GetKubernetesClient()
@@ -165,23 +167,14 @@ func TestDeployChallenge(t *testing.T) {
 	require.NoError(t, err, "should create challenge namespace")
 
 	// Deploy the challenge from OCI registry
+	// Build challenges have no manifests, so this is essentially a no-op after pulling the artifact.
 	err = deployer.DeployChallenge(ctx, clientset, dynamicClient, testChallengeSlug)
 	require.NoError(t, err, "DeployChallenge should succeed")
 
-	// Verify namespace exists
+	// Verify namespace exists and is empty (build challenge — user must create resources)
 	ns, err := clientset.CoreV1().Namespaces().Get(ctx, testChallengeSlug, metav1.GetOptions{})
 	require.NoError(t, err, "challenge namespace should exist")
 	assert.Equal(t, testChallengeSlug, ns.Name)
-
-	// Verify at least one resource was created in the namespace
-	pods, err := clientset.CoreV1().Pods(testChallengeSlug).List(ctx, metav1.ListOptions{})
-	require.NoError(t, err, "should list pods in challenge namespace")
-
-	deployments, err := clientset.AppsV1().Deployments(testChallengeSlug).List(ctx, metav1.ListOptions{})
-	require.NoError(t, err, "should list deployments in challenge namespace")
-
-	assert.True(t, len(pods.Items) > 0 || len(deployments.Items) > 0,
-		"challenge should have created at least one pod or deployment")
 }
 
 func TestValidateChallenge(t *testing.T) {
@@ -203,7 +196,7 @@ func TestValidateChallenge(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	// Execute validations against the deployed (broken) challenge
+	// Execute validations against the empty namespace (build challenge, nothing created yet)
 	executor := validation.NewExecutor(clientset, dynamicClient, restConfig, testChallengeSlug)
 	results := executor.ExecuteAll(ctx, config.Validations)
 
@@ -218,9 +211,14 @@ func TestValidateChallenge(t *testing.T) {
 		t.Logf("  %s: passed=%v message=%q", r.Key, r.Passed, r.Message)
 	}
 
-	// Verify all expected keys are present (no missing, no extra)
+	// Verify all expected keys are present
 	for _, v := range config.Validations {
 		assert.True(t, resultKeys[v.Key], "result should contain key %s", v.Key)
+	}
+
+	// Build challenge with empty namespace: no resources exist, so all validations must fail
+	for _, r := range results {
+		assert.False(t, r.Passed, "validation %s should fail on empty namespace", r.Key)
 	}
 }
 

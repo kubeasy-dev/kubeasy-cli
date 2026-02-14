@@ -9,37 +9,76 @@ on:
 permissions: {}
 
 jobs:
-  # Pre-release validation - ensures quality before building
+  # Pre-release validation - verifies that CI checks already passed on main
+  # Tests and linting run on every push to main (test.yml, lint.yml),
+  # so we just verify they passed instead of re-running them.
   pre-release-checks:
     name: Pre-release validation
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      checks: read
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          fetch-depth: 0
+          fetch-depth: 2
           persist-credentials: false
 
-      - name: Set up Go
-        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
-        with:
-          go-version: "1.26.0"
-          cache: true
-          cache-dependency-path: go.sum
+      - name: Verify CI checks passed on main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The tag is created on the version bump commit (which skips CI).
+          # CI tests ran on the parent commit — the actual code change.
+          PARENT_SHA=$(git rev-parse HEAD~1)
+          echo "Verifying CI status for commit: $PARENT_SHA"
 
-      - name: Install Task
-        uses: go-task/setup-task@0ab1b2a65bc55236a3bc64cde78f80e20e8885c2 # v1
+          REQUIRED_CHECKS=("Test Summary" "golangci-lint")
 
-      - name: Run tests
-        run: task test
+          for check_name in "${REQUIRED_CHECKS[@]}"; do
+            echo ""
+            echo "--- Checking: $check_name ---"
+            PASSED=false
 
-      - name: Run linters
-        run: task lint
+            # Poll for up to 10 minutes (20 × 30s) in case checks are still running
+            for i in $(seq 1 20); do
+              RESULT=$(gh api "repos/${{ github.repository }}/commits/${PARENT_SHA}/check-runs" \
+                --jq "[.check_runs[] | select(.name == \"${check_name}\")] | first" 2>/dev/null)
 
-      - name: Test build
-        run: task build
+              if [ -z "$RESULT" ] || [ "$RESULT" = "null" ]; then
+                echo "⚠️  Check '$check_name' not found yet (attempt $i/20), waiting 30s..."
+                sleep 30
+                continue
+              fi
+
+              STATUS=$(echo "$RESULT" | jq -r '.status')
+              CONCLUSION=$(echo "$RESULT" | jq -r '.conclusion')
+
+              if [ "$STATUS" = "completed" ]; then
+                if [ "$CONCLUSION" = "success" ]; then
+                  echo "✅ $check_name passed"
+                  PASSED=true
+                  break
+                else
+                  echo "❌ $check_name failed (conclusion: $CONCLUSION)"
+                  echo "Ensure all checks pass on main before releasing."
+                  exit 1
+                fi
+              fi
+
+              echo "⏳ $check_name in progress (attempt $i/20), waiting 30s..."
+              sleep 30
+            done
+
+            if [ "$PASSED" != "true" ]; then
+              echo "❌ Timed out waiting for '$check_name' to complete on commit $PARENT_SHA"
+              exit 1
+            fi
+          done
+
+          echo ""
+          echo "✅ All required CI checks passed"
 
   # Build and release binaries
   build:

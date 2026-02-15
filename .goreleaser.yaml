@@ -48,6 +48,19 @@ blobs:
         name_template: install.sh
       - glob: .latest-version
         name_template: latest
+  # Upload install.sh and latest to bucket root (not under project/version/)
+  - provider: s3
+    bucket: kubeasy-cli-binaries
+    region: weur
+    endpoint: https://57e2edb42742bf00d9a2526736f3ea36.r2.cloudflarestorage.com
+    acl: public-read
+    directory: "."
+    extra_files_only: true
+    extra_files:
+      - glob: scripts/install.sh
+        name_template: install.sh
+      - glob: .latest-version
+        name_template: latest
 homebrew_casks:
   - name: kubeasy
     repository:

@@ -203,11 +203,12 @@ func SubmitChallenge(slug string, req ChallengeSubmitRequest) (*ChallengeSubmitR
 		return nil, fmt.Errorf("challenge '%s' not found", slug)
 	}
 
-	// The submit endpoint returns 200 for both success and failure.
-	// The response is a union type discriminated by the "success" field.
-	// We always parse the raw body since the generated client's JSON200 type
-	// only matches the success variant.
-	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusBadRequest {
+	// The submit endpoint uses distinct HTTP codes:
+	//   200 → success ({ success: true, xpAwarded, ... })
+	//   422 → validation failed ({ success: false, message, failedObjectives })
+	// We parse both as ChallengeSubmitResponse since they share the same
+	// discriminated union keyed on the "success" boolean.
+	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusUnprocessableEntity {
 		var result ChallengeSubmitResponse
 		if err := json.Unmarshal(resp.Body, &result); err != nil {
 			return nil, fmt.Errorf("failed to decode response: %w", err)

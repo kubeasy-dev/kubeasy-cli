@@ -300,7 +300,7 @@ func TestSubmitChallenge_PartialSuccess(t *testing.T) {
 
 	server := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(http.StatusUnprocessableEntity)
 		response := ChallengeSubmitResponse{
 			Success: false,
 			Message: strPtr("Some validations failed"),

@@ -67,7 +67,7 @@ tasks:
       - command -v oapi-codegen
     cmds:
       - echo "Installing oapi-codegen..."
-      - go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
+      - go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.5.1
 
   install:tools:
     desc: Install all development tools

@@ -17,23 +17,42 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.26.0"
+          go-version-file: go.mod
           cache: true
           cache-dependency-path: go.sum
 
       - name: Write OpenAPI spec
         run: |
           if [ -n "${{ github.event.client_payload.spec_base64 }}" ]; then
-            echo "${{ github.event.client_payload.spec_base64 }}" | base64 -d > openapi.json
+            SOURCE_SHA="${{ github.event.client_payload.source_sha }}"
+            if [ -z "$SOURCE_SHA" ]; then
+              echo "::error::source_sha is missing from payload"
+              exit 1
+            fi
+
+            echo "${{ github.event.client_payload.spec_base64 }}" | base64 -d | head -c 5M > openapi.json.tmp
+
+            if ! jq empty openapi.json.tmp 2>/dev/null; then
+              echo "::error::Decoded payload is not valid JSON"
+              rm -f openapi.json.tmp
+              exit 1
+            fi
+
+            mv openapi.json.tmp openapi.json
           else
             echo "No spec in payload, using existing openapi.json"
           fi
 
       - name: Generate API client
         run: |
-          go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
+          go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.5.1
           mkdir -p internal/apigen
           oapi-codegen --config oapi-codegen.yaml openapi.json
+
+      - name: Build and test generated code
+        run: |
+          go build ./...
+          go test ./internal/api/...
 
       - name: Generate GitHub App token
         uses: actions/create-github-app-token@v2
@@ -77,7 +96,7 @@ jobs:
           fi
 
           git commit -m "chore: update OpenAPI spec and generated client from website"
-          git push origin "$BRANCH_NAME" --force
+          git push origin "$BRANCH_NAME" --force-with-lease
 
           gh pr create \
             --title "chore: update OpenAPI spec and generated client from website" \

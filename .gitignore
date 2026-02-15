@@ -10,6 +10,7 @@ kubeasy-cli.log
 # Build artifacts
 kubeasy
 kubeasy-cli
+.latest-version
 
 # Task artifacts
 *.task/

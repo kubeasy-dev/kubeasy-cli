@@ -5,7 +5,7 @@ version: 2
 project_name: kubeasy-cli
 before:
   hooks:
-    - sh -c 'echo {{ .Tag }} > /tmp/latest'
+    - sh -c 'echo {{ .Tag }} > .latest-version'
 release:
   github:
     owner: kubeasy-dev
@@ -46,7 +46,7 @@ blobs:
     extra_files:
       - glob: scripts/install.sh
         name_template: install.sh
-      - glob: /tmp/latest
+      - glob: .latest-version
         name_template: latest
 homebrew_casks:
   - name: kubeasy

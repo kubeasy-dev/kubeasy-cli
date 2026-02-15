@@ -5,8 +5,6 @@ import "strings"
 // WebsiteURL is the base URL for the Kubeasy website (used for CLI API routes)
 var WebsiteURL = "http://localhost:3000"
 
-var RestAPIUrl = WebsiteURL + "/api/cli"
-
 var KeyringServiceName = "kubeasy-cli"
 
 var GithubRootURL = "https://github.com/kubeasy-dev"

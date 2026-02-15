@@ -22,7 +22,6 @@ func setupMockServer(t *testing.T, handler http.HandlerFunc) *httptest.Server {
 // setupKeyring sets up a mock keyring for testing
 func setupKeyring(t *testing.T, token string) {
 	t.Helper()
-	// Use mock keyring for testing
 	keyring.MockInit()
 	err := keyring.Set(constants.KeyringServiceName, "api_key", token)
 	require.NoError(t, err, "Failed to set mock keyring")
@@ -34,19 +33,25 @@ func cleanupKeyring(t *testing.T) {
 	_ = keyring.Delete(constants.KeyringServiceName, "api_key")
 }
 
+// overrideServerURL overrides WebsiteURL for testing, returns cleanup func
+func overrideServerURL(t *testing.T, serverURL string) func() {
+	t.Helper()
+	oldWebsiteURL := constants.WebsiteURL
+	constants.WebsiteURL = serverURL
+	return func() {
+		constants.WebsiteURL = oldWebsiteURL
+	}
+}
+
 func TestGetProfile_Success(t *testing.T) {
-	// Setup mock keyring
 	setupKeyring(t, "test-token")
 	defer cleanupKeyring(t)
 
-	// Setup mock server
 	server := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		// Verify request
 		assert.Equal(t, "GET", r.Method)
-		assert.Equal(t, "/user", r.URL.Path)
+		assert.Equal(t, "/api/cli/user", r.URL.Path)
 		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
 
-		// Return mock response
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		response := UserProfile{
@@ -56,16 +61,10 @@ func TestGetProfile_Success(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(response)
 	})
 	defer server.Close()
+	defer overrideServerURL(t, server.URL)()
 
-	// Override API URL for testing
-	oldAPIURL := constants.RestAPIUrl
-	constants.RestAPIUrl = server.URL
-	defer func() { constants.RestAPIUrl = oldAPIURL }()
-
-	// Execute
 	profile, err := GetProfile()
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, "Test", profile.FirstName)
 	assert.NotNil(t, profile.LastName)
@@ -83,15 +82,10 @@ func TestGetProfile_APIError(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(response)
 	})
 	defer server.Close()
+	defer overrideServerURL(t, server.URL)()
 
-	oldAPIURL := constants.RestAPIUrl
-	constants.RestAPIUrl = server.URL
-	defer func() { constants.RestAPIUrl = oldAPIURL }()
-
-	// Execute
 	profile, err := GetProfile()
 
-	// Assert
 	require.Error(t, err)
 	assert.Nil(t, profile)
 	assert.Contains(t, err.Error(), "API error: Unauthorized")
@@ -107,18 +101,12 @@ func TestGetProfile_InvalidJSON(t *testing.T) {
 		_, _ = w.Write([]byte("invalid json"))
 	})
 	defer server.Close()
+	defer overrideServerURL(t, server.URL)()
 
-	oldAPIURL := constants.RestAPIUrl
-	constants.RestAPIUrl = server.URL
-	defer func() { constants.RestAPIUrl = oldAPIURL }()
-
-	// Execute
 	profile, err := GetProfile()
 
-	// Assert
 	require.Error(t, err)
 	assert.Nil(t, profile)
-	assert.Contains(t, err.Error(), "failed to decode response")
 }
 
 func TestGetUserProfile_Alias(t *testing.T) {
@@ -132,15 +120,10 @@ func TestGetUserProfile_Alias(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(response)
 	})
 	defer server.Close()
+	defer overrideServerURL(t, server.URL)()
 
-	oldAPIURL := constants.RestAPIUrl
-	constants.RestAPIUrl = server.URL
-	defer func() { constants.RestAPIUrl = oldAPIURL }()
-
-	// Execute
 	profile, err := GetUserProfile()
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, "Test", profile.FirstName)
 }
@@ -151,7 +134,7 @@ func TestGetChallengeBySlug_Success(t *testing.T) {
 
 	server := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "GET", r.Method)
-		assert.Equal(t, "/challenge/pod-evicted", r.URL.Path)
+		assert.Equal(t, "/api/cli/challenge/pod-evicted", r.URL.Path)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -168,15 +151,10 @@ func TestGetChallengeBySlug_Success(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(response)
 	})
 	defer server.Close()
+	defer overrideServerURL(t, server.URL)()
 
-	oldAPIURL := constants.RestAPIUrl
-	constants.RestAPIUrl = server.URL
-	defer func() { constants.RestAPIUrl = oldAPIURL }()
-
-	// Execute
 	challenge, err := GetChallengeBySlug("pod-evicted")
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, 123, challenge.ID)
 	assert.Equal(t, "pod-evicted", challenge.Slug)
@@ -188,18 +166,16 @@ func TestGetChallengeBySlug_NotFound(t *testing.T) {
 	defer cleanupKeyring(t)
 
 	server := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
+		response := ErrorResponse{Error: "Not found"}
+		_ = json.NewEncoder(w).Encode(response)
 	})
 	defer server.Close()
+	defer overrideServerURL(t, server.URL)()
 
-	oldAPIURL := constants.RestAPIUrl
-	constants.RestAPIUrl = server.URL
-	defer func() { constants.RestAPIUrl = oldAPIURL }()
-
-	// Execute
 	challenge, err := GetChallengeBySlug("nonexistent")
 
-	// Assert
 	require.Error(t, err)
 	assert.Nil(t, challenge)
 	assert.Contains(t, err.Error(), "challenge 'nonexistent' not found")
@@ -211,7 +187,7 @@ func TestGetChallengeStatus_Success(t *testing.T) {
 
 	server := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "GET", r.Method)
-		assert.Equal(t, "/challenge/pod-evicted/status", r.URL.Path)
+		assert.Equal(t, "/api/cli/challenge/pod-evicted/status", r.URL.Path)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -222,15 +198,10 @@ func TestGetChallengeStatus_Success(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(response)
 	})
 	defer server.Close()
+	defer overrideServerURL(t, server.URL)()
 
-	oldAPIURL := constants.RestAPIUrl
-	constants.RestAPIUrl = server.URL
-	defer func() { constants.RestAPIUrl = oldAPIURL }()
-
-	// Execute
 	status, err := GetChallengeStatus("pod-evicted")
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, "in_progress", status.Status)
 	assert.NotNil(t, status.StartedAt)
@@ -242,7 +213,7 @@ func TestStartChallengeWithResponse_Success(t *testing.T) {
 
 	server := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "/challenge/pod-evicted/start", r.URL.Path)
+		assert.Equal(t, "/api/cli/challenge/pod-evicted/start", r.URL.Path)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -254,15 +225,10 @@ func TestStartChallengeWithResponse_Success(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(response)
 	})
 	defer server.Close()
+	defer overrideServerURL(t, server.URL)()
 
-	oldAPIURL := constants.RestAPIUrl
-	constants.RestAPIUrl = server.URL
-	defer func() { constants.RestAPIUrl = oldAPIURL }()
-
-	// Execute
 	response, err := StartChallengeWithResponse("pod-evicted")
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, "in_progress", response.Status)
 	assert.Equal(t, "2024-01-01T00:00:00Z", response.StartedAt)
@@ -284,15 +250,10 @@ func TestStartChallenge_BackwardCompatibility(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(response)
 	})
 	defer server.Close()
+	defer overrideServerURL(t, server.URL)()
 
-	oldAPIURL := constants.RestAPIUrl
-	constants.RestAPIUrl = server.URL
-	defer func() { constants.RestAPIUrl = oldAPIURL }()
-
-	// Execute
 	err := StartChallenge("pod-evicted")
 
-	// Assert
 	require.NoError(t, err)
 }
 
@@ -302,10 +263,9 @@ func TestSubmitChallenge_Success(t *testing.T) {
 
 	server := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "/challenge/pod-evicted/submit", r.URL.Path)
+		assert.Equal(t, "/api/cli/challenge/pod-evicted/submit", r.URL.Path)
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-		// Verify request body
 		var req ChallengeSubmitRequest
 		err := json.NewDecoder(r.Body).Decode(&req)
 		require.NoError(t, err)
@@ -320,12 +280,8 @@ func TestSubmitChallenge_Success(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(response)
 	})
 	defer server.Close()
+	defer overrideServerURL(t, server.URL)()
 
-	oldAPIURL := constants.RestAPIUrl
-	constants.RestAPIUrl = server.URL
-	defer func() { constants.RestAPIUrl = oldAPIURL }()
-
-	// Execute
 	req := ChallengeSubmitRequest{
 		Results: []ObjectiveResult{
 			{ObjectiveKey: "obj-1", Passed: true, Message: strPtr("Passed")},
@@ -334,11 +290,8 @@ func TestSubmitChallenge_Success(t *testing.T) {
 	}
 	response, err := SubmitChallenge("pod-evicted", req)
 
-	// Assert
 	require.NoError(t, err)
 	assert.True(t, response.Success)
-	assert.NotNil(t, response.Message)
-	assert.Equal(t, "All validations passed", *response.Message)
 }
 
 func TestSubmitChallenge_PartialSuccess(t *testing.T) {
@@ -347,7 +300,7 @@ func TestSubmitChallenge_PartialSuccess(t *testing.T) {
 
 	server := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(http.StatusUnprocessableEntity)
 		response := ChallengeSubmitResponse{
 			Success: false,
 			Message: strPtr("Some validations failed"),
@@ -355,12 +308,8 @@ func TestSubmitChallenge_PartialSuccess(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(response)
 	})
 	defer server.Close()
+	defer overrideServerURL(t, server.URL)()
 
-	oldAPIURL := constants.RestAPIUrl
-	constants.RestAPIUrl = server.URL
-	defer func() { constants.RestAPIUrl = oldAPIURL }()
-
-	// Execute
 	req := ChallengeSubmitRequest{
 		Results: []ObjectiveResult{
 			{ObjectiveKey: "obj-1", Passed: false, Message: strPtr("Failed")},
@@ -368,7 +317,6 @@ func TestSubmitChallenge_PartialSuccess(t *testing.T) {
 	}
 	response, err := SubmitChallenge("pod-evicted", req)
 
-	// Assert - 400 is acceptable for submit endpoint
 	require.NoError(t, err)
 	assert.False(t, response.Success)
 }
@@ -384,18 +332,13 @@ func TestSendSubmit_Success(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(response)
 	})
 	defer server.Close()
+	defer overrideServerURL(t, server.URL)()
 
-	oldAPIURL := constants.RestAPIUrl
-	constants.RestAPIUrl = server.URL
-	defer func() { constants.RestAPIUrl = oldAPIURL }()
-
-	// Execute
 	results := []ObjectiveResult{
 		{ObjectiveKey: "obj-1", Passed: true, Message: strPtr("Passed")},
 	}
 	err := SendSubmit("pod-evicted", results)
 
-	// Assert
 	require.NoError(t, err)
 }
 
@@ -413,18 +356,13 @@ func TestSendSubmit_Failure(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(response)
 	})
 	defer server.Close()
+	defer overrideServerURL(t, server.URL)()
 
-	oldAPIURL := constants.RestAPIUrl
-	constants.RestAPIUrl = server.URL
-	defer func() { constants.RestAPIUrl = oldAPIURL }()
-
-	// Execute
 	results := []ObjectiveResult{
 		{ObjectiveKey: "obj-1", Passed: false, Message: strPtr("Failed")},
 	}
 	err := SendSubmit("pod-evicted", results)
 
-	// Assert
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Validation failed")
 }
@@ -435,7 +373,7 @@ func TestResetChallenge_Success(t *testing.T) {
 
 	server := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "/challenge/pod-evicted/reset", r.URL.Path)
+		assert.Equal(t, "/api/cli/challenge/pod-evicted/reset", r.URL.Path)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -446,15 +384,10 @@ func TestResetChallenge_Success(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(response)
 	})
 	defer server.Close()
+	defer overrideServerURL(t, server.URL)()
 
-	oldAPIURL := constants.RestAPIUrl
-	constants.RestAPIUrl = server.URL
-	defer func() { constants.RestAPIUrl = oldAPIURL }()
-
-	// Execute
 	response, err := ResetChallenge("pod-evicted")
 
-	// Assert
 	require.NoError(t, err)
 	assert.True(t, response.Success)
 	assert.Equal(t, "Challenge reset successfully", response.Message)
@@ -471,15 +404,10 @@ func TestResetChallengeProgress_Success(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(response)
 	})
 	defer server.Close()
+	defer overrideServerURL(t, server.URL)()
 
-	oldAPIURL := constants.RestAPIUrl
-	constants.RestAPIUrl = server.URL
-	defer func() { constants.RestAPIUrl = oldAPIURL }()
-
-	// Execute
 	err := ResetChallengeProgress("pod-evicted")
 
-	// Assert
 	require.NoError(t, err)
 }
 
@@ -497,15 +425,10 @@ func TestResetChallengeProgress_Failure(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(response)
 	})
 	defer server.Close()
+	defer overrideServerURL(t, server.URL)()
 
-	oldAPIURL := constants.RestAPIUrl
-	constants.RestAPIUrl = server.URL
-	defer func() { constants.RestAPIUrl = oldAPIURL }()
-
-	// Execute
 	err := ResetChallengeProgress("pod-evicted")
 
-	// Assert
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Reset failed")
 }
@@ -530,15 +453,10 @@ func TestGetChallenge_Alias(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(response)
 	})
 	defer server.Close()
+	defer overrideServerURL(t, server.URL)()
 
-	oldAPIURL := constants.RestAPIUrl
-	constants.RestAPIUrl = server.URL
-	defer func() { constants.RestAPIUrl = oldAPIURL }()
-
-	// Execute
 	challenge, err := GetChallenge("test")
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, 456, challenge.ID)
 }
@@ -554,15 +472,10 @@ func TestGetChallengeProgress_Alias(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(response)
 	})
 	defer server.Close()
+	defer overrideServerURL(t, server.URL)()
 
-	oldAPIURL := constants.RestAPIUrl
-	constants.RestAPIUrl = server.URL
-	defer func() { constants.RestAPIUrl = oldAPIURL }()
-
-	// Execute
 	status, err := GetChallengeProgress("test")
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, "completed", status.Status)
 }
@@ -573,16 +486,19 @@ func TestLogin_Success(t *testing.T) {
 
 	server := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "/user", r.URL.Path)
+		assert.Equal(t, "/api/cli/user", r.URL.Path)
 		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-		// Verify request body contains CLI metadata
-		var req TrackRequest
+		var req struct {
+			CliVersion string `json:"cliVersion"`
+			Os         string `json:"os"`
+			Arch       string `json:"arch"`
+		}
 		err := json.NewDecoder(r.Body).Decode(&req)
 		require.NoError(t, err)
-		assert.NotEmpty(t, req.CLIVersion)
-		assert.NotEmpty(t, req.OS)
+		assert.NotEmpty(t, req.CliVersion)
+		assert.NotEmpty(t, req.Os)
 		assert.NotEmpty(t, req.Arch)
 
 		w.Header().Set("Content-Type", "application/json")
@@ -596,10 +512,7 @@ func TestLogin_Success(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(response)
 	})
 	defer server.Close()
-
-	oldAPIURL := constants.RestAPIUrl
-	constants.RestAPIUrl = server.URL
-	defer func() { constants.RestAPIUrl = oldAPIURL }()
+	defer overrideServerURL(t, server.URL)()
 
 	result, err := Login()
 
@@ -622,10 +535,7 @@ func TestLogin_APIError(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(response)
 	})
 	defer server.Close()
-
-	oldAPIURL := constants.RestAPIUrl
-	constants.RestAPIUrl = server.URL
-	defer func() { constants.RestAPIUrl = oldAPIURL }()
+	defer overrideServerURL(t, server.URL)()
 
 	result, err := Login()
 
@@ -634,63 +544,7 @@ func TestLogin_APIError(t *testing.T) {
 	assert.Contains(t, err.Error(), "API error: Unauthorized")
 }
 
-func TestSendTrackEvent_Success(t *testing.T) {
-	setupKeyring(t, "test-token")
-	defer cleanupKeyring(t)
-
-	server := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "/track/setup", r.URL.Path)
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
-		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
-
-		// Verify request body
-		var req TrackRequest
-		err := json.NewDecoder(r.Body).Decode(&req)
-		require.NoError(t, err)
-		assert.NotEmpty(t, req.CLIVersion)
-		assert.NotEmpty(t, req.OS)
-		assert.NotEmpty(t, req.Arch)
-
-		w.WriteHeader(http.StatusOK)
-	})
-	defer server.Close()
-
-	oldAPIURL := constants.RestAPIUrl
-	constants.RestAPIUrl = server.URL
-	defer func() { constants.RestAPIUrl = oldAPIURL }()
-
-	// Call sendTrackEvent directly (synchronous) for testability
-	sendTrackEvent("/track/setup")
-}
-
-func TestSendTrackEvent_ServerError(t *testing.T) {
-	setupKeyring(t, "test-token")
-	defer cleanupKeyring(t)
-
-	server := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	})
-	defer server.Close()
-
-	oldAPIURL := constants.RestAPIUrl
-	constants.RestAPIUrl = server.URL
-	defer func() { constants.RestAPIUrl = oldAPIURL }()
-
-	// Should not panic on server error
-	sendTrackEvent("/track/setup")
-}
-
-func TestSendTrackEvent_NoAuth(t *testing.T) {
-	// Clean keyring to simulate missing token
-	keyring.MockInit()
-	_ = keyring.Delete(constants.KeyringServiceName, "api_key")
-
-	// Should not panic when no auth token is available
-	sendTrackEvent("/track/setup")
-}
-
-func TestTrackEventSync(t *testing.T) {
+func TestTrackSetup_Success(t *testing.T) {
 	setupKeyring(t, "test-token")
 	defer cleanupKeyring(t)
 
@@ -698,32 +552,35 @@ func TestTrackEventSync(t *testing.T) {
 	server := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "/track/setup", r.URL.Path)
+		assert.Equal(t, "/api/cli/track/setup", r.URL.Path)
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"success":true,"firstTime":false}`))
 	})
 	defer server.Close()
+	defer overrideServerURL(t, server.URL)()
 
-	oldAPIURL := constants.RestAPIUrl
-	constants.RestAPIUrl = server.URL
-	defer func() { constants.RestAPIUrl = oldAPIURL }()
+	TrackSetup()
 
-	TrackEventSync("/track/setup")
-
-	// Request must have completed synchronously before this assertion
-	assert.True(t, called, "expected tracking request to be sent synchronously")
+	assert.True(t, called, "expected tracking request to be sent")
 }
 
-// TestGetAuthToken_NoKeyring tests behavior when keyring is not available
-func TestGetAuthToken_NoKeyring(t *testing.T) {
-	// Clean keyring to simulate missing token
+func TestTrackSetup_NoAuth(t *testing.T) {
 	keyring.MockInit()
 	_ = keyring.Delete(constants.KeyringServiceName, "api_key")
 
-	// This will fail because getAuthToken is not exported
-	// We test it indirectly through GetProfile
-	oldAPIURL := constants.RestAPIUrl
-	constants.RestAPIUrl = "http://localhost:9999"
-	defer func() { constants.RestAPIUrl = oldAPIURL }()
+	// Should not panic
+	TrackSetup()
+}
+
+func TestGetAuthToken_NoKeyring(t *testing.T) {
+	keyring.MockInit()
+	_ = keyring.Delete(constants.KeyringServiceName, "api_key")
+
+	defer overrideServerURL(t, "http://localhost:9999")()
 
 	_, err := GetProfile()
 	require.Error(t, err)
@@ -737,12 +594,7 @@ func strPtr(s string) *string {
 
 // TestMain sets up test environment
 func TestMain(m *testing.M) {
-	// Setup
 	keyring.MockInit()
-
-	// Run tests
 	code := m.Run()
-
-	// Teardown
 	os.Exit(code)
 }

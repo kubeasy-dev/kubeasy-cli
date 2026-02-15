@@ -1,0 +1,111 @@
+name: Update OpenAPI client
+
+on:
+  repository_dispatch:
+    types: [openapi-spec-updated]
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Write OpenAPI spec
+        run: |
+          if [ -n "${{ github.event.client_payload.spec_base64 }}" ]; then
+            SOURCE_SHA="${{ github.event.client_payload.source_sha }}"
+            if [ -z "$SOURCE_SHA" ]; then
+              echo "::error::source_sha is missing from payload"
+              exit 1
+            fi
+
+            echo "${{ github.event.client_payload.spec_base64 }}" | base64 -d | head -c 5M > openapi.json.tmp
+
+            if ! jq empty openapi.json.tmp 2>/dev/null; then
+              echo "::error::Decoded payload is not valid JSON"
+              rm -f openapi.json.tmp
+              exit 1
+            fi
+
+            mv openapi.json.tmp openapi.json
+          else
+            echo "No spec in payload, using existing openapi.json"
+          fi
+
+      - name: Generate API client
+        run: |
+          go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.5.1
+          mkdir -p internal/apigen
+          oapi-codegen --config oapi-codegen.yaml openapi.json
+
+      - name: Build and test generated code
+        run: |
+          go build ./...
+          go test ./internal/api/...
+
+      - name: Generate GitHub App token
+        uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Get GitHub App User ID
+        id: get-user-id
+        run: echo "user-id=$(gh api "/users/${{ steps.app-token.outputs.app-slug }}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      - name: Configure git
+        run: |
+          git config --local user.name "${{ steps.app-token.outputs.app-slug }}[bot]"
+          git config --local user.email "${{ steps.get-user-id.outputs.user-id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
+
+      - name: Create or update PR
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          BRANCH_NAME="chore/update-openapi-from-website"
+
+          git fetch origin
+
+          if git ls-remote --exit-code --heads origin "$BRANCH_NAME" >/dev/null 2>&1; then
+            git checkout "$BRANCH_NAME"
+            git pull origin "$BRANCH_NAME"
+          else
+            git checkout -b "$BRANCH_NAME"
+          fi
+
+          git add openapi.json internal/apigen/client.gen.go
+
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          git commit -m "chore: update OpenAPI spec and generated client from website"
+          git push origin "$BRANCH_NAME" --force-with-lease
+
+          gh pr create \
+            --title "chore: update OpenAPI spec and generated client from website" \
+            --body "Auto-generated from website OpenAPI schema changes (source: kubeasy-dev/website@${{ github.event.client_payload.source_sha }}).
+
+          **Changes:**
+          - Updated \`openapi.json\` spec
+          - Regenerated \`internal/apigen/client.gen.go\`
+
+          Review and merge when ready." \
+            --base main \
+            --head "$BRANCH_NAME" || echo "PR already exists, updated with new commits"

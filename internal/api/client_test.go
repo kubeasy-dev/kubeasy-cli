@@ -12,8 +12,8 @@ import (
 func TestSendSubmit_RequestConstruction(t *testing.T) {
 	t.Run("constructs correct request structure", func(t *testing.T) {
 		results := []ObjectiveResult{
-			{ObjectiveKey: "obj1", Passed: true, Message: stringPtr("success")},
-			{ObjectiveKey: "obj2", Passed: false, Message: stringPtr("failed")},
+			{ObjectiveKey: "obj1", Passed: true, Message: strPtr("success")},
+			{ObjectiveKey: "obj2", Passed: false, Message: strPtr("failed")},
 		}
 
 		req := ChallengeSubmitRequest{
@@ -53,7 +53,7 @@ func TestRequestMarshaling(t *testing.T) {
 	t.Run("ChallengeSubmitRequest marshaling", func(t *testing.T) {
 		req := ChallengeSubmitRequest{
 			Results: []ObjectiveResult{
-				{ObjectiveKey: "test", Passed: true, Message: stringPtr("success")},
+				{ObjectiveKey: "test", Passed: true, Message: strPtr("success")},
 			},
 		}
 
@@ -299,19 +299,6 @@ func TestResponseUnmarshaling(t *testing.T) {
 		assert.Nil(t, resp.FirstLogin)
 	})
 
-	t.Run("TrackRequest marshaling", func(t *testing.T) {
-		req := TrackRequest{
-			CLIVersion: "2.5.0",
-			OS:         "darwin",
-			Arch:       "arm64",
-		}
-
-		data, err := json.Marshal(req)
-		require.NoError(t, err)
-		assert.Contains(t, string(data), `"cliVersion":"2.5.0"`)
-		assert.Contains(t, string(data), `"os":"darwin"`)
-		assert.Contains(t, string(data), `"arch":"arm64"`)
-	})
 }
 
 // TestObjectiveResultVariations tests different ObjectiveResult scenarios
@@ -326,7 +313,7 @@ func TestObjectiveResultVariations(t *testing.T) {
 			result: ObjectiveResult{
 				ObjectiveKey: "pod-ready",
 				Passed:       true,
-				Message:      stringPtr("Pod is running"),
+				Message:      strPtr("Pod is running"),
 			},
 			wantJSON: `{"objectiveKey":"pod-ready","passed":true,"message":"Pod is running"}`,
 		},
@@ -372,7 +359,5 @@ func TestObjectiveResultVariations(t *testing.T) {
 	}
 }
 
-// Helper functions
-func stringPtr(s string) *string {
-	return &s
-}
+// strPtr is an alias for strPtr defined in client_http_test.go
+// Helper functions are defined there to avoid duplication.

@@ -61,6 +61,14 @@ tasks:
       - echo "Installing gocovmerge..."
       - go install github.com/wadey/gocovmerge@latest
 
+  install:oapi-codegen:
+    desc: Install oapi-codegen
+    status:
+      - command -v oapi-codegen
+    cmds:
+      - echo "Installing oapi-codegen..."
+      - go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.5.1
+
   install:tools:
     desc: Install all development tools
     deps:
@@ -68,6 +76,7 @@ tasks:
       - install:envtest
       - install:goreleaser
       - install:gocovmerge
+      - install:oapi-codegen
 
   # ===========================================================================
   # Setup
@@ -96,6 +105,21 @@ tasks:
     cmds:
       - echo "Generating vendor directory..."
       - go mod vendor
+
+  # ===========================================================================
+  # Code Generation
+  # ===========================================================================
+  generate:api:
+    desc: Generate Go API client from OpenAPI spec
+    deps: [install:oapi-codegen]
+    cmds:
+      - mkdir -p internal/apigen
+      - oapi-codegen --config oapi-codegen.yaml openapi.json
+    sources:
+      - openapi.json
+      - oapi-codegen.yaml
+    generates:
+      - internal/apigen/client.gen.go
 
   # ===========================================================================
   # Build

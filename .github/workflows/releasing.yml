@@ -34,7 +34,7 @@ jobs:
           PARENT_SHA=$(git rev-parse HEAD~1)
           echo "Verifying CI status for commit: $PARENT_SHA"
 
-          REQUIRED_CHECKS=("Test Summary" "golangci-lint")
+          REQUIRED_CHECKS=("Test Summary" "Go Lint")
 
           for check_name in "${REQUIRED_CHECKS[@]}"; do
             echo ""

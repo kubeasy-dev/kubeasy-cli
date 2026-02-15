@@ -1,0 +1,1130 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Kubeasy CLI API",
+    "version": "1.0.0",
+    "description": "API consumed by the Kubeasy CLI (`kubeasy-cli`) and challenge sync scripts."
+  },
+  "servers": [
+    {
+      "url": "https://kubeasy.dev",
+      "description": "Production"
+    },
+    {
+      "url": "http://localhost:3000",
+      "description": "Development"
+    }
+  ],
+  "paths": {
+    "/api/cli/user": {
+      "get": {
+        "operationId": "getUser",
+        "summary": "Get current user (deprecated)",
+        "deprecated": true,
+        "tags": [
+          "User"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "firstName": {
+                      "type": "string"
+                    },
+                    "lastName": {
+                      "nullable": true,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "firstName",
+                    "lastName"
+                  ],
+                  "additionalProperties": false,
+                  "description": "User profile information"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "loginUser",
+        "summary": "Login user and track CLI metadata",
+        "tags": [
+          "User"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cliVersion": {
+                    "type": "string"
+                  },
+                  "os": {
+                    "type": "string"
+                  },
+                  "arch": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "cliVersion",
+                  "os",
+                  "arch"
+                ],
+                "description": "CLI metadata sent with tracking requests"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "User profile with first-login flag",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "firstName": {
+                      "type": "string"
+                    },
+                    "lastName": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "firstLogin": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "firstName",
+                    "lastName",
+                    "firstLogin"
+                  ],
+                  "additionalProperties": false,
+                  "description": "User login response with first-login flag"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cli/challenge/{slug}": {
+      "get": {
+        "operationId": "getChallenge",
+        "summary": "Get challenge details",
+        "tags": [
+          "Challenge"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "schema": {
+              "type": "string",
+              "description": "Challenge slug",
+              "example": "pod-evicted"
+            },
+            "required": true,
+            "description": "Challenge slug"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Challenge details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "difficulty": {
+                      "type": "string",
+                      "enum": [
+                        "easy",
+                        "medium",
+                        "hard"
+                      ]
+                    },
+                    "theme": {
+                      "type": "string"
+                    },
+                    "initial_situation": {
+                      "type": "string"
+                    },
+                    "objective": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "slug",
+                    "description",
+                    "difficulty",
+                    "theme",
+                    "initial_situation",
+                    "objective"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Challenge details"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Challenge not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cli/challenge/{slug}/status": {
+      "get": {
+        "operationId": "getChallengeStatus",
+        "summary": "Get challenge progress status",
+        "tags": [
+          "Challenge"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "schema": {
+              "type": "string",
+              "description": "Challenge slug",
+              "example": "pod-evicted"
+            },
+            "required": true,
+            "description": "Challenge slug"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Challenge status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "not_started",
+                        "in_progress",
+                        "completed"
+                      ]
+                    },
+                    "startedAt": {
+                      "description": "ISO 8601 date string",
+                      "type": "string"
+                    },
+                    "completedAt": {
+                      "description": "ISO 8601 date string",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Challenge progress status"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Challenge not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cli/challenge/{slug}/start": {
+      "post": {
+        "operationId": "startChallenge",
+        "summary": "Start a challenge",
+        "tags": [
+          "Challenge"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "schema": {
+              "type": "string",
+              "description": "Challenge slug",
+              "example": "pod-evicted"
+            },
+            "required": true,
+            "description": "Challenge slug"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Challenge started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "in_progress",
+                        "completed"
+                      ]
+                    },
+                    "startedAt": {
+                      "type": "string",
+                      "description": "ISO 8601 date string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "startedAt"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Challenge start response"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Challenge not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cli/challenge/{slug}/submit": {
+      "post": {
+        "operationId": "submitChallenge",
+        "summary": "Submit challenge validation results",
+        "tags": [
+          "Challenge"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "schema": {
+              "type": "string",
+              "description": "Challenge slug",
+              "example": "pod-evicted"
+            },
+            "required": true,
+            "description": "Challenge slug"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "results": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "objectiveKey": {
+                          "type": "string",
+                          "description": "Validation key (e.g. pod-ready-check)"
+                        },
+                        "passed": {
+                          "type": "boolean"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "objectiveKey",
+                        "passed"
+                      ],
+                      "description": "Result from a single validation"
+                    }
+                  }
+                },
+                "required": [
+                  "results"
+                ],
+                "description": "Challenge submission payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Submission accepted (check `success` field)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "xpAwarded": {
+                      "type": "number"
+                    },
+                    "totalXp": {
+                      "type": "number"
+                    },
+                    "rank": {
+                      "type": "string"
+                    },
+                    "rankUp": {
+                      "type": "boolean"
+                    },
+                    "firstChallenge": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "xpAwarded",
+                    "totalXp",
+                    "rank"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Successful challenge submission"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Challenge not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cli/challenge/{slug}/reset": {
+      "post": {
+        "operationId": "resetChallenge",
+        "summary": "Reset challenge progress",
+        "tags": [
+          "Challenge"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "schema": {
+              "type": "string",
+              "description": "Challenge slug",
+              "example": "pod-evicted"
+            },
+            "required": true,
+            "description": "Challenge slug"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Challenge reset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "message"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Challenge reset response"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Challenge not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cli/track/setup": {
+      "post": {
+        "operationId": "trackSetup",
+        "summary": "Track CLI cluster setup",
+        "tags": [
+          "Tracking"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cliVersion": {
+                    "type": "string"
+                  },
+                  "os": {
+                    "type": "string"
+                  },
+                  "arch": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "cliVersion",
+                  "os",
+                  "arch"
+                ],
+                "description": "CLI metadata sent with tracking requests"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Setup tracked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "firstTime": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "firstTime"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Track setup response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "API key obtained via `kubeasy login`"
+      }
+    }
+  }
+}

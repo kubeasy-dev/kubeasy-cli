@@ -5,6 +5,7 @@ go 1.25.4
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/hypersequent/zen v0.0.0-20250923135653-056103bb12ce
+	github.com/oapi-codegen/runtime v1.1.2
 	github.com/pterm/pterm v0.12.82
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
@@ -26,6 +27,7 @@ require (
 	atomicgo.dev/keyboard v0.2.9 // indirect
 	atomicgo.dev/schedule v0.1.0 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
+	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/containerd/console v1.0.5 // indirect

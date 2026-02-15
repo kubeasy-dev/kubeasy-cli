@@ -1,5 +1,8 @@
-// Code generated from website/types/cli-api.ts
-// Manually updated: 2025-11-27
+// Package api provides the HTTP client layer for the Kubeasy CLI API.
+//
+// Response types are kept here as stable interfaces for the rest of the CLI.
+// The generated client (internal/apigen) uses inline anonymous structs, so
+// these named types provide backward compatibility and a cleaner API.
 
 package api
 
@@ -10,7 +13,6 @@ type UserResponse struct {
 }
 
 // LoginResponse represents the response from POST /api/cli/user
-// Combines user profile with login tracking in a single call.
 type LoginResponse struct {
 	FirstName  string  `json:"firstName"`
 	LastName   *string `json:"lastName,omitempty"`
@@ -44,36 +46,19 @@ type ChallengeStartResponse struct {
 }
 
 // ObjectiveResult represents the raw validation result from a CRD
-// This is the simplified payload sent by the CLI - no processing, just CRD status
 type ObjectiveResult struct {
-	ObjectiveKey string  `json:"objectiveKey"`      // CRD metadata.name (e.g., "pod-ready-check")
+	ObjectiveKey string  `json:"objectiveKey"`      // CRD metadata.name
 	Passed       bool    `json:"passed"`            // CRD status.allPassed
 	Message      *string `json:"message,omitempty"` // CRD status message or error
 }
 
 // ChallengeSubmitRequest represents the request body for POST /api/cli/challenge/[slug]/submit
 type ChallengeSubmitRequest struct {
-	Results []ObjectiveResult `json:"results"` // Raw results from validation CRDs
+	Results []ObjectiveResult `json:"results"`
 }
 
-// ChallengeSubmitSuccessResponse represents a successful submission response
-type ChallengeSubmitSuccessResponse struct {
-	Success        bool   `json:"success"` // Always true for this type
-	XpAwarded      int    `json:"xpAwarded"`
-	TotalXp        int    `json:"totalXp"`
-	Rank           string `json:"rank"`
-	RankUp         *bool  `json:"rankUp,omitempty"`
-	FirstChallenge *bool  `json:"firstChallenge,omitempty"`
-}
-
-// ChallengeSubmitFailureResponse represents a failed submission response
-type ChallengeSubmitFailureResponse struct {
-	Success bool   `json:"success"` // Always false for this type
-	Message string `json:"message"`
-}
-
-// ChallengeSubmitResponse is a union type that can be either success or failure
-// Check the Success field to determine which type it is
+// ChallengeSubmitResponse is a union type that can be either success or failure.
+// Check the Success field to determine which type it is.
 type ChallengeSubmitResponse struct {
 	Success        bool    `json:"success"`
 	XpAwarded      *int    `json:"xpAwarded,omitempty"`
@@ -96,13 +81,6 @@ type ErrorResponse struct {
 	Details *string `json:"details,omitempty"`
 }
 
-// TrackRequest represents the request body for POST /api/cli/track/*
-type TrackRequest struct {
-	CLIVersion string `json:"cliVersion"`
-	OS         string `json:"os"`
-	Arch       string `json:"arch"`
-}
-
-// Type aliases for backward compatibility with existing CLI code
+// Type aliases for backward compatibility
 type UserProfile = UserResponse
 type ChallengeEntity = ChallengeResponse

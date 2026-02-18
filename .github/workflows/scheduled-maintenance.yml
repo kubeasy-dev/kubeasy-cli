@@ -1,0 +1,38 @@
+name: Weekly Maintenance
+on:
+  schedule:
+    - cron: "0 8 * * 6"
+  workflow_dispatch:
+
+jobs:
+  maintenance:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1.0.51
+        with:
+          anthropic_api_key: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            REPO: ${{ github.repository }}
+
+            Perform weekly repository maintenance:
+
+            1. Check for outdated dependencies in package.json
+            2. Scan for security vulnerabilities using `npm audit`
+            3. Review open issues older than 90 days
+            4. Check for TODO comments in recent commits
+            5. Verify README.md examples still work
+
+            Create many issues for any findings with detailed descriptions and steps to reproduce.
+            If critical security issues are found, also comment on open PRs.
+
+          claude_args: |
+            --allowedTools "Read,Bash(npm:*),Bash(gh issue:*),Bash(git:*)"

@@ -15,6 +15,8 @@ var ExercicesRepoBranch = "challenge/refactoring-2024"
 
 var Version = "dev"
 
+var KubeasyClusterName = "kubeasy"
+
 var KubeasyClusterContext = "kind-kubeasy"
 
 // UnknownVersion is returned when a version cannot be parsed or determined.

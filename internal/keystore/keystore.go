@@ -59,7 +59,7 @@ var (
 
 // credentials represents the structure of the credentials file
 type credentials struct {
-	APIKey string `json:"api_key,omitempty"`
+	APIKey string `json:"api_key,omitempty"` //nolint:gosec // G117 -- struct is unexported; exported field required for json serialization
 }
 
 // StorageType indicates which storage backend is being used

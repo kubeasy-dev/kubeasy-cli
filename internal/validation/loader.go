@@ -42,6 +42,9 @@ func LoadFromFile(path string) (*ValidationConfig, error) {
 
 // FindLocalChallengeFile looks for challenge.yaml in common locations
 func FindLocalChallengeFile(slug string) string {
+	// Sanitize slug to prevent path traversal
+	slug = filepath.Base(slug)
+
 	// Check common development paths
 	paths := []string{
 		filepath.Join(".", slug, "challenge.yaml"),
@@ -50,7 +53,7 @@ func FindLocalChallengeFile(slug string) string {
 	}
 
 	for _, p := range paths {
-		if _, err := os.Stat(p); err == nil {
+		if _, err := os.Stat(p); err == nil { //nolint:gosec // G703 -- slug sanitized with filepath.Base above
 			return p
 		}
 	}

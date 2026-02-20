@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/api"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/devutils"
@@ -12,7 +14,6 @@ import (
 	"github.com/kubeasy-dev/kubeasy-cli/internal/ui"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
-	"gopkg.in/yaml.v3"
 )
 
 var defaultChallengeTypes = []string{"fix", "build", "migrate"}
@@ -68,20 +69,73 @@ func fetchMetadata() (types, themes, difficulties []string) {
 	return types, themes, difficulties
 }
 
-// challengeConfig matches the official challenge.yaml schema (camelCase keys)
-type challengeConfig struct {
-	Title            string        `yaml:"title"`
-	Description      string        `yaml:"description"`
-	Theme            string        `yaml:"theme"`
-	Type             string        `yaml:"type"`
-	Difficulty       string        `yaml:"difficulty"`
-	EstimatedTime    int           `yaml:"estimatedTime"`
-	InitialSituation string        `yaml:"initialSituation"`
-	Objective        string        `yaml:"objective"`
-	OfTheWeek        bool          `yaml:"ofTheWeek"`
-	StarterFriendly  bool          `yaml:"starterFriendly"`
-	Objectives       []interface{} `yaml:"objectives"`
+func containsValue(slice []string, val string) bool {
+	for _, s := range slice {
+		if s == val {
+			return true
+		}
+	}
+	return false
 }
+
+// challengeYAMLTemplate is a well-commented template for new challenge.yaml files.
+var challengeYAMLTemplate = template.Must(template.New("challenge.yaml").Parse(`title: "{{.Title}}"
+type: "{{.Type}}"
+theme: "{{.Theme}}"
+difficulty: "{{.Difficulty}}"
+estimatedTime: {{.EstimatedTime}}
+
+# TODO: Describe the symptoms the user will observe (NOT the root cause).
+# Example: "A web application deployed in the cluster is not responding to requests.
+#           The pod seems to start but crashes shortly after."
+description: |
+  TODO: Write a description of the observable symptoms here.
+
+# TODO: Describe what the user will find when they start the challenge.
+# Example: "A single pod is deployed in the namespace running a Node.js application.
+#           A Service is configured to expose it within the cluster."
+initialSituation: |
+  TODO: Describe the initial state of the cluster here.
+
+# TODO: State what the user needs to achieve (NOT how to do it).
+# Example: "Make the application accessible and running stably."
+objective: |
+  TODO: Write the objective here.
+
+# Define validation objectives that check the user's solution.
+# Each objective runs against the cluster to verify the fix.
+objectives: []
+  # Example condition objective (uncomment and adapt):
+  #
+  # - key: pod-running
+  #   title: "Application Running"
+  #   description: "The application pod must be in Ready state"
+  #   order: 1
+  #   type: condition
+  #   spec:
+  #     target:
+  #       kind: Pod
+  #       labelSelector:
+  #         app: my-app
+  #     checks:
+  #       - type: Ready
+  #         status: "True"
+  #
+  # - key: no-crashes
+  #   title: "Stable Operation"
+  #   description: "No crash or eviction events"
+  #   order: 2
+  #   type: event
+  #   spec:
+  #     target:
+  #       kind: Pod
+  #       labelSelector:
+  #         app: my-app
+  #     forbiddenReasons:
+  #       - "OOMKilled"
+  #       - "CrashLoopBackOff"
+  #     sinceSeconds: 300
+`))
 
 // dev create flags
 var (
@@ -92,15 +146,6 @@ var (
 	devCreateDifficulty    string
 	devCreateEstimatedTime int
 )
-
-func containsValue(slice []string, val string) bool {
-	for _, s := range slice {
-		if s == val {
-			return true
-		}
-	}
-	return false
-}
 
 var devCreateCmd = &cobra.Command{
 	Use:   "create",
@@ -254,28 +299,27 @@ In non-interactive mode, use flags: --name, --type, --theme, --difficulty.`,
 			}
 		}
 
-		// Generate challenge.yaml
-		config := challengeConfig{
-			Title:            name,
-			Description:      "",
-			Theme:            theme,
-			Type:             challengeType,
-			Difficulty:       difficulty,
-			EstimatedTime:    estimatedTime,
-			InitialSituation: "",
-			Objective:        "",
-			OfTheWeek:        false,
-			StarterFriendly:  false,
-			Objectives:       []interface{}{},
-		}
-
-		yamlData, err := yaml.Marshal(&config)
+		// Generate challenge.yaml from template
+		var buf bytes.Buffer
+		err := challengeYAMLTemplate.Execute(&buf, struct {
+			Title         string
+			Type          string
+			Theme         string
+			Difficulty    string
+			EstimatedTime int
+		}{
+			Title:         name,
+			Type:          challengeType,
+			Theme:         theme,
+			Difficulty:    difficulty,
+			EstimatedTime: estimatedTime,
+		})
 		if err != nil {
 			return fmt.Errorf("failed to generate challenge.yaml: %w", err)
 		}
 
 		challengeYAMLPath := filepath.Join(slug, "challenge.yaml")
-		if err := os.WriteFile(challengeYAMLPath, yamlData, 0o600); err != nil {
+		if err := os.WriteFile(challengeYAMLPath, buf.Bytes(), 0o600); err != nil {
 			return fmt.Errorf("failed to write challenge.yaml: %w", err)
 		}
 

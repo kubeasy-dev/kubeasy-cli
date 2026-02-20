@@ -2,24 +2,30 @@ package cmd
 
 import (
 	"fmt"
-	"path/filepath"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/devutils"
-	"github.com/kubeasy-dev/kubeasy-cli/internal/kube"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/ui"
-	"github.com/kubeasy-dev/kubeasy-cli/internal/validation"
 	"github.com/spf13/cobra"
 )
 
-var devValidateDir string
+var (
+	devValidateDir   string
+	devValidateWatch bool
+)
 
 var devValidateCmd = &cobra.Command{
 	Use:   "validate [challenge-slug]",
 	Short: "Run validations locally without submitting to API",
 	Long: `Runs challenge validations against the Kind cluster and displays results.
 This is the dev equivalent of 'kubeasy challenge submit' but does not send
-results to the Kubeasy API. No login required.`,
-	Args: cobra.ExactArgs(1),
+results to the Kubeasy API. No login required.
+
+Use --watch to continuously re-run validations every 5 seconds.`,
+	Args:          cobra.ExactArgs(1),
+	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		challengeSlug := args[0]
 
@@ -38,71 +44,56 @@ results to the Kubeasy API. No login required.`,
 			return err
 		}
 
-		// Load validations from local challenge.yaml
-		challengeYAML := filepath.Join(challengeDir, "challenge.yaml")
-		var config *validation.ValidationConfig
-		err = ui.WaitMessage("Loading validations", func() error {
-			var loadErr error
-			config, loadErr = validation.LoadFromFile(challengeYAML)
-			return loadErr
-		})
+		if devValidateWatch {
+			return runDevValidateWatch(cmd, challengeSlug, challengeDir)
+		}
+
+		allPassed, err := runDevValidate(cmd, challengeSlug, challengeDir)
 		if err != nil {
-			ui.Error("Failed to load validations")
-			return fmt.Errorf("failed to load validations from %s: %w", challengeYAML, err)
+			return err
 		}
 
-		if len(config.Validations) == 0 {
-			ui.Warning("No validations (objectives) defined in challenge.yaml")
-			ui.Info("Add objectives to your challenge.yaml to test validations")
-			return nil
-		}
-
-		// Get Kubernetes clients
-		clientset, err := kube.GetKubernetesClient()
-		if err != nil {
-			ui.Error("Failed to get Kubernetes client. Is the cluster running? Try 'kubeasy setup'")
-			return fmt.Errorf("failed to get Kubernetes client: %w", err)
-		}
-
-		dynamicClient, err := kube.GetDynamicClient()
-		if err != nil {
-			ui.Error("Failed to get dynamic client")
-			return fmt.Errorf("failed to get dynamic client: %w", err)
-		}
-
-		restConfig, err := kube.GetRestConfig()
-		if err != nil {
-			ui.Error("Failed to get REST config")
-			return fmt.Errorf("failed to get REST config: %w", err)
-		}
-
-		namespace := challengeSlug
-
-		// Create executor and run validations
-		executor := validation.NewExecutor(clientset, dynamicClient, restConfig, namespace)
-
-		ui.Info("Running validations...")
-		ui.Println()
-
-		results := executor.ExecuteAll(cmd.Context(), config.Validations)
-
-		// Display results
-		allPassed := devutils.DisplayValidationResults(config.Validations, results)
-
-		// Display overall result
-		ui.Section("Validation Result")
-		if allPassed {
-			ui.Success("All validations passed!")
-		} else {
-			ui.Error("Some validations failed")
-			ui.Info("Review the results above and try again")
+		if !allPassed {
+			return fmt.Errorf("some validations failed")
 		}
 
 		return nil
 	},
 }
 
+// runDevValidateWatch runs validations in a loop every 5 seconds until interrupted.
+func runDevValidateWatch(cmd *cobra.Command, challengeSlug, challengeDir string) error {
+	ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	// Run immediately on first iteration
+	fmt.Print("\033[H\033[2J")
+	ui.Section(fmt.Sprintf("Validating Dev Challenge: %s (watch mode)", challengeSlug))
+	ui.Info(fmt.Sprintf("Last run: %s — Press Ctrl+C to stop", time.Now().Format("15:04:05")))
+	ui.Println()
+	runDevValidate(cmd, challengeSlug, challengeDir) //nolint:errcheck
+
+	for {
+		select {
+		case <-ctx.Done():
+			ui.Println()
+			ui.Info("Watch mode stopped")
+			return nil
+		case <-ticker.C:
+			fmt.Print("\033[H\033[2J")
+			ui.Section(fmt.Sprintf("Validating Dev Challenge: %s (watch mode)", challengeSlug))
+			ui.Info(fmt.Sprintf("Last run: %s — Press Ctrl+C to stop", time.Now().Format("15:04:05")))
+			ui.Println()
+			runDevValidate(cmd, challengeSlug, challengeDir) //nolint:errcheck
+		}
+	}
+}
+
 func init() {
 	devCmd.AddCommand(devValidateCmd)
 	devValidateCmd.Flags().StringVar(&devValidateDir, "dir", "", "Path to challenge directory (default: auto-detect)")
+	devValidateCmd.Flags().BoolVarP(&devValidateWatch, "watch", "w", false, "Continuously re-run validations every 5 seconds")
 }

@@ -6,16 +6,18 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/kubeasy-dev/kubeasy-cli/internal/api"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/devutils"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/ui"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 )
 
-var challengeTypes = []string{"fix", "build", "migrate"}
+var defaultChallengeTypes = []string{"fix", "build", "migrate"}
 
-var challengeThemes = []string{
+var defaultChallengeThemes = []string{
 	"ingress-tls",
 	"jobs-cronjobs",
 	"monitoring-debugging",
@@ -27,7 +29,44 @@ var challengeThemes = []string{
 	"volumes-secrets",
 }
 
-var challengeDifficulties = []string{"easy", "medium", "hard"}
+var defaultChallengeDifficulties = []string{"easy", "medium", "hard"}
+
+// fetchMetadata fetches challenge types, themes, and difficulties from the API.
+// Falls back to hardcoded defaults when the API is unreachable.
+func fetchMetadata() (types, themes, difficulties []string) {
+	types = defaultChallengeTypes
+	themes = defaultChallengeThemes
+	difficulties = defaultChallengeDifficulties
+
+	fetched := false
+
+	if t, err := api.GetTypes(); err == nil {
+		types = t
+		fetched = true
+	} else {
+		logger.Debug("Failed to fetch types from API: %v", err)
+	}
+
+	if t, err := api.GetThemes(); err == nil {
+		themes = t
+		fetched = true
+	} else {
+		logger.Debug("Failed to fetch themes from API: %v", err)
+	}
+
+	if d, err := api.GetDifficulties(); err == nil {
+		difficulties = d
+		fetched = true
+	} else {
+		logger.Debug("Failed to fetch difficulties from API: %v", err)
+	}
+
+	if !fetched {
+		ui.Warning("Could not reach the API — using offline defaults for types, themes, and difficulties.")
+	}
+
+	return types, themes, difficulties
+}
 
 // challengeConfig matches the official challenge.yaml schema (camelCase keys)
 type challengeConfig struct {
@@ -75,6 +114,8 @@ In non-interactive mode, use flags: --name, --type, --theme, --difficulty.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ui.Section("Create New Challenge")
+
+		challengeTypes, challengeThemes, challengeDifficulties := fetchMetadata()
 
 		interactive := term.IsTerminal(int(os.Stdin.Fd()))
 

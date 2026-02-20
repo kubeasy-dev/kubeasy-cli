@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"text/template"
 
@@ -67,15 +68,6 @@ func fetchMetadata() (types, themes, difficulties []string) {
 	}
 
 	return types, themes, difficulties
-}
-
-func containsValue(slice []string, val string) bool {
-	for _, s := range slice {
-		if s == val {
-			return true
-		}
-	}
-	return false
 }
 
 // challengeYAMLTemplate is a well-commented template for new challenge.yaml files.
@@ -196,7 +188,8 @@ The challenge is created in the current working directory.
 
 In interactive mode (TTY), prompts guide you through the setup.
 In non-interactive mode, use flags: --name, --type, --theme, --difficulty.`,
-	Args: cobra.NoArgs,
+	Args:          cobra.NoArgs,
+	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ui.Section("Create New Challenge")
 
@@ -297,13 +290,13 @@ In non-interactive mode, use flags: --name, --type, --theme, --difficulty.`,
 			return err
 		}
 
-		if !containsValue(challengeTypes, challengeType) {
+		if !slices.Contains(challengeTypes, challengeType) {
 			return fmt.Errorf("invalid type '%s' (valid: %s)", challengeType, strings.Join(challengeTypes, ", "))
 		}
-		if !containsValue(challengeThemes, theme) {
+		if !slices.Contains(challengeThemes, theme) {
 			return fmt.Errorf("invalid theme '%s' (valid: %s)", theme, strings.Join(challengeThemes, ", "))
 		}
-		if !containsValue(challengeDifficulties, difficulty) {
+		if !slices.Contains(challengeDifficulties, difficulty) {
 			return fmt.Errorf("invalid difficulty '%s' (valid: %s)", difficulty, strings.Join(challengeDifficulties, ", "))
 		}
 

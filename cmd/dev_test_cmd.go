@@ -2,8 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/devutils"
@@ -74,7 +72,10 @@ Use --json for structured JSON output (useful for CI).`,
 		}
 
 		if devTestWatch {
-			return runDevTestWatch(cmd, challengeSlug, challengeDir, opts)
+			header := fmt.Sprintf("Validating Dev Challenge: %s (watch mode)", challengeSlug)
+			return devutils.TickerWatchLoop(cmd.Context(), 5*time.Second, header, func() {
+				runDevValidate(cmd, challengeSlug, challengeDir, opts) //nolint:errcheck
+			})
 		}
 
 		allPassed, err := runDevValidate(cmd, challengeSlug, challengeDir, opts)
@@ -88,33 +89,6 @@ Use --json for structured JSON output (useful for CI).`,
 
 		return nil
 	},
-}
-
-// runDevTestWatch runs validations in a loop every 5 seconds after the initial apply.
-func runDevTestWatch(cmd *cobra.Command, challengeSlug, challengeDir string, opts DevValidateOpts) error {
-	ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-
-	// Run immediately on first iteration
-	runDevValidate(cmd, challengeSlug, challengeDir, opts) //nolint:errcheck
-
-	for {
-		select {
-		case <-ctx.Done():
-			ui.Println()
-			ui.Info("Watch mode stopped")
-			return nil
-		case <-ticker.C:
-			fmt.Print("\033[H\033[2J")
-			ui.Section(fmt.Sprintf("Validating Dev Challenge: %s (watch mode)", challengeSlug))
-			ui.Info(fmt.Sprintf("Last run: %s — Press Ctrl+C to stop", time.Now().Format("15:04:05")))
-			ui.Println()
-			runDevValidate(cmd, challengeSlug, challengeDir, opts) //nolint:errcheck
-		}
-	}
 }
 
 func init() {

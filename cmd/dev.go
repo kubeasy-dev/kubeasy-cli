@@ -14,6 +14,7 @@ on challenges locally without needing the Kubeasy API.
 
 Commands:
   create   - Scaffold a new challenge directory
+  get      - Display local challenge metadata
   apply    - Deploy local challenge manifests to the Kind cluster
   validate - Run validations locally without submitting to API
   test     - Apply manifests and run validations in one step

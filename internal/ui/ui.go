@@ -239,6 +239,11 @@ func TimedSpinner(message string, fn func() error) error {
 	}
 }
 
+// ClearScreen clears the terminal screen using ANSI escape codes.
+func ClearScreen() {
+	fmt.Print("\033[H\033[2J") //nolint:forbidigo
+}
+
 // ValidationResult displays validation results in a formatted way
 func ValidationResult(name string, passed bool, details []string) {
 	if passed {

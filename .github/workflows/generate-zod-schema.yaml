@@ -63,38 +63,39 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          BRANCH_NAME="chore/update-schema-from-cli"
+          BRANCH_NAME="chore/update-openapi-from-website"
 
-          # Fetch all branches
           git fetch origin
 
-          # Check if branch exists remotely
+          # Stash les changements générés avant de switch de branche
+          git stash --include-untracked
+
           if git ls-remote --exit-code --heads origin "$BRANCH_NAME" >/dev/null 2>&1; then
-            # Branch exists, checkout and update
             git checkout "$BRANCH_NAME"
             git pull origin "$BRANCH_NAME"
           else
-            # Create new branch
             git checkout -b "$BRANCH_NAME"
           fi
 
-          # Add and commit changes
-          git add schemas/challengeObjectives.ts
+          # Restaurer les changements
+          git stash pop
 
-          # Only proceed if there are changes
+          git add openapi.json internal/apigen/client.gen.go
           if git diff --staged --quiet; then
             echo "No changes to commit"
             exit 0
           fi
+          git commit -m "chore: update OpenAPI spec and generated client from website"
+          git push origin "$BRANCH_NAME" --force-with-lease
 
-          git commit -m "chore: update challengeObjectives.ts from CLI"
-
-          # Push branch (force push to update if exists)
-          git push origin "$BRANCH_NAME" --force
-
-          # Create PR if it doesn't exist (will fail silently if PR already exists)
           gh pr create \
-            --title "chore: update challengeObjectives.ts from CLI" \
-            --body "To be merged at next kubeasy-cli release" \
+            --title "chore: update OpenAPI spec and generated client from website" \
+            --body "Auto-generated from website OpenAPI schema changes.
+
+          **Changes:**
+          - Updated \`openapi.json\` spec
+          - Regenerated \`internal/apigen/client.gen.go\`
+
+          Review and merge when ready." \
             --base main \
             --head "$BRANCH_NAME" || echo "PR already exists, updated with new commits"

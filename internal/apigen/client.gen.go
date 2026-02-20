@@ -144,10 +144,19 @@ type ClientInterface interface {
 
 	SubmitChallenge(ctx context.Context, slug string, body SubmitChallengeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetDifficulties request
+	GetDifficulties(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetThemes request
+	GetThemes(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// TrackSetupWithBody request with any body
 	TrackSetupWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	TrackSetup(ctx context.Context, body TrackSetupJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetTypes request
+	GetTypes(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetUser request
 	GetUser(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -230,6 +239,30 @@ func (c *Client) SubmitChallenge(ctx context.Context, slug string, body SubmitCh
 	return c.Client.Do(req)
 }
 
+func (c *Client) GetDifficulties(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetDifficultiesRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetThemes(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetThemesRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) TrackSetupWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewTrackSetupRequestWithBody(c.Server, contentType, body)
 	if err != nil {
@@ -244,6 +277,18 @@ func (c *Client) TrackSetupWithBody(ctx context.Context, contentType string, bod
 
 func (c *Client) TrackSetup(ctx context.Context, body TrackSetupJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewTrackSetupRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetTypes(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetTypesRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -473,6 +518,60 @@ func NewSubmitChallengeRequestWithBody(server string, slug string, contentType s
 	return req, nil
 }
 
+// NewGetDifficultiesRequest generates requests for GetDifficulties
+func NewGetDifficultiesRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/cli/difficulties")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetThemesRequest generates requests for GetThemes
+func NewGetThemesRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/cli/themes")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewTrackSetupRequest calls the generic TrackSetup builder with application/json body
 func NewTrackSetupRequest(server string, body TrackSetupJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -509,6 +608,33 @@ func NewTrackSetupRequestWithBody(server string, contentType string, body io.Rea
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetTypesRequest generates requests for GetTypes
+func NewGetTypesRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/cli/types")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -640,10 +766,19 @@ type ClientWithResponsesInterface interface {
 
 	SubmitChallengeWithResponse(ctx context.Context, slug string, body SubmitChallengeJSONRequestBody, reqEditors ...RequestEditorFn) (*SubmitChallengeResponse, error)
 
+	// GetDifficultiesWithResponse request
+	GetDifficultiesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetDifficultiesResponse, error)
+
+	// GetThemesWithResponse request
+	GetThemesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetThemesResponse, error)
+
 	// TrackSetupWithBodyWithResponse request with any body
 	TrackSetupWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TrackSetupResponse, error)
 
 	TrackSetupWithResponse(ctx context.Context, body TrackSetupJSONRequestBody, reqEditors ...RequestEditorFn) (*TrackSetupResponse, error)
+
+	// GetTypesWithResponse request
+	GetTypesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetTypesResponse, error)
 
 	// GetUserWithResponse request
 	GetUserWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserResponse, error)
@@ -841,12 +976,17 @@ type SubmitChallengeResponse struct {
 		Details *string `json:"details,omitempty"`
 		Error   string  `json:"error"`
 	}
+	JSON422 *struct {
+		Message string                    `json:"message"`
+		Success SubmitChallenge422Success `json:"success"`
+	}
 	JSON500 *struct {
 		Details *string `json:"details,omitempty"`
 		Error   string  `json:"error"`
 	}
 }
 type SubmitChallenge200Success bool
+type SubmitChallenge422Success bool
 
 // Status returns HTTPResponse.Status
 func (r SubmitChallengeResponse) Status() string {
@@ -858,6 +998,64 @@ func (r SubmitChallengeResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r SubmitChallengeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetDifficultiesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *struct {
+		Difficulties []GetDifficulties200Difficulties `json:"difficulties"`
+	}
+}
+type GetDifficulties200Difficulties string
+
+// Status returns HTTPResponse.Status
+func (r GetDifficultiesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetDifficultiesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetThemesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *struct {
+		Themes []struct {
+			Description string  `json:"description"`
+			Logo        *string `json:"logo"`
+			Name        string  `json:"name"`
+			Slug        string  `json:"slug"`
+		} `json:"themes"`
+	}
+	JSON500 *struct {
+		Details *string `json:"details,omitempty"`
+		Error   string  `json:"error"`
+	}
+}
+
+// Status returns HTTPResponse.Status
+func (r GetThemesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetThemesResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -895,6 +1093,39 @@ func (r TrackSetupResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r TrackSetupResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetTypesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *struct {
+		Types []struct {
+			Description string  `json:"description"`
+			Logo        *string `json:"logo"`
+			Name        string  `json:"name"`
+			Slug        string  `json:"slug"`
+		} `json:"types"`
+	}
+	JSON500 *struct {
+		Details *string `json:"details,omitempty"`
+		Error   string  `json:"error"`
+	}
+}
+
+// Status returns HTTPResponse.Status
+func (r GetTypesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetTypesResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -1025,6 +1256,24 @@ func (c *ClientWithResponses) SubmitChallengeWithResponse(ctx context.Context, s
 	return ParseSubmitChallengeResponse(rsp)
 }
 
+// GetDifficultiesWithResponse request returning *GetDifficultiesResponse
+func (c *ClientWithResponses) GetDifficultiesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetDifficultiesResponse, error) {
+	rsp, err := c.GetDifficulties(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetDifficultiesResponse(rsp)
+}
+
+// GetThemesWithResponse request returning *GetThemesResponse
+func (c *ClientWithResponses) GetThemesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetThemesResponse, error) {
+	rsp, err := c.GetThemes(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetThemesResponse(rsp)
+}
+
 // TrackSetupWithBodyWithResponse request with arbitrary body returning *TrackSetupResponse
 func (c *ClientWithResponses) TrackSetupWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TrackSetupResponse, error) {
 	rsp, err := c.TrackSetupWithBody(ctx, contentType, body, reqEditors...)
@@ -1040,6 +1289,15 @@ func (c *ClientWithResponses) TrackSetupWithResponse(ctx context.Context, body T
 		return nil, err
 	}
 	return ParseTrackSetupResponse(rsp)
+}
+
+// GetTypesWithResponse request returning *GetTypesResponse
+func (c *ClientWithResponses) GetTypesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetTypesResponse, error) {
+	rsp, err := c.GetTypes(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetTypesResponse(rsp)
 }
 
 // GetUserWithResponse request returning *GetUserResponse
@@ -1375,6 +1633,87 @@ func ParseSubmitChallengeResponse(rsp *http.Response) (*SubmitChallengeResponse,
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest struct {
+			Message string                    `json:"message"`
+			Success SubmitChallenge422Success `json:"success"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest struct {
+			Details *string `json:"details,omitempty"`
+			Error   string  `json:"error"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetDifficultiesResponse parses an HTTP response from a GetDifficultiesWithResponse call
+func ParseGetDifficultiesResponse(rsp *http.Response) (*GetDifficultiesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetDifficultiesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Difficulties []GetDifficulties200Difficulties `json:"difficulties"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetThemesResponse parses an HTTP response from a GetThemesWithResponse call
+func ParseGetThemesResponse(rsp *http.Response) (*GetThemesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetThemesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Themes []struct {
+				Description string  `json:"description"`
+				Logo        *string `json:"logo"`
+				Name        string  `json:"name"`
+				Slug        string  `json:"slug"`
+			} `json:"themes"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest struct {
 			Details *string `json:"details,omitempty"`
@@ -1433,6 +1772,49 @@ func ParseTrackSetupResponse(rsp *http.Response) (*TrackSetupResponse, error) {
 			return nil, err
 		}
 		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest struct {
+			Details *string `json:"details,omitempty"`
+			Error   string  `json:"error"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetTypesResponse parses an HTTP response from a GetTypesWithResponse call
+func ParseGetTypesResponse(rsp *http.Response) (*GetTypesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetTypesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Types []struct {
+				Description string  `json:"description"`
+				Logo        *string `json:"logo"`
+				Name        string  `json:"name"`
+				Slug        string  `json:"slug"`
+			} `json:"types"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest struct {

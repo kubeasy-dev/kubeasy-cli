@@ -1,11 +1,21 @@
 package devutils
 
 import (
+	"fmt"
 	"slices"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/ui"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/validation"
 )
+
+// formatDuration formats a duration for display (e.g. "245ms", "1.2s")
+func formatDuration(d interface{ Milliseconds() int64 }) string {
+	ms := d.Milliseconds()
+	if ms < 1000 {
+		return fmt.Sprintf("%dms", ms)
+	}
+	return fmt.Sprintf("%.1fs", float64(ms)/1000)
+}
 
 // DisplayValidationResults renders validation results grouped by type and returns whether all passed.
 func DisplayValidationResults(validations []validation.Validation, results []validation.Result) bool {
@@ -40,7 +50,11 @@ func DisplayValidationResults(validations []validation.Validation, results []val
 		}
 		ui.Section(typeLabels[valType])
 		for _, r := range typeRes {
-			ui.ValidationResult(r.Key, r.Passed, []string{r.Message})
+			detail := r.Message
+			if r.Duration > 0 {
+				detail = fmt.Sprintf("%s (%s)", r.Message, formatDuration(r.Duration))
+			}
+			ui.ValidationResult(r.Key, r.Passed, []string{detail})
 			if !r.Passed {
 				allPassed = false
 			}
@@ -55,7 +69,11 @@ func DisplayValidationResults(validations []validation.Validation, results []val
 		}
 		ui.Section(string(valType))
 		for _, r := range typeRes {
-			ui.ValidationResult(r.Key, r.Passed, []string{r.Message})
+			detail := r.Message
+			if r.Duration > 0 {
+				detail = fmt.Sprintf("%s (%s)", r.Message, formatDuration(r.Duration))
+			}
+			ui.ValidationResult(r.Key, r.Passed, []string{detail})
 			if !r.Passed {
 				allPassed = false
 			}

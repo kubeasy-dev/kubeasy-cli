@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/deployer"
@@ -12,6 +14,12 @@ import (
 	"github.com/kubeasy-dev/kubeasy-cli/internal/validation"
 	"github.com/spf13/cobra"
 )
+
+// DevValidateOpts holds options for dev validate runs.
+type DevValidateOpts struct {
+	FailFast   bool
+	JSONOutput bool
+}
 
 // runDevApply deploys local challenge manifests to the Kind cluster.
 // If clean is true, it deletes existing resources before applying.
@@ -80,21 +88,36 @@ func runDevApply(cmd *cobra.Command, challengeSlug, challengeDir string, clean b
 
 // runDevValidate runs validations against the cluster and displays results.
 // Returns true if all validations passed.
-func runDevValidate(cmd *cobra.Command, challengeSlug, challengeDir string) (bool, error) {
+func runDevValidate(cmd *cobra.Command, challengeSlug, challengeDir string, opts DevValidateOpts) (bool, error) {
 	// Load validations from local challenge.yaml
 	challengeYAML := filepath.Join(challengeDir, "challenge.yaml")
 	var config *validation.ValidationConfig
-	err := ui.WaitMessage("Loading validations", func() error {
-		var loadErr error
-		config, loadErr = validation.LoadFromFile(challengeYAML)
-		return loadErr
-	})
-	if err != nil {
-		ui.Error("Failed to load validations")
-		return false, fmt.Errorf("failed to load validations from %s: %w", challengeYAML, err)
+
+	if !opts.JSONOutput {
+		err := ui.WaitMessage("Loading validations", func() error {
+			var loadErr error
+			config, loadErr = validation.LoadFromFile(challengeYAML)
+			return loadErr
+		})
+		if err != nil {
+			ui.Error("Failed to load validations")
+			return false, fmt.Errorf("failed to load validations from %s: %w", challengeYAML, err)
+		}
+	} else {
+		var err error
+		config, err = validation.LoadFromFile(challengeYAML)
+		if err != nil {
+			return false, fmt.Errorf("failed to load validations from %s: %w", challengeYAML, err)
+		}
 	}
 
 	if len(config.Validations) == 0 {
+		if opts.JSONOutput {
+			out := devutils.FormatValidationJSON(challengeSlug, config.Validations, nil, 0)
+			data, _ := json.Marshal(out)
+			fmt.Println(string(data))
+			return true, nil
+		}
 		ui.Warning("No validations (objectives) defined in challenge.yaml")
 		ui.Info("Add objectives to your challenge.yaml to test validations")
 		return true, nil
@@ -103,19 +126,25 @@ func runDevValidate(cmd *cobra.Command, challengeSlug, challengeDir string) (boo
 	// Get Kubernetes clients
 	clientset, err := kube.GetKubernetesClient()
 	if err != nil {
-		ui.Error("Failed to get Kubernetes client. Is the cluster running? Try 'kubeasy setup'")
+		if !opts.JSONOutput {
+			ui.Error("Failed to get Kubernetes client. Is the cluster running? Try 'kubeasy setup'")
+		}
 		return false, fmt.Errorf("failed to get Kubernetes client: %w", err)
 	}
 
 	dynamicClient, err := kube.GetDynamicClient()
 	if err != nil {
-		ui.Error("Failed to get dynamic client")
+		if !opts.JSONOutput {
+			ui.Error("Failed to get dynamic client")
+		}
 		return false, fmt.Errorf("failed to get dynamic client: %w", err)
 	}
 
 	restConfig, err := kube.GetRestConfig()
 	if err != nil {
-		ui.Error("Failed to get REST config")
+		if !opts.JSONOutput {
+			ui.Error("Failed to get REST config")
+		}
 		return false, fmt.Errorf("failed to get REST config: %w", err)
 	}
 
@@ -124,10 +153,33 @@ func runDevValidate(cmd *cobra.Command, challengeSlug, challengeDir string) (boo
 	// Create executor and run validations
 	executor := validation.NewExecutor(clientset, dynamicClient, restConfig, namespace)
 
-	ui.Info("Running validations...")
-	ui.Println()
+	if !opts.JSONOutput {
+		ui.Info("Running validations...")
+		ui.Println()
+	}
 
-	results := executor.ExecuteAll(cmd.Context(), config.Validations)
+	totalStart := time.Now()
+	var results []validation.Result
+	if opts.FailFast {
+		results = executor.ExecuteSequential(cmd.Context(), config.Validations, true)
+	} else {
+		results = executor.ExecuteAll(cmd.Context(), config.Validations)
+	}
+	totalDuration := time.Since(totalStart)
+
+	if opts.JSONOutput {
+		out := devutils.FormatValidationJSON(challengeSlug, config.Validations, results, totalDuration)
+		data, _ := json.MarshalIndent(out, "", "  ")
+		fmt.Println(string(data))
+		allPassed := true
+		for _, r := range results {
+			if !r.Passed {
+				allPassed = false
+				break
+			}
+		}
+		return allPassed, nil
+	}
 
 	// Display results
 	allPassed := devutils.DisplayValidationResults(config.Validations, results)

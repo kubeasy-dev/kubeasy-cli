@@ -3,6 +3,7 @@ module github.com/kubeasy-dev/kubeasy-cli
 go 1.25.4
 
 require (
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/hypersequent/zen v0.0.0-20250923135653-056103bb12ce
 	github.com/oapi-codegen/runtime v1.1.2

@@ -137,6 +137,45 @@ objectives: []
   #     sinceSeconds: 300
 `))
 
+// deploymentManifestTemplate generates a starter deployment.yaml for a challenge.
+var deploymentManifestTemplate = template.Must(template.New("deployment.yaml").Parse(`apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{.Slug}}
+  labels:
+    app: {{.Slug}}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{.Slug}}
+  template:
+    metadata:
+      labels:
+        app: {{.Slug}}
+    spec:
+      containers:
+        - name: {{.Slug}}
+          image: nginx:latest
+          ports:
+            - containerPort: 80
+`))
+
+// serviceManifestTemplate generates a starter service.yaml for a challenge.
+var serviceManifestTemplate = template.Must(template.New("service.yaml").Parse(`apiVersion: v1
+kind: Service
+metadata:
+  name: {{.Slug}}
+  labels:
+    app: {{.Slug}}
+spec:
+  selector:
+    app: {{.Slug}}
+  ports:
+    - port: 80
+      targetPort: 80
+`))
+
 // dev create flags
 var (
 	devCreateName          string
@@ -145,6 +184,7 @@ var (
 	devCreateTheme         string
 	devCreateDifficulty    string
 	devCreateEstimatedTime int
+	devCreateWithManifests bool
 )
 
 var devCreateCmd = &cobra.Command{
@@ -323,6 +363,37 @@ In non-interactive mode, use flags: --name, --type, --theme, --difficulty.`,
 			return fmt.Errorf("failed to write challenge.yaml: %w", err)
 		}
 
+		// Generate manifest templates
+		generateManifests := devCreateWithManifests
+		if !generateManifests && interactive {
+			generateManifests = ui.Confirmation("Generate starter manifests? (deployment + service)")
+		}
+
+		if generateManifests {
+			tmplData := struct{ Slug string }{Slug: slug}
+
+			var deployBuf bytes.Buffer
+			if err := deploymentManifestTemplate.Execute(&deployBuf, tmplData); err != nil {
+				return fmt.Errorf("failed to generate deployment.yaml: %w", err)
+			}
+			deployPath := filepath.Join(slug, "manifests", "deployment.yaml")
+			if err := os.WriteFile(deployPath, deployBuf.Bytes(), 0o600); err != nil {
+				return fmt.Errorf("failed to write deployment.yaml: %w", err)
+			}
+
+			var svcBuf bytes.Buffer
+			if err := serviceManifestTemplate.Execute(&svcBuf, tmplData); err != nil {
+				return fmt.Errorf("failed to generate service.yaml: %w", err)
+			}
+			svcPath := filepath.Join(slug, "manifests", "service.yaml")
+			if err := os.WriteFile(svcPath, svcBuf.Bytes(), 0o600); err != nil {
+				return fmt.Errorf("failed to write service.yaml: %w", err)
+			}
+
+			// Remove .gitkeep since we now have actual files
+			_ = os.Remove(filepath.Join(slug, "manifests", ".gitkeep"))
+		}
+
 		// Display summary
 		ui.Println()
 		ui.Success(fmt.Sprintf("Challenge '%s' created!", slug))
@@ -334,12 +405,18 @@ In non-interactive mode, use flags: --name, --type, --theme, --difficulty.`,
 		ui.KeyValue("Estimated time", fmt.Sprintf("%d minutes", estimatedTime))
 		ui.Println()
 		ui.Info("Next steps:")
-		_ = ui.BulletList([]string{
-			fmt.Sprintf("Add your Kubernetes manifests to %s/manifests/", slug),
+		nextSteps := []string{}
+		if !generateManifests {
+			nextSteps = append(nextSteps, fmt.Sprintf("Add your Kubernetes manifests to %s/manifests/", slug))
+		} else {
+			nextSteps = append(nextSteps, fmt.Sprintf("Edit the generated manifests in %s/manifests/", slug))
+		}
+		nextSteps = append(nextSteps,
 			fmt.Sprintf("Edit %s to fill in description, objectives, and validations", challengeYAMLPath),
 			fmt.Sprintf("Run 'kubeasy dev apply %s' to deploy locally", slug),
 			fmt.Sprintf("Run 'kubeasy dev validate %s' to test validations", slug),
-		})
+		)
+		_ = ui.BulletList(nextSteps)
 
 		return nil
 	},
@@ -353,4 +430,5 @@ func init() {
 	devCreateCmd.Flags().StringVar(&devCreateTheme, "theme", "", "Challenge theme")
 	devCreateCmd.Flags().StringVar(&devCreateDifficulty, "difficulty", "", "Challenge difficulty (easy, medium, hard)")
 	devCreateCmd.Flags().IntVar(&devCreateEstimatedTime, "estimated-time", 0, "Estimated time in minutes (default: 30)")
+	devCreateCmd.Flags().BoolVar(&devCreateWithManifests, "with-manifests", false, "Generate starter deployment and service manifests")
 }

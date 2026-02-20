@@ -4,6 +4,8 @@
 package validation
 
 import (
+	"time"
+
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -204,4 +206,6 @@ type Result struct {
 	Passed bool `json:"passed"`
 	// Message provides details about the result (success info or failure reason)
 	Message string `json:"message"`
+	// Duration is the time taken to execute this validation
+	Duration time.Duration `json:"-"`
 }

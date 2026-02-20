@@ -61,7 +61,7 @@ func fetchNPMLatestVersion(pkg string) (string, error) {
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	req.Header.Set("User-Agent", "kubeasy-cli-version-check")
 
-	resp, err := client.Do(req) //nolint:gosec // G704 -- URL built from hardcoded package name, not user input
+	resp, err := client.Do(req) //nolint:gosec // URL built from hardcoded package name, not user input
 	if err != nil {
 		return "", err
 	}

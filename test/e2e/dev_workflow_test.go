@@ -57,41 +57,54 @@ type: "build"
 difficulty: "easy"
 estimatedTime: 10
 initialSituation: ""
-objective: "Deploy a configmap"
+objective: "Deploy a working nginx pod"
 ofTheWeek: false
 starterFriendly: false
 objectives:
-  - key: "configmap-exists"
-    title: "ConfigMap exists"
-    description: "The test-config ConfigMap should exist"
+  - key: "pod-ready"
+    title: "Pod Ready"
+    description: "The nginx pod should be running and ready"
     order: 1
-    type: status
+    type: condition
     spec:
       target:
-        kind: ConfigMap
-        name: test-config
+        kind: Pod
+        labelSelector:
+          app: dev-e2e-nginx
       checks:
-        - field: data.key
-          operator: "=="
-          value: "e2e-value"
+        - type: Ready
+          status: "True"
 `
 		err := os.WriteFile(filepath.Join(challengeDir, "challenge.yaml"), []byte(challengeYAML), 0600)
 		require.NoError(t, err)
 
-		// Write a ConfigMap manifest
-		configMapManifest := `apiVersion: v1
-kind: ConfigMap
+		// Write a Deployment manifest
+		deploymentManifest := `apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: test-config
-data:
-  key: e2e-value
+  name: dev-e2e-nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dev-e2e-nginx
+  template:
+    metadata:
+      labels:
+        app: dev-e2e-nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.25
+          ports:
+            - containerPort: 80
 `
-		err = os.WriteFile(filepath.Join(challengeDir, "manifests", "configmap.yaml"), []byte(configMapManifest), 0600)
+		err = os.WriteFile(filepath.Join(challengeDir, "manifests", "deployment.yaml"), []byte(deploymentManifest), 0600)
 		require.NoError(t, err)
 
 		// Verify structure
 		assert.FileExists(t, filepath.Join(challengeDir, "challenge.yaml"))
-		assert.FileExists(t, filepath.Join(challengeDir, "manifests", "configmap.yaml"))
+		assert.FileExists(t, filepath.Join(challengeDir, "manifests", "deployment.yaml"))
 		assert.DirExists(t, filepath.Join(challengeDir, "policies"))
 	})
 
@@ -123,10 +136,10 @@ data:
 		err = deployer.DeployLocalChallenge(ctx, clientset, dynamicClient, challengeDir, devTestSlug)
 		require.NoError(t, err, "DeployLocalChallenge should succeed")
 
-		// Verify the ConfigMap was created
-		cm, err := clientset.CoreV1().ConfigMaps(devTestSlug).Get(ctx, "test-config", metav1.GetOptions{})
-		require.NoError(t, err, "ConfigMap should exist after deploy")
-		assert.Equal(t, "e2e-value", cm.Data["key"])
+		// Verify the Deployment was created
+		deploy, err := clientset.AppsV1().Deployments(devTestSlug).Get(ctx, "dev-e2e-nginx", metav1.GetOptions{})
+		require.NoError(t, err, "Deployment should exist after deploy")
+		assert.Equal(t, int32(1), *deploy.Spec.Replicas)
 	})
 
 	t.Run("validate", func(t *testing.T) {

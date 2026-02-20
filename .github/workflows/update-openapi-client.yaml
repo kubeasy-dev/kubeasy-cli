@@ -81,6 +81,9 @@ jobs:
 
           git fetch origin
 
+          # Stash les changements générés avant de switch de branche
+          git stash --include-untracked
+
           if git ls-remote --exit-code --heads origin "$BRANCH_NAME" >/dev/null 2>&1; then
             git checkout "$BRANCH_NAME"
             git pull origin "$BRANCH_NAME"
@@ -88,19 +91,20 @@ jobs:
             git checkout -b "$BRANCH_NAME"
           fi
 
-          git add openapi.json internal/apigen/client.gen.go
+          # Restaurer les changements
+          git stash pop
 
+          git add openapi.json internal/apigen/client.gen.go
           if git diff --staged --quiet; then
             echo "No changes to commit"
             exit 0
           fi
-
           git commit -m "chore: update OpenAPI spec and generated client from website"
           git push origin "$BRANCH_NAME" --force-with-lease
 
           gh pr create \
             --title "chore: update OpenAPI spec and generated client from website" \
-            --body "Auto-generated from website OpenAPI schema changes (source: kubeasy-dev/website@${{ github.event.client_payload.source_sha }}).
+            --body "Auto-generated from website OpenAPI schema changes.
 
           **Changes:**
           - Updated \`openapi.json\` spec

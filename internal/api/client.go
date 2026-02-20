@@ -294,6 +294,75 @@ func TrackSetup() {
 	}
 }
 
+// GetTypes fetches challenge types from the public API.
+func GetTypes() ([]string, error) {
+	client, err := NewPublicClient()
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.GetTypesWithResponse(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch challenge types: %w", err)
+	}
+
+	if resp.JSON200 == nil {
+		return nil, parseErrorResponse(resp.HTTPResponse, resp.Body)
+	}
+
+	slugs := make([]string, len(resp.JSON200.Types))
+	for i, t := range resp.JSON200.Types {
+		slugs[i] = t.Slug
+	}
+	return slugs, nil
+}
+
+// GetThemes fetches challenge themes from the public API.
+func GetThemes() ([]string, error) {
+	client, err := NewPublicClient()
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.GetThemesWithResponse(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch challenge themes: %w", err)
+	}
+
+	if resp.JSON200 == nil {
+		return nil, parseErrorResponse(resp.HTTPResponse, resp.Body)
+	}
+
+	slugs := make([]string, len(resp.JSON200.Themes))
+	for i, t := range resp.JSON200.Themes {
+		slugs[i] = t.Slug
+	}
+	return slugs, nil
+}
+
+// GetDifficulties fetches challenge difficulties from the public API.
+func GetDifficulties() ([]string, error) {
+	client, err := NewPublicClient()
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.GetDifficultiesWithResponse(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch challenge difficulties: %w", err)
+	}
+
+	if resp.JSON200 == nil {
+		return nil, parseErrorResponse(resp.HTTPResponse, resp.Body)
+	}
+
+	difficulties := make([]string, len(resp.JSON200.Difficulties))
+	for i, d := range resp.JSON200.Difficulties {
+		difficulties[i] = string(d)
+	}
+	return difficulties, nil
+}
+
 // ResetChallengeProgress is a wrapper for ResetChallenge for backward compatibility
 func ResetChallengeProgress(slugOrID string) error {
 	result, err := ResetChallenge(slugOrID)

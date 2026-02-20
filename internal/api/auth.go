@@ -39,3 +39,12 @@ func NewAuthenticatedClient() (*apigen.ClientWithResponses, error) {
 		apigen.WithRequestEditorFn(BearerAuthEditorFn),
 	)
 }
+
+// NewPublicClient creates an apigen.ClientWithResponses without authentication.
+// Use this for public endpoints that don't require a Bearer token.
+func NewPublicClient() (*apigen.ClientWithResponses, error) {
+	return apigen.NewClientWithResponses(
+		constants.WebsiteURL,
+		apigen.WithHTTPClient(&http.Client{Timeout: 10 * time.Second}),
+	)
+}

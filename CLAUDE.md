@@ -6,6 +6,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `kubeasy-cli` is a command-line tool built with Go and Cobra that helps developers learn Kubernetes through practical challenges. It manages local Kind clusters, deploys challenges via OCI artifacts, and validates solutions using a **CLI-based validation system** (as of v2.0.0).
 
+## Commit & PR Conventions
+
+Commits and PR titles **must** follow [Conventional Commits](https://www.conventionalcommits.org/) with an optional scope:
+
+```
+<type>(<scope>): <description>
+```
+
+Allowed types: `feat`, `fix`, `docs`, `refactor`, `perf`, `style`, `test`, `ci`, `chore`.
+
+Examples:
+- `feat: add cluster status command`
+- `fix(deploy): handle missing namespace`
+- `chore(deps): bump kyverno to v1.13`
+
+This convention is used by GoReleaser to generate the changelog.
+
 ## Documentation
 
 Comprehensive documentation is available in the `docs/` folder:

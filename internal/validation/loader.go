@@ -53,7 +53,7 @@ func FindLocalChallengeFile(slug string) string {
 	}
 
 	for _, p := range paths {
-		if _, err := os.Stat(p); err == nil { //nolint:gosec // G703 -- slug sanitized with filepath.Base above
+		if _, err := os.Stat(p); err == nil { //nolint:gosec // slug sanitized with filepath.Base above
 			return p
 		}
 	}

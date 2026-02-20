@@ -4,13 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
-	osexec "os/exec"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 	"sigs.k8s.io/kind/pkg/cluster"
 	"sigs.k8s.io/kind/pkg/cluster/nodeutils"
-	"sigs.k8s.io/kind/pkg/exec"
 	"sigs.k8s.io/kind/pkg/fs"
 )
 
@@ -25,7 +24,7 @@ func BuildAndLoadImage(ctx context.Context, imageDir string, imageTag string, cl
 
 	// 1. Build Docker image
 	logger.Info("Building Docker image '%s' from %s...", imageTag, imageDir)
-	buildCmd := osexec.CommandContext(ctx, "docker", "build", "-t", imageTag, imageDir)
+	buildCmd := exec.CommandContext(ctx, "docker", "build", "-t", imageTag, imageDir)
 	buildOutput, err := buildCmd.CombinedOutput()
 	if err != nil {
 		logger.Debug("Docker build output: %s", string(buildOutput))
@@ -52,7 +51,8 @@ func BuildAndLoadImage(ctx context.Context, imageDir string, imageTag string, cl
 
 	imageTarPath := filepath.Join(dir, "image.tar")
 	logger.Info("Saving Docker image to %s...", imageTarPath)
-	if err := exec.Command("docker", "save", "-o", imageTarPath, imageTag).Run(); err != nil {
+	saveCmd := exec.CommandContext(ctx, "docker", "save", "-o", imageTarPath, imageTag)
+	if err := saveCmd.Run(); err != nil {
 		return fmt.Errorf("docker save failed: %w", err)
 	}
 
@@ -63,11 +63,11 @@ func BuildAndLoadImage(ctx context.Context, imageDir string, imageTag string, cl
 		if err != nil {
 			return fmt.Errorf("failed to open image tar: %w", err)
 		}
-		if err := nodeutils.LoadImageArchive(node, f); err != nil {
-			f.Close()
-			return fmt.Errorf("failed to load image into node %s: %w", node.String(), err)
-		}
+		loadErr := nodeutils.LoadImageArchive(node, f)
 		f.Close()
+		if loadErr != nil {
+			return fmt.Errorf("failed to load image into node %s: %w", node.String(), loadErr)
+		}
 	}
 
 	logger.Info("Image '%s' loaded into Kind cluster '%s'", imageTag, clusterName)

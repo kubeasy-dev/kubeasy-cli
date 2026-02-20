@@ -161,9 +161,6 @@ In non-interactive mode, use flags: --name, --type, --theme, --difficulty.`,
 
 		// Defaults
 		name = strings.TrimSpace(name)
-		if name == "" {
-			return fmt.Errorf("challenge name cannot be empty")
-		}
 
 		slug = strings.TrimSpace(slug)
 		if slug == "" {

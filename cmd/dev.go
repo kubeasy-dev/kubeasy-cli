@@ -16,6 +16,7 @@ Commands:
   create   - Scaffold a new challenge directory
   apply    - Deploy local challenge manifests to the Kind cluster
   validate - Run validations locally without submitting to API
+  test     - Apply manifests and run validations in one step
   clean    - Remove dev challenge resources from the cluster`,
 	Run: func(cmd *cobra.Command, args []string) {
 		err := cmd.Help()

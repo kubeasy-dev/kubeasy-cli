@@ -1,0 +1,80 @@
+name: Test Action
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "action.yml"
+      - ".github/workflows/test-action.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-latest:
+    name: Test (latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Run setup-kubeasy action
+        uses: ./
+        with:
+          api-key: ${{ secrets.KUBEASY_API_KEY }}
+
+      - name: Verify CLI is installed
+        run: kubeasy version
+
+      - name: Verify Kind cluster exists
+        run: kind get clusters | grep -q "^kubeasy$"
+
+      - name: Verify kubectl context
+        run: kubectl cluster-info --context kind-kubeasy
+
+      - name: Verify Kyverno is ready
+        run: |
+          for deploy in kyverno-admission-controller kyverno-background-controller kyverno-cleanup-controller kyverno-reports-controller; do
+            kubectl get deployment "${deploy}" -n kyverno -o jsonpath='{.status.readyReplicas}' | grep -qv "^0$"
+            echo "${deploy}: ready"
+          done
+
+      - name: Verify local-path-provisioner is ready
+        run: |
+          kubectl get deployment local-path-provisioner -n local-path-storage -o jsonpath='{.status.readyReplicas}' | grep -qv "^0$"
+          echo "local-path-provisioner: ready"
+
+      - name: Verify KUBEASY_API_KEY is set
+        run: test -n "${KUBEASY_API_KEY}"
+
+  test-pinned-version:
+    name: Test (pinned version)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Run setup-kubeasy action
+        id: setup
+        uses: ./
+        with:
+          version: "v2.5.2"
+          api-key: ${{ secrets.KUBEASY_API_KEY }}
+
+      - name: Verify CLI version
+        run: kubeasy version | grep -q "2.5.2"
+
+      - name: Verify Kind cluster exists
+        run: kind get clusters | grep -q "^kubeasy$"
+
+      - name: Verify infrastructure
+        run: |
+          kubectl get deployment kyverno-admission-controller -n kyverno
+          kubectl get deployment local-path-provisioner -n local-path-storage

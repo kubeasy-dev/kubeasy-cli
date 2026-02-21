@@ -36,7 +36,7 @@ runs:
           INSTALL_URL="https://download.kubeasy.dev/install.sh"
         else
           echo "Installing kubeasy CLI ${KUBEASY_VERSION}..."
-          INSTALL_URL="https://download.kubeasy.dev/${KUBEASY_VERSION}/install.sh"
+          INSTALL_URL="https://download.kubeasy.dev/kubeasy-cli/${KUBEASY_VERSION}/install.sh"
         fi
 
         curl -fsSL "${INSTALL_URL}" | KUBEASY_INSTALL_DIR=/usr/local/bin sh

@@ -12,148 +12,17 @@ inputs:
     default: "latest"
   api-key:
     description: "Kubeasy API key for authentication. Sets the KUBEASY_API_KEY environment variable."
-    required: false
-  skip-cluster:
-    description: "Skip Kind cluster creation (if you already have a cluster)."
-    required: false
-    default: "false"
-  skip-infrastructure:
-    description: "Skip infrastructure installation (Kyverno + local-path-provisioner)."
-    required: false
-    default: "false"
-  kind-version:
-    description: "Kind version to install."
-    required: false
-    default: "v0.31.0"
-  kubernetes-version:
-    description: "Kubernetes version for the Kind node image (e.g. v1.35.0)."
-    required: false
-    default: "v1.35.0"
+    required: true
 
 outputs:
   version:
     description: "Installed kubeasy CLI version"
     value: ${{ steps.install-cli.outputs.version }}
-  cluster-name:
-    description: "Name of the Kind cluster"
-    value: "kubeasy"
-  kubeconfig:
-    description: "Path to the kubeconfig file"
-    value: ${{ steps.create-cluster.outputs.kubeconfig }}
 
 runs:
   using: "composite"
   steps:
-    # ── Step 1: Install Kind ──────────────────────────────────────────────
-    - name: Install Kind
-      if: inputs.skip-cluster == 'false'
-      shell: bash
-      env:
-        KIND_VERSION: ${{ inputs.kind-version }}
-      run: |
-        echo "::group::Install Kind ${KIND_VERSION}"
-        if command -v kind &>/dev/null; then
-          CURRENT_VERSION="$(kind version | grep -oP 'v[\d.]+')"
-          if [ "${CURRENT_VERSION}" = "${KIND_VERSION}" ]; then
-            echo "Kind ${KIND_VERSION} is already installed"
-            echo "::endgroup::"
-            exit 0
-          fi
-        fi
-
-        KIND_BINARY="kind-linux-amd64"
-        ARCH="$(uname -m)"
-        if [ "${ARCH}" = "aarch64" ] || [ "${ARCH}" = "arm64" ]; then
-          KIND_BINARY="kind-linux-arm64"
-        fi
-
-        curl -fsSLo ./kind "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/${KIND_BINARY}"
-        chmod +x ./kind
-        sudo mv ./kind /usr/local/bin/kind
-        echo "Kind ${KIND_VERSION} installed: $(kind version)"
-        echo "::endgroup::"
-
-    # ── Step 2: Create Kind cluster ───────────────────────────────────────
-    - name: Create Kind cluster
-      id: create-cluster
-      if: inputs.skip-cluster == 'false'
-      shell: bash
-      env:
-        K8S_VERSION: ${{ inputs.kubernetes-version }}
-      run: |
-        echo "::group::Create Kind cluster 'kubeasy' (Kubernetes ${K8S_VERSION})"
-        KUBECONFIG_PATH="${HOME}/.kube/config"
-
-        if kind get clusters 2>/dev/null | grep -q "^kubeasy$"; then
-          echo "Kind cluster 'kubeasy' already exists"
-        else
-          kind create cluster \
-            --name kubeasy \
-            --image "kindest/node:${K8S_VERSION}" \
-            --wait 120s
-          echo "Kind cluster 'kubeasy' created"
-        fi
-
-        # Ensure kubectl context is set
-        kubectl cluster-info --context kind-kubeasy
-
-        echo "kubeconfig=${KUBECONFIG_PATH}" >> "$GITHUB_OUTPUT"
-        echo "::endgroup::"
-
-    # ── Step 3: Install Kyverno ───────────────────────────────────────────
-    - name: Install Kyverno
-      if: inputs.skip-infrastructure == 'false'
-      shell: bash
-      run: |
-        KYVERNO_VERSION="v1.17.0"
-        echo "::group::Install Kyverno ${KYVERNO_VERSION}"
-
-        KYVERNO_URL="https://github.com/kyverno/kyverno/releases/download/${KYVERNO_VERSION}/install.yaml"
-        echo "Applying Kyverno manifest from ${KYVERNO_URL}"
-        kubectl create namespace kyverno --dry-run=client -o yaml | kubectl apply -f -
-        kubectl apply -f "${KYVERNO_URL}"
-
-        echo "Kyverno manifest applied"
-        echo "::endgroup::"
-
-    # ── Step 4: Install local-path-provisioner ────────────────────────────
-    - name: Install local-path-provisioner
-      if: inputs.skip-infrastructure == 'false'
-      shell: bash
-      run: |
-        LOCAL_PATH_VERSION="v0.0.34"
-        echo "::group::Install local-path-provisioner ${LOCAL_PATH_VERSION}"
-
-        LOCAL_PATH_URL="https://raw.githubusercontent.com/rancher/local-path-provisioner/${LOCAL_PATH_VERSION}/deploy/local-path-storage.yaml"
-        echo "Applying local-path-provisioner manifest from ${LOCAL_PATH_URL}"
-        kubectl create namespace local-path-storage --dry-run=client -o yaml | kubectl apply -f -
-        kubectl apply -f "${LOCAL_PATH_URL}"
-
-        echo "local-path-provisioner manifest applied"
-        echo "::endgroup::"
-
-    # ── Step 5: Wait for infrastructure ───────────────────────────────────
-    - name: Wait for infrastructure to be ready
-      if: inputs.skip-infrastructure == 'false'
-      shell: bash
-      run: |
-        echo "::group::Wait for infrastructure deployments"
-
-        echo "Waiting for Kyverno deployments..."
-        for deploy in kyverno-admission-controller kyverno-background-controller kyverno-cleanup-controller kyverno-reports-controller; do
-          echo "  Waiting for ${deploy}..."
-          kubectl rollout status deployment/"${deploy}" -n kyverno --timeout=300s
-        done
-        echo "Kyverno is ready"
-
-        echo "Waiting for local-path-provisioner..."
-        kubectl rollout status deployment/local-path-provisioner -n local-path-storage --timeout=120s
-        echo "local-path-provisioner is ready"
-
-        echo "All infrastructure components are ready"
-        echo "::endgroup::"
-
-    # ── Step 6: Install kubeasy CLI ───────────────────────────────────────
+    # ── Step 1: Install kubeasy CLI ───────────────────────────────────────
     - name: Install kubeasy CLI
       id: install-cli
       shell: bash
@@ -175,10 +44,17 @@ runs:
         echo "kubeasy CLI installed: ${INSTALLED_VERSION}"
         echo "::endgroup::"
 
-    # ── Step 7: Set API key (optional) ────────────────────────────────────
+    # ── Step 2: Set API key ───────────────────────────────────────────────
     - name: Set API key
-      if: inputs.api-key != ''
       shell: bash
+      run: echo "KUBEASY_API_KEY=${{ inputs.api-key }}" >> "$GITHUB_ENV"
+
+    # ── Step 3: Setup cluster and infrastructure ──────────────────────────
+    - name: Setup Kubeasy environment
+      shell: bash
+      env:
+        KUBEASY_API_KEY: ${{ inputs.api-key }}
       run: |
-        echo "KUBEASY_API_KEY=${{ inputs.api-key }}" >> "$GITHUB_ENV"
-        echo "Kubeasy API key configured"
+        echo "::group::Setup Kubeasy environment"
+        kubeasy setup
+        echo "::endgroup::"

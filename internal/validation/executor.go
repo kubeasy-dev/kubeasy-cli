@@ -60,6 +60,7 @@ func NewExecutor(clientset kubernetes.Interface, dynamicClient dynamic.Interface
 
 // Execute runs a single validation and returns the result
 func (e *Executor) Execute(ctx context.Context, v Validation) Result {
+	start := time.Now()
 	result := Result{
 		Key:     v.Key,
 		Passed:  false,
@@ -85,6 +86,7 @@ func (e *Executor) Execute(ctx context.Context, v Validation) Result {
 		result.Passed, result.Message, err = e.executeConnectivity(ctx, spec)
 	default:
 		result.Message = fmt.Sprintf("Unknown validation type: %s", v.Type)
+		result.Duration = time.Since(start)
 		return result
 	}
 
@@ -93,6 +95,7 @@ func (e *Executor) Execute(ctx context.Context, v Validation) Result {
 		result.Message = err.Error()
 	}
 
+	result.Duration = time.Since(start)
 	return result
 }
 
@@ -111,6 +114,19 @@ func (e *Executor) ExecuteAll(ctx context.Context, validations []Validation) []R
 	}
 
 	wg.Wait()
+	return results
+}
+
+// ExecuteSequential runs validations one by one. If failFast is true, it stops at the first failure.
+func (e *Executor) ExecuteSequential(ctx context.Context, validations []Validation, failFast bool) []Result {
+	var results []Result
+	for _, v := range validations {
+		result := e.Execute(ctx, v)
+		results = append(results, result)
+		if failFast && !result.Passed {
+			break
+		}
+	}
 	return results
 }
 

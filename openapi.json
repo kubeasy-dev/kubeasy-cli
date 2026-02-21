@@ -724,7 +724,7 @@
         },
         "responses": {
           "200": {
-            "description": "Submission accepted (check `success` field)",
+            "description": "Submission accepted, all validations passed",
             "content": {
               "application/json": {
                 "schema": {
@@ -829,6 +829,33 @@
                   ],
                   "additionalProperties": false,
                   "description": "Standard error response"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed (some objectives did not pass)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "message"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Failed challenge submission"
                 }
               }
             }
@@ -974,6 +1001,205 @@
                   ],
                   "additionalProperties": false,
                   "description": "Standard error response"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cli/types": {
+      "get": {
+        "operationId": "getTypes",
+        "summary": "List available challenge types",
+        "tags": [
+          "Metadata"
+        ],
+        "responses": {
+          "200": {
+            "description": "List of challenge types",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "types": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "slug": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "logo": {
+                            "nullable": true,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "slug",
+                          "name",
+                          "description",
+                          "logo"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Challenge type"
+                      }
+                    }
+                  },
+                  "required": [
+                    "types"
+                  ],
+                  "additionalProperties": false,
+                  "description": "List of available types"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cli/themes": {
+      "get": {
+        "operationId": "getThemes",
+        "summary": "List available challenge themes",
+        "tags": [
+          "Metadata"
+        ],
+        "responses": {
+          "200": {
+            "description": "List of challenge themes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "themes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "slug": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "logo": {
+                            "nullable": true,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "slug",
+                          "name",
+                          "description",
+                          "logo"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Challenge theme"
+                      }
+                    }
+                  },
+                  "required": [
+                    "themes"
+                  ],
+                  "additionalProperties": false,
+                  "description": "List of available themes"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Standard error response"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cli/difficulties": {
+      "get": {
+        "operationId": "getDifficulties",
+        "summary": "List available difficulty levels",
+        "tags": [
+          "Metadata"
+        ],
+        "responses": {
+          "200": {
+            "description": "List of difficulty levels",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "difficulties": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "easy",
+                          "medium",
+                          "hard"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "difficulties"
+                  ],
+                  "additionalProperties": false,
+                  "description": "List of available difficulty levels"
                 }
               }
             }

@@ -33,11 +33,13 @@ runs:
 
         if [ "${KUBEASY_VERSION}" = "latest" ]; then
           echo "Installing latest version of kubeasy CLI..."
-          curl -fsSL https://download.kubeasy.dev/install.sh | KUBEASY_INSTALL_DIR=/usr/local/bin sh
+          INSTALL_URL="https://download.kubeasy.dev/install.sh"
         else
           echo "Installing kubeasy CLI ${KUBEASY_VERSION}..."
-          curl -fsSL https://download.kubeasy.dev/install.sh | KUBEASY_VERSION="${KUBEASY_VERSION}" KUBEASY_INSTALL_DIR=/usr/local/bin sh
+          INSTALL_URL="https://download.kubeasy.dev/${KUBEASY_VERSION}/install.sh"
         fi
+
+        curl -fsSL "${INSTALL_URL}" | KUBEASY_INSTALL_DIR=/usr/local/bin sh
 
         INSTALLED_VERSION="$(kubeasy version 2>/dev/null || kubeasy --version 2>/dev/null || echo 'unknown')"
         echo "version=${INSTALLED_VERSION}" >> "$GITHUB_OUTPUT"

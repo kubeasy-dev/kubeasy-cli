@@ -104,19 +104,19 @@ changelog:
       - Merge branch
   groups:
     - title: "🚀 Features"
-      regexp: "^feat:"
+      regexp: '^feat(\(.+\))?:'
       order: 0
     - title: "🐛 Bug Fixes"
-      regexp: "^fix:"
+      regexp: '^fix(\(.+\))?:'
       order: 1
     - title: "📚 Documentation"
-      regexp: "^docs:"
+      regexp: '^docs(\(.+\))?:'
       order: 2
     - title: "🔧 Improvements"
-      regexp: "^refactor:|^perf:|^style:"
+      regexp: '^(refactor|perf|style)(\(.+\))?:'
       order: 3
     - title: "🧰 Maintenance"
-      regexp: "^chore:"
+      regexp: '^chore(\(.+\))?:'
       order: 4
     - title: "Others"
       order: 999

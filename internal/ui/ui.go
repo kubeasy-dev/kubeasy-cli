@@ -119,6 +119,21 @@ func Confirmation(message string) bool {
 	return result
 }
 
+// TextInput prompts the user for text input
+func TextInput(label string) (string, error) {
+	return pterm.DefaultInteractiveTextInput.Show(label)
+}
+
+// TextInputWithDefault prompts the user for text input with a default value
+func TextInputWithDefault(label, defaultValue string) (string, error) {
+	return pterm.DefaultInteractiveTextInput.WithDefaultValue(defaultValue).Show(label)
+}
+
+// Select prompts the user to select from a list of options
+func Select(label string, options []string) (string, error) {
+	return pterm.DefaultInteractiveSelect.WithOptions(options).Show(label)
+}
+
 // KeyValue displays a key-value pair in a styled format
 func KeyValue(key, value string) {
 	pterm.Printf("%s %s\n", pterm.LightCyan(key+":"), value)
@@ -222,6 +237,11 @@ func TimedSpinner(message string, fn func() error) error {
 			spinner.UpdateText(fmt.Sprintf("%s (%s)", message, elapsed))
 		}
 	}
+}
+
+// ClearScreen clears the terminal screen using ANSI escape codes.
+func ClearScreen() {
+	fmt.Print("\033[H\033[2J") //nolint:forbidigo
 }
 
 // ValidationResult displays validation results in a formatted way

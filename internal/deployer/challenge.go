@@ -74,7 +74,7 @@ func DeployChallenge(ctx context.Context, clientset *kubernetes.Clientset, dynam
 
 	// Wait for Deployments and StatefulSets to be ready
 	logger.Info("Waiting for challenge resources to be ready...")
-	if err := waitForChallengeReady(ctx, clientset, slug); err != nil {
+	if err := WaitForChallengeReady(ctx, clientset, slug); err != nil {
 		return fmt.Errorf("challenge resources failed to become ready: %w", err)
 	}
 
@@ -103,8 +103,8 @@ func pullOCIArtifact(ctx context.Context, ref string, targetDir string) error {
 	return nil
 }
 
-// waitForChallengeReady waits for all Deployments and StatefulSets in the namespace to be ready.
-func waitForChallengeReady(ctx context.Context, clientset *kubernetes.Clientset, namespace string) error {
+// WaitForChallengeReady waits for all Deployments and StatefulSets in the namespace to be ready.
+func WaitForChallengeReady(ctx context.Context, clientset *kubernetes.Clientset, namespace string) error {
 	// List Deployments
 	deployments, err := clientset.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {

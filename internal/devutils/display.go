@@ -24,7 +24,12 @@ func DisplayValidationResults(validations []validation.Validation, results []val
 	// Group validations by type for display
 	typeResults := make(map[validation.ValidationType][]validation.Result)
 	for i, v := range validations {
+	for i, v := range validations {
+		if i >= len(results) {
+			break
+		}
 		typeResults[v.Type] = append(typeResults[v.Type], results[i])
+	}
 	}
 
 	typeOrder := []validation.ValidationType{

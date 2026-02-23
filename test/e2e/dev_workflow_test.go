@@ -177,7 +177,7 @@ spec:
 			t.Logf("  %s: passed=%v message=%q", r.Key, r.Passed, r.Message)
 		}
 
-		assert.True(t, allPassed, "all validations should pass since we deployed the ConfigMap")
+		assert.True(t, allPassed, "all validations should pass since we deployed the nginx Deployment")
 	})
 
 	t.Run("clean", func(t *testing.T) {

@@ -17,7 +17,7 @@ import (
 	"golang.org/x/term"
 )
 
-var defaultChallengeTypes = []string{"fix", "build", "migrate"}
+var defaultChallengeTypes = devutils.ValidTypes
 
 var defaultChallengeThemes = []string{
 	"ingress-tls",
@@ -31,7 +31,7 @@ var defaultChallengeThemes = []string{
 	"volumes-secrets",
 }
 
-var defaultChallengeDifficulties = []string{"easy", "medium", "hard"}
+var defaultChallengeDifficulties = devutils.ValidDifficulties
 
 // fetchMetadata fetches challenge types, themes, and difficulties from the API.
 // Falls back to hardcoded defaults when the API is unreachable.
@@ -40,31 +40,25 @@ func fetchMetadata() (types, themes, difficulties []string) {
 	themes = defaultChallengeThemes
 	difficulties = defaultChallengeDifficulties
 
-	fetched := false
-
 	if t, err := api.GetTypes(); err == nil {
 		types = t
-		fetched = true
 	} else {
 		logger.Debug("Failed to fetch types from API: %v", err)
+		ui.Warning("Could not fetch challenge types from API — using offline defaults.")
 	}
 
 	if t, err := api.GetThemes(); err == nil {
 		themes = t
-		fetched = true
 	} else {
 		logger.Debug("Failed to fetch themes from API: %v", err)
+		ui.Warning("Could not fetch challenge themes from API — using offline defaults.")
 	}
 
 	if d, err := api.GetDifficulties(); err == nil {
 		difficulties = d
-		fetched = true
 	} else {
 		logger.Debug("Failed to fetch difficulties from API: %v", err)
-	}
-
-	if !fetched {
-		ui.Warning("Could not reach the API — using offline defaults for types, themes, and difficulties.")
+		ui.Warning("Could not fetch challenge difficulties from API — using offline defaults.")
 	}
 
 	return types, themes, difficulties
@@ -317,9 +311,19 @@ In non-interactive mode, use flags: --name, --type, --theme, --difficulty.`,
 		}
 		for _, dir := range dirs {
 			if err := os.MkdirAll(dir, 0o755); err != nil {
+				// Clean up partially created directories
+				_ = os.RemoveAll(slug)
 				return fmt.Errorf("failed to create directory %s: %w", dir, err)
 			}
 		}
+
+		// Clean up on any subsequent error
+		success := false
+		defer func() {
+			if !success {
+				_ = os.RemoveAll(slug)
+			}
+		}()
 
 		// Create .gitkeep files
 		gitkeepPaths := []string{
@@ -411,6 +415,7 @@ In non-interactive mode, use flags: --name, --type, --theme, --difficulty.`,
 		)
 		_ = ui.BulletList(nextSteps)
 
+		success = true
 		return nil
 	},
 }

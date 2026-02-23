@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/signal"
 	"path/filepath"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -70,13 +71,13 @@ func FsWatchLoop(ctx context.Context, challengeDir string, onChange func()) erro
 	ui.Println()
 	ui.Info("Watching for changes... Press Ctrl+C to stop")
 
-	redeployCount := 0
+	var redeployCount atomic.Int64
 	var debounceTimer *time.Timer
 	for {
 		select {
 		case <-ctx.Done():
 			ui.Println()
-			ui.Info(fmt.Sprintf("Watch mode stopped (%d redeploy(s))", redeployCount))
+			ui.Info(fmt.Sprintf("Watch mode stopped (%d redeploy(s))", redeployCount.Load()))
 			return nil
 		case event, ok := <-watcher.Events:
 			if !ok {
@@ -89,9 +90,9 @@ func FsWatchLoop(ctx context.Context, challengeDir string, onChange func()) erro
 				debounceTimer.Stop()
 			}
 			debounceTimer = time.AfterFunc(500*time.Millisecond, func() {
-				redeployCount++
+				n := redeployCount.Add(1)
 				ui.Println()
-				ui.Info(fmt.Sprintf("Change detected: %s (redeploy #%d)", event.Name, redeployCount))
+				ui.Info(fmt.Sprintf("Change detected: %s (redeploy #%d)", event.Name, n))
 				onChange()
 			})
 		case watchErr, ok := <-watcher.Errors:

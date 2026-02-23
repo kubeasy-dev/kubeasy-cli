@@ -114,7 +114,10 @@ func runDevValidate(cmd *cobra.Command, challengeSlug, challengeDir string, opts
 	if len(config.Validations) == 0 {
 		if opts.JSONOutput {
 			out := devutils.FormatValidationJSON(challengeSlug, config.Validations, nil, 0)
-			data, _ := json.Marshal(out)
+			data, err := json.Marshal(out)
+			if err != nil {
+				return false, fmt.Errorf("failed to serialize JSON output: %w", err)
+			}
 			fmt.Println(string(data))
 			return true, nil
 		}
@@ -169,7 +172,10 @@ func runDevValidate(cmd *cobra.Command, challengeSlug, challengeDir string, opts
 
 	if opts.JSONOutput {
 		out := devutils.FormatValidationJSON(challengeSlug, config.Validations, results, totalDuration)
-		data, _ := json.MarshalIndent(out, "", "  ")
+		data, err := json.MarshalIndent(out, "", "  ")
+		if err != nil {
+			return false, fmt.Errorf("failed to serialize JSON output: %w", err)
+		}
 		fmt.Println(string(data))
 		allPassed := true
 		for _, r := range results {

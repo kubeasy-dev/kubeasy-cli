@@ -26,8 +26,8 @@ type LintIssue struct {
 }
 
 var (
-	validDifficulties = []string{"easy", "medium", "hard"}
-	validTypes        = []string{"fix", "build", "migrate"}
+	ValidDifficulties = []string{"easy", "medium", "hard"}
+	ValidTypes        = []string{"fix", "build", "migrate"}
 )
 
 // LintChallengeFile validates a challenge.yaml file structure without requiring a cluster.
@@ -75,15 +75,15 @@ func LintChallengeFile(path string) ([]LintIssue, error) {
 
 	// Check difficulty value
 	if diff, ok := raw["difficulty"].(string); ok && diff != "" {
-		if !slices.Contains(validDifficulties, diff) {
-			issues = append(issues, LintIssue{Field: "difficulty", Severity: SeverityError, Message: fmt.Sprintf("invalid difficulty '%s' (valid: %v)", diff, validDifficulties)})
+		if !slices.Contains(ValidDifficulties, diff) {
+			issues = append(issues, LintIssue{Field: "difficulty", Severity: SeverityError, Message: fmt.Sprintf("invalid difficulty '%s' (valid: %v)", diff, ValidDifficulties)})
 		}
 	}
 
 	// Check type value
 	if t, ok := raw["type"].(string); ok && t != "" {
-		if !slices.Contains(validTypes, t) {
-			issues = append(issues, LintIssue{Field: "type", Severity: SeverityError, Message: fmt.Sprintf("invalid type '%s' (valid: %v)", t, validTypes)})
+		if !slices.Contains(ValidTypes, t) {
+			issues = append(issues, LintIssue{Field: "type", Severity: SeverityError, Message: fmt.Sprintf("invalid type '%s' (valid: %v)", t, ValidTypes)})
 		}
 	}
 

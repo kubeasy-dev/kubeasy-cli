@@ -11,6 +11,7 @@ A command-line tool to learn Kubernetes through practical challenges. Create loc
 - Challenge deployment and validation
 - Progress tracking with backend integration
 - 6 specialized validation types for comprehensive testing
+- Dev mode for challenge creators (scaffold, deploy, validate, lint locally)
 
 ## Installation
 
@@ -42,6 +43,37 @@ kubeasy challenge reset <challenge-slug>
 
 # Clean challenge (removes resources only, keeps progress)
 kubeasy challenge clean <challenge-slug>
+```
+
+## Dev Mode (Challenge Creators)
+
+```bash
+# Scaffold a new challenge directory
+kubeasy dev create
+
+# Display local challenge metadata (no cluster needed)
+kubeasy dev get
+
+# Validate challenge.yaml structure (no cluster needed)
+kubeasy dev lint
+
+# Deploy local manifests to the Kind cluster
+kubeasy dev apply
+
+# Run validations locally without submitting to API
+kubeasy dev validate
+
+# Apply manifests and run validations in one step
+kubeasy dev test
+
+# Show pods, events, and objective count for a deployed challenge
+kubeasy dev status
+
+# Stream logs from challenge pods
+kubeasy dev logs
+
+# Remove dev challenge resources from the cluster
+kubeasy dev clean
 ```
 
 ## Documentation

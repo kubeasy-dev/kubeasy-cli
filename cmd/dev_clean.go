@@ -14,6 +14,8 @@ var devCleanCmd = &cobra.Command{
 This is the dev equivalent of 'kubeasy challenge clean' but does not require
 API login.`,
 	Args: cobra.ExactArgs(1),
+	Args:          cobra.ExactArgs(1),
+	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		challengeSlug := args[0]
 

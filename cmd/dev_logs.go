@@ -171,7 +171,7 @@ func streamPodLogs(ctx context.Context, clientset kubernetes.Interface, namespac
 	if err != nil {
 		return fmt.Errorf("failed to stream logs for pod %s: %w", podName, err)
 	}
-	defer stream.Close()
+	defer func() { _ = stream.Close() }()
 
 	scanner := bufio.NewScanner(stream)
 	for scanner.Scan() {

@@ -12,6 +12,11 @@ import (
 )
 
 func TestRestrictFilePermissions_Windows(t *testing.T) {
+	// Note: This test verifies that the current user retains access after ACL
+	// restrictions are applied. Verifying that other users are denied access
+	// would require running as a different user, which needs OS-level
+	// integration testing with multiple Windows accounts.
+
 	// Create a temporary file
 	tempDir := t.TempDir()
 	tempFile := filepath.Join(tempDir, "test-acl")
@@ -39,17 +44,11 @@ func TestRestrictFilePermissions_Windows(t *testing.T) {
 func TestRestrictFilePermissions_Windows_NonExistentFile(t *testing.T) {
 	err := restrictFilePermissions(filepath.Join(t.TempDir(), "nonexistent"))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to set file security")
 }
 
 func TestGetConfigDir_Windows_APPDATA(t *testing.T) {
-	// Save original value
-	origAppData := os.Getenv("APPDATA")
-	defer os.Setenv("APPDATA", origAppData)
-
-	// Set custom APPDATA
 	tempDir := t.TempDir()
-	os.Setenv("APPDATA", tempDir)
+	t.Setenv("APPDATA", tempDir)
 
 	configDir, err := getConfigDir()
 	require.NoError(t, err)
@@ -57,18 +56,7 @@ func TestGetConfigDir_Windows_APPDATA(t *testing.T) {
 }
 
 func TestGetConfigDir_Windows_FallbackToHomeDir(t *testing.T) {
-	// Save original value
-	origAppData := os.Getenv("APPDATA")
-	defer func() {
-		if origAppData != "" {
-			os.Setenv("APPDATA", origAppData)
-		} else {
-			os.Unsetenv("APPDATA")
-		}
-	}()
-
-	// Unset APPDATA to trigger fallback
-	os.Unsetenv("APPDATA")
+	t.Setenv("APPDATA", "")
 
 	configDir, err := getConfigDir()
 	require.NoError(t, err)

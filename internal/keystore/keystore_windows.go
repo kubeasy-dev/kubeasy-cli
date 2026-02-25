@@ -57,6 +57,7 @@ func restrictFilePermissions(path string) error {
 		},
 	}
 
+	// nil = create a fresh ACL, don't merge with an existing one.
 	acl, err := windows.ACLFromEntries([]windows.EXPLICIT_ACCESS{ea}, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create ACL: %w", err)

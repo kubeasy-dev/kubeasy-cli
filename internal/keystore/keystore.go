@@ -16,10 +16,8 @@
 //
 // Windows:
 //   - Windows Credential Manager is the preferred storage backend
-//   - File-based fallback uses %APPDATA% which is user-protected by Windows
-//   - IMPORTANT: File-based storage on Windows does not have explicit ACL restrictions.
-//     The file inherits permissions from the APPDATA directory. For maximum security,
-//     ensure Windows Credential Manager is available.
+//   - File-based fallback uses %APPDATA% with ACL restrictions (owner-only access)
+//   - ACL restrictions are applied using Windows security APIs (DACL with user-only access)
 //
 // The keyring is always preferred when available for maximum security.
 package keystore
@@ -265,8 +263,7 @@ func setToFile(apiKey string) error {
 
 	// Apply platform-specific permission restrictions to temp file.
 	// On Unix, this is a no-op since os.WriteFile already applies the mode.
-	// On Windows, this is currently a no-op but kept as a hook for future
-	// ACL implementation. See keystore_windows.go for details.
+	// On Windows, this applies ACL restrictions granting access only to the current user.
 	if err := restrictFilePermissions(tmpPath); err != nil {
 		os.Remove(tmpPath)
 		return fmt.Errorf("failed to restrict file permissions: %w", err)

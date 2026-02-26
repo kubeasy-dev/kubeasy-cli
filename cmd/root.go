@@ -9,8 +9,12 @@ import (
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/ui"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
+
+var noSpinner bool
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -35,6 +39,11 @@ to quickly create a Cobra application.`,
 
 		logger.Initialize(loggerOpts)
 		logger.Info("Kubeasy CLI started - logging to: %s", constants.LogFilePath)
+
+		// Enable CI mode if --no-spinner flag is set or stdout is not a TTY
+		if noSpinner || !term.IsTerminal(int(os.Stdout.Fd())) {
+			ui.SetCIMode(true)
+		}
 	},
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
@@ -56,6 +65,8 @@ func init() {
 	// will be global for your application.
 
 	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.kubeasy-cli.yaml)")
+
+	rootCmd.PersistentFlags().BoolVar(&noSpinner, "no-spinner", false, "Force plain text output (spinners are disabled automatically when stdout is not a TTY)")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.

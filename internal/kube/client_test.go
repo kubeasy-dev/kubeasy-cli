@@ -369,11 +369,11 @@ func TestPluralize(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"policy", "policies"},         // consonant-y → -ies
+		{"policy", "policies"},               // consonant-y → -ies
 		{"clusterpolicy", "clusterpolicies"}, // consonant-y → -ies
-		{"relay", "relays"},            // vowel-y → +s (no change)
-		{"deployment", "deployments"},  // non-y → +s
-		{"secret", "secrets"},          // non-y → +s
+		{"relay", "relays"},                  // vowel-y → +s (no change)
+		{"deployment", "deployments"},        // non-y → +s
+		{"secret", "secrets"},                // non-y → +s
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {

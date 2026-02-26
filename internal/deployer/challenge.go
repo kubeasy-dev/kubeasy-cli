@@ -16,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/restmapper"
 )
 
 // DeployChallenge pulls the challenge OCI artifact and applies manifests to the cluster.
@@ -36,6 +37,13 @@ func DeployChallenge(ctx context.Context, clientset *kubernetes.Clientset, dynam
 	if err := pullOCIArtifact(ctx, ref, tmpDir); err != nil {
 		return fmt.Errorf("failed to pull challenge artifact from %s: %w", ref, err)
 	}
+
+	// Build REST mapper from API discovery
+	groups, err := restmapper.GetAPIGroupResources(clientset.Discovery())
+	if err != nil {
+		return fmt.Errorf("failed to discover API resources: %w", err)
+	}
+	mapper := restmapper.NewDiscoveryRESTMapper(groups)
 
 	// Find and apply YAML files from manifests/ and policies/
 	dirs := []string{"manifests", "policies"}
@@ -66,7 +74,7 @@ func DeployChallenge(ctx context.Context, clientset *kubernetes.Clientset, dynam
 			if err != nil {
 				return fmt.Errorf("failed to read manifest %s: %w", f, err)
 			}
-			if err := kube.ApplyManifest(ctx, data, slug, clientset, dynamicClient); err != nil {
+			if err := kube.ApplyManifest(ctx, data, slug, mapper, dynamicClient); err != nil {
 				return fmt.Errorf("failed to apply manifest %s: %w", filepath.Base(f), err)
 			}
 		}

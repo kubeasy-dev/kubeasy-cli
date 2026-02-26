@@ -10,6 +10,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/restmapper"
 )
 
 const (
@@ -44,6 +45,13 @@ func SetupInfrastructure() error {
 		return fmt.Errorf("failed to get Kubernetes dynamic client: %w", err)
 	}
 
+	// Build REST mapper from API discovery (used for all ApplyManifest calls)
+	groups, err := restmapper.GetAPIGroupResources(clientset.Discovery())
+	if err != nil {
+		return fmt.Errorf("failed to discover API resources: %w", err)
+	}
+	mapper := restmapper.NewDiscoveryRESTMapper(groups)
+
 	// Install Kyverno
 	logger.Info("Installing Kyverno %s...", KyvernoVersion)
 	if err := kube.CreateNamespace(ctx, clientset, kyvernoNamespace); err != nil {
@@ -58,7 +66,7 @@ func SetupInfrastructure() error {
 	}
 	logger.Debug("Kyverno manifest fetched (%d bytes)", len(kyvernoManifest))
 
-	if err := kube.ApplyManifest(ctx, kyvernoManifest, kyvernoNamespace, clientset, dynamicClient); err != nil {
+	if err := kube.ApplyManifest(ctx, kyvernoManifest, kyvernoNamespace, mapper, dynamicClient); err != nil {
 		return fmt.Errorf("failed to apply Kyverno manifest: %w", err)
 	}
 	logger.Info("Kyverno manifest applied.")
@@ -77,7 +85,7 @@ func SetupInfrastructure() error {
 	}
 	logger.Debug("local-path-provisioner manifest fetched (%d bytes)", len(localPathManifest))
 
-	if err := kube.ApplyManifest(ctx, localPathManifest, localPathStorageNamespace, clientset, dynamicClient); err != nil {
+	if err := kube.ApplyManifest(ctx, localPathManifest, localPathStorageNamespace, mapper, dynamicClient); err != nil {
 		return fmt.Errorf("failed to apply local-path-provisioner manifest: %w", err)
 	}
 	logger.Info("local-path-provisioner manifest applied.")

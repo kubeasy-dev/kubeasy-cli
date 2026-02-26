@@ -10,11 +10,12 @@ import (
 )
 
 var (
-	devTestDir      string
-	devTestClean    bool
-	devTestWatch    bool
-	devTestFailFast bool
-	devTestJSON     bool
+	devTestDir           string
+	devTestClean         bool
+	devTestWatch         bool
+	devTestWatchInterval time.Duration
+	devTestFailFast      bool
+	devTestJSON          bool
 )
 
 var devTestCmd = &cobra.Command{
@@ -24,7 +25,7 @@ var devTestCmd = &cobra.Command{
 This is equivalent to running 'kubeasy dev apply' followed by 'kubeasy dev validate'.
 
 Use --clean to delete existing resources before applying.
-Use --watch to continuously re-run validations every 5 seconds after the initial apply.
+Use --watch to continuously re-run validations at the given interval after the initial apply (see --watch-interval).
 Use --fail-fast to stop at the first validation failure.
 Use --json for structured JSON output (useful for CI).`,
 	Args:          cobra.ExactArgs(1),
@@ -73,7 +74,7 @@ Use --json for structured JSON output (useful for CI).`,
 
 		if devTestWatch {
 			header := fmt.Sprintf("Validating Dev Challenge: %s (watch mode)", challengeSlug)
-			return devutils.TickerWatchLoop(cmd.Context(), 5*time.Second, header, func() {
+			return devutils.TickerWatchLoop(cmd.Context(), devTestWatchInterval, header, func() {
 				runDevValidate(cmd, challengeSlug, challengeDir, opts) //nolint:errcheck
 			})
 		}
@@ -95,7 +96,8 @@ func init() {
 	devCmd.AddCommand(devTestCmd)
 	devTestCmd.Flags().StringVar(&devTestDir, "dir", "", "Path to challenge directory (default: auto-detect)")
 	devTestCmd.Flags().BoolVar(&devTestClean, "clean", false, "Delete existing resources before applying")
-	devTestCmd.Flags().BoolVarP(&devTestWatch, "watch", "w", false, "Continuously re-run validations every 5 seconds after apply")
+	devTestCmd.Flags().BoolVarP(&devTestWatch, "watch", "w", false, "Continuously re-run validations at the given interval after apply (see --watch-interval)")
+	devTestCmd.Flags().DurationVarP(&devTestWatchInterval, "watch-interval", "i", 5*time.Second, "Interval between watch re-runs (e.g. 10s, 1m)")
 	devTestCmd.Flags().BoolVar(&devTestFailFast, "fail-fast", false, "Stop at the first validation failure")
 	devTestCmd.Flags().BoolVar(&devTestJSON, "json", false, "Output results as JSON")
 }

@@ -8,6 +8,14 @@ import (
 	"github.com/pterm/pterm/putils"
 )
 
+// ciMode disables spinner animations and uses plain text output instead.
+var ciMode bool
+
+// SetCIMode enables or disables CI-friendly plain text output (no spinners).
+func SetCIMode(v bool) {
+	ciMode = v
+}
+
 // Spinner creates and starts a spinner with the given text
 func Spinner(text string) (*pterm.SpinnerPrinter, error) {
 	spinner, err := pterm.DefaultSpinner.Start(text)
@@ -190,6 +198,17 @@ func PrintLogo() {
 
 // WaitMessage displays a message while executing a function
 func WaitMessage(message string, fn func() error) error {
+	if ciMode {
+		fmt.Printf("• %s...\n", message)
+		err := fn()
+		if err != nil {
+			fmt.Printf("✗ %s\n", message)
+			return err
+		}
+		fmt.Printf("✓ %s\n", message)
+		return nil
+	}
+
 	spinner, err := pterm.DefaultSpinner.Start(message)
 	if err != nil {
 		return err
@@ -207,6 +226,19 @@ func WaitMessage(message string, fn func() error) error {
 
 // TimedSpinner shows a spinner with elapsed time
 func TimedSpinner(message string, fn func() error) error {
+	if ciMode {
+		fmt.Printf("• %s...\n", message)
+		start := time.Now()
+		err := fn()
+		elapsed := time.Since(start).Round(time.Second)
+		if err != nil {
+			fmt.Printf("✗ %s (failed after %s)\n", message, elapsed)
+			return err
+		}
+		fmt.Printf("✓ %s (completed in %s)\n", message, elapsed)
+		return nil
+	}
+
 	start := time.Now()
 	spinner, err := pterm.DefaultSpinner.Start(message)
 	if err != nil {

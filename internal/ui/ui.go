@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/pterm/pterm"
@@ -16,7 +17,8 @@ func SetCIMode(v bool) {
 	ciMode = v
 }
 
-// Spinner creates and starts a spinner with the given text
+// Spinner creates and starts a spinner with the given text.
+// Note: does not respect ciMode — use WaitMessage or TimedSpinner for CI-safe output.
 func Spinner(text string) (*pterm.SpinnerPrinter, error) {
 	spinner, err := pterm.DefaultSpinner.Start(text)
 	if err != nil {
@@ -147,7 +149,8 @@ func KeyValue(key, value string) {
 	pterm.Printf("%s %s\n", pterm.LightCyan(key+":"), value)
 }
 
-// MultiSpinner manages multiple spinners for parallel tasks
+// MultiSpinner manages multiple spinners for parallel tasks.
+// Note: does not respect ciMode — use WaitMessage or TimedSpinner for CI-safe output.
 type MultiSpinner struct {
 	spinners map[string]*pterm.SpinnerPrinter
 }
@@ -202,7 +205,7 @@ func WaitMessage(message string, fn func() error) error {
 		fmt.Printf("• %s...\n", message)
 		err := fn()
 		if err != nil {
-			fmt.Printf("✗ %s\n", message)
+			fmt.Fprintf(os.Stderr, "✗ %s: %v\n", message, err)
 			return err
 		}
 		fmt.Printf("✓ %s\n", message)
@@ -232,7 +235,7 @@ func TimedSpinner(message string, fn func() error) error {
 		err := fn()
 		elapsed := time.Since(start).Round(time.Second)
 		if err != nil {
-			fmt.Printf("✗ %s (failed after %s)\n", message, elapsed)
+			fmt.Fprintf(os.Stderr, "✗ %s (failed after %s): %v\n", message, elapsed, err)
 			return err
 		}
 		fmt.Printf("✓ %s (completed in %s)\n", message, elapsed)

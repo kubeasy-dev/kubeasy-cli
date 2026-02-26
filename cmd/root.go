@@ -66,7 +66,7 @@ func init() {
 
 	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.kubeasy-cli.yaml)")
 
-	rootCmd.PersistentFlags().BoolVar(&noSpinner, "no-spinner", false, "Disable spinner animations (plain text output, useful for CI/non-interactive environments)")
+	rootCmd.PersistentFlags().BoolVar(&noSpinner, "no-spinner", false, "Force plain text output (spinners are disabled automatically when stdout is not a TTY)")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.

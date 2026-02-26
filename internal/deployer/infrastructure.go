@@ -45,7 +45,12 @@ func SetupInfrastructure() error {
 		return fmt.Errorf("failed to get Kubernetes dynamic client: %w", err)
 	}
 
-	// Build REST mapper from API discovery (used for all ApplyManifest calls)
+	// Build REST mapper from API discovery (used for all ApplyManifest calls).
+	// This is a point-in-time snapshot: CRD types registered by the manifests applied
+	// below won't be resolvable within this call. That is acceptable here because neither
+	// the Kyverno nor the local-path-provisioner install manifest applies instances of
+	// their own CRD types — they only create the CRDs themselves (CustomResourceDefinition,
+	// a standard type always present in discovery).
 	groups, err := restmapper.GetAPIGroupResources(clientset.Discovery())
 	if err != nil {
 		return fmt.Errorf("failed to discover API resources: %w", err)

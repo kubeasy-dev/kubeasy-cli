@@ -59,7 +59,7 @@ func DeployChallenge(ctx context.Context, clientset *kubernetes.Clientset, dynam
 			if err != nil {
 				return err
 			}
-			if !d.IsDir() && strings.HasSuffix(path, ".yaml") {
+			if !d.IsDir() && (strings.HasSuffix(path, ".yaml") || strings.HasSuffix(path, ".yml")) {
 				files = append(files, path)
 			}
 			return nil

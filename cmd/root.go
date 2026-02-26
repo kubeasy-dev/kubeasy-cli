@@ -4,7 +4,6 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
@@ -31,11 +30,6 @@ to quickly create a Cobra application.`,
 		loggerOpts := logger.DefaultOptions()
 		loggerOpts.FilePath = constants.LogFilePath
 		loggerOpts.Level = logger.INFO
-
-		// Attempt to truncate the log file at the start
-		if err := os.Truncate(constants.LogFilePath, 0); err != nil && !os.IsNotExist(err) {
-			fmt.Fprintf(os.Stderr, "[WARN] Failed to clear log file %s: %v\n", constants.LogFilePath, err)
-		}
 
 		logger.Initialize(loggerOpts)
 		logger.Info("Kubeasy CLI started - logging to: %s", constants.LogFilePath)

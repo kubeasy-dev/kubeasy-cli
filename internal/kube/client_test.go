@@ -363,6 +363,25 @@ func TestDeleteNamespace(t *testing.T) {
 	})
 }
 
+// TestPluralize tests the pluralize helper
+func TestPluralize(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"policy", "policies"},         // consonant-y → -ies
+		{"clusterpolicy", "clusterpolicies"}, // consonant-y → -ies
+		{"relay", "relays"},            // vowel-y → +s (no change)
+		{"deployment", "deployments"},  // non-y → +s
+		{"secret", "secrets"},          // non-y → +s
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			assert.Equal(t, tt.expected, pluralize(tt.input))
+		})
+	}
+}
+
 // TestGetResourceGVR tests the GetResourceGVR function
 func TestGetResourceGVR(t *testing.T) {
 	tests := []struct {

@@ -256,8 +256,10 @@ func DeleteNamespace(ctx context.Context, clientset kubernetes.Interface, namesp
 	return nil
 }
 
+var vowels = map[byte]bool{'a': true, 'e': true, 'i': true, 'o': true, 'u': true}
+
 func pluralize(kind string) string {
-	if strings.HasSuffix(kind, "y") {
+	if strings.HasSuffix(kind, "y") && len(kind) >= 2 && !vowels[kind[len(kind)-2]] {
 		return kind[:len(kind)-1] + "ies"
 	}
 	return kind + "s"
@@ -285,10 +287,6 @@ func GetResourceGVR(gvk *schema.GroupVersionKind) schema.GroupVersionResource {
 		if gvk.Group == "networking.k8s.io" || gvk.Group == "extensions" {
 			gvr.Resource = "ingresses"
 		}
-	case "networkpolicy":
-		if gvk.Group == "networking.k8s.io" {
-			gvr.Resource = "networkpolicies"
-		}
 	case "customresourcedefinition":
 		if gvk.Group == "apiextensions.k8s.io" {
 			gvr.Resource = "customresourcedefinitions"
@@ -300,10 +298,6 @@ func GetResourceGVR(gvk *schema.GroupVersionKind) schema.GroupVersionResource {
 	case "endpoint":
 		if gvk.Group == "" {
 			gvr.Resource = "endpoints"
-		}
-	case "podsecuritypolicy":
-		if gvk.Group == "policy" {
-			gvr.Resource = "podsecuritypolicies"
 		}
 	}
 

@@ -539,6 +539,34 @@ func TestGetResourceGVR(t *testing.T) {
 			},
 			description: "Secret should map to secrets",
 		},
+		{
+			name: "Kyverno Policy",
+			gvk: schema.GroupVersionKind{
+				Group:   "kyverno.io",
+				Version: "v1",
+				Kind:    "Policy",
+			},
+			expectedGVR: schema.GroupVersionResource{
+				Group:    "kyverno.io",
+				Version:  "v1",
+				Resource: "policies",
+			},
+			description: "Policy (ends in -y) should map to policies",
+		},
+		{
+			name: "Kyverno ClusterPolicy",
+			gvk: schema.GroupVersionKind{
+				Group:   "kyverno.io",
+				Version: "v1",
+				Kind:    "ClusterPolicy",
+			},
+			expectedGVR: schema.GroupVersionResource{
+				Group:    "kyverno.io",
+				Version:  "v1",
+				Resource: "clusterpolicies",
+			},
+			description: "ClusterPolicy (ends in -y) should map to clusterpolicies",
+		},
 	}
 
 	for _, tt := range tests {

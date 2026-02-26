@@ -256,12 +256,19 @@ func DeleteNamespace(ctx context.Context, clientset kubernetes.Interface, namesp
 	return nil
 }
 
+func pluralize(kind string) string {
+	if strings.HasSuffix(kind, "y") {
+		return kind[:len(kind)-1] + "ies"
+	}
+	return kind + "s"
+}
+
 // GetResourceGVR returns the Group-Version-Resource for a Kubernetes resource
 func GetResourceGVR(gvk *schema.GroupVersionKind) schema.GroupVersionResource {
 	gvr := schema.GroupVersionResource{
 		Group:    gvk.Group,
 		Version:  gvk.Version,
-		Resource: strings.ToLower(gvk.Kind) + "s", // Simple pluralization
+		Resource: pluralize(strings.ToLower(gvk.Kind)),
 	}
 
 	// Handle special cases and exceptions

@@ -72,6 +72,10 @@ Use --json for structured JSON output (useful for CI).`,
 			ui.Section(fmt.Sprintf("Validating Dev Challenge: %s", challengeSlug))
 		}
 
+		if devTestWatch && devTestWatchInterval <= 0 {
+			return fmt.Errorf("--watch-interval must be a positive duration (e.g. 5s, 1m)")
+		}
+
 		if devTestWatch {
 			header := fmt.Sprintf("Validating Dev Challenge: %s (watch mode)", challengeSlug)
 			return devutils.TickerWatchLoop(cmd.Context(), devTestWatchInterval, header, func() {

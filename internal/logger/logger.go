@@ -37,9 +37,10 @@ type Logger struct {
 	level     LogLevel
 	outputs   []io.Writer
 	mu        sync.Mutex
-	filePath  string // Store the file path for line management
-	lineCount int    // Current number of lines in the log file
-	maxLines  int    // Maximum lines to keep in the file
+	filePath  string   // Store the file path for line management
+	file      *os.File // File handle kept open for in-place rotation
+	lineCount int      // Current number of lines in the log file
+	maxLines  int      // Maximum lines to keep in the file
 }
 
 var (
@@ -70,6 +71,7 @@ func Initialize(opts *Options) {
 
 	once.Do(func() {
 		outputs := []io.Writer{}
+		var logFile *os.File
 
 		// Only add file output if FilePath is specified
 		// No stdout output - logs go only to file
@@ -88,6 +90,7 @@ func Initialize(opts *Options) {
 				// Use fmt.Fprintf here as logger might not be fully initialized
 				fmt.Fprintf(os.Stderr, "[ERROR] Failed to open log file '%s': %v\n", opts.FilePath, err)
 			} else {
+				logFile = file
 				// Add file writer to outputs
 				outputs = append(outputs, file)
 				// Closing the file is usually handled by the OS when the process exits.
@@ -98,6 +101,7 @@ func Initialize(opts *Options) {
 			level:     opts.Level,
 			outputs:   outputs,
 			filePath:  opts.FilePath,
+			file:      logFile,
 			lineCount: 0,
 			maxLines:  constants.MaxLogLines,
 		}
@@ -303,25 +307,26 @@ func (l *Logger) readAllLines() ([]string, error) {
 	return lines, scanner.Err()
 }
 
-// rewriteFile rewrites the log file with the given lines
+// rewriteFile rewrites the log file with the given lines using the existing file
+// handle to avoid the inode-swap problem that would occur with a temp-file rename.
 func (l *Logger) rewriteFile(lines []string) error {
-	// Create a temporary file
-	tempFile := l.filePath + ".tmp"
-	file, err := os.Create(tempFile)
-	if err != nil {
+	if l.file == nil {
+		return fmt.Errorf("no file handle available for rotation")
+	}
+
+	// Seek to the beginning and truncate, keeping the same inode so the open
+	// handle in l.outputs remains valid for subsequent writes.
+	if _, err := l.file.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	if err := l.file.Truncate(0); err != nil {
 		return err
 	}
 
-	// Write the lines
 	for _, line := range lines {
-		if _, err := fmt.Fprintln(file, line); err != nil {
-			file.Close()
-			os.Remove(tempFile)
+		if _, err := fmt.Fprintln(l.file, line); err != nil {
 			return err
 		}
 	}
-	file.Close()
-
-	// Replace the original file with the temporary file
-	return os.Rename(tempFile, l.filePath)
+	return nil
 }

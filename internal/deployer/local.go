@@ -11,12 +11,20 @@ import (
 	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/restmapper"
 )
 
 // DeployLocalChallenge applies manifests from a local challenge directory to the cluster.
 // Unlike DeployChallenge, it reads from the local filesystem instead of pulling from OCI.
 func DeployLocalChallenge(ctx context.Context, clientset *kubernetes.Clientset, dynamicClient dynamic.Interface, challengeDir string, namespace string) error {
 	logger.Info("Deploying local challenge from '%s'...", challengeDir)
+
+	// Build REST mapper from API discovery
+	groups, err := restmapper.GetAPIGroupResources(clientset.Discovery())
+	if err != nil {
+		return fmt.Errorf("failed to discover API resources: %w", err)
+	}
+	mapper := restmapper.NewDiscoveryRESTMapper(groups)
 
 	// Find and apply YAML files from manifests/ and policies/
 	dirs := []string{"manifests", "policies"}
@@ -47,7 +55,7 @@ func DeployLocalChallenge(ctx context.Context, clientset *kubernetes.Clientset, 
 			if err != nil {
 				return fmt.Errorf("failed to read manifest %s: %w", f, err)
 			}
-			if err := kube.ApplyManifest(ctx, data, namespace, clientset, dynamicClient); err != nil {
+			if err := kube.ApplyManifest(ctx, data, namespace, mapper, dynamicClient); err != nil {
 				return fmt.Errorf("failed to apply manifest %s: %w", filepath.Base(f), err)
 			}
 		}

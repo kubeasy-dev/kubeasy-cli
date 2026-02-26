@@ -6,12 +6,15 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/meta/testrestmapper"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic/fake"
-	"k8s.io/client-go/kubernetes"
 )
 
 const (
@@ -24,70 +27,24 @@ data:
   key: value`
 )
 
-// TestIsNamespaced tests the IsNamespaced function
-func TestIsNamespaced(t *testing.T) {
-	tests := []struct {
-		name              string
-		kind              string
-		expectsNamespaced bool
-	}{
-		// Cluster-scoped resources
-		{name: "Namespace", kind: "Namespace", expectsNamespaced: false},
-		{name: "Node", kind: "Node", expectsNamespaced: false},
-		{name: "PersistentVolume", kind: "PersistentVolume", expectsNamespaced: false},
-		{name: "ClusterRole", kind: "ClusterRole", expectsNamespaced: false},
-		{name: "ClusterRoleBinding", kind: "ClusterRoleBinding", expectsNamespaced: false},
-		{name: "CustomResourceDefinition", kind: "CustomResourceDefinition", expectsNamespaced: false},
-		{name: "StorageClass", kind: "StorageClass", expectsNamespaced: false},
-		{name: "PodSecurityPolicy", kind: "PodSecurityPolicy", expectsNamespaced: false},
-		{name: "MutatingWebhookConfiguration", kind: "MutatingWebhookConfiguration", expectsNamespaced: false},
-		{name: "ValidatingWebhookConfiguration", kind: "ValidatingWebhookConfiguration", expectsNamespaced: false},
-		{name: "VolumeAttachment", kind: "VolumeAttachment", expectsNamespaced: false},
-		{name: "RuntimeClass", kind: "RuntimeClass", expectsNamespaced: false},
-		{name: "PriorityClass", kind: "PriorityClass", expectsNamespaced: false},
-		{name: "CSIDriver", kind: "CSIDriver", expectsNamespaced: false},
-		{name: "CSINode", kind: "CSINode", expectsNamespaced: false},
-		{name: "APIService", kind: "APIService", expectsNamespaced: false},
-		{name: "CertificateSigningRequest", kind: "CertificateSigningRequest", expectsNamespaced: false},
-
-		// Namespaced resources
-		{name: "Pod", kind: "Pod", expectsNamespaced: true},
-		{name: "Deployment", kind: "Deployment", expectsNamespaced: true},
-		{name: "Service", kind: "Service", expectsNamespaced: true},
-		{name: "ConfigMap", kind: "ConfigMap", expectsNamespaced: true},
-		{name: "Secret", kind: "Secret", expectsNamespaced: true},
-		{name: "ServiceAccount", kind: "ServiceAccount", expectsNamespaced: true},
-		{name: "Role", kind: "Role", expectsNamespaced: true},
-		{name: "RoleBinding", kind: "RoleBinding", expectsNamespaced: true},
-		{name: "Ingress", kind: "Ingress", expectsNamespaced: true},
-		{name: "NetworkPolicy", kind: "NetworkPolicy", expectsNamespaced: true},
-		{name: "StatefulSet", kind: "StatefulSet", expectsNamespaced: true},
-		{name: "DaemonSet", kind: "DaemonSet", expectsNamespaced: true},
-
-		// Case insensitive
-		{name: "namespace (lowercase)", kind: "namespace", expectsNamespaced: false},
-		{name: "NAMESPACE (uppercase)", kind: "NAMESPACE", expectsNamespaced: false},
-		{name: "pod (lowercase)", kind: "pod", expectsNamespaced: true},
-		{name: "POD (uppercase)", kind: "POD", expectsNamespaced: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := IsNamespaced(tt.kind)
-			assert.Equal(t, tt.expectsNamespaced, result,
-				"IsNamespaced(%s) should return %v", tt.kind, tt.expectsNamespaced)
-		})
-	}
+// newTestScheme returns a scheme with core and apps types registered.
+func newTestScheme() *runtime.Scheme {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	_ = appsv1.AddToScheme(scheme)
+	_ = rbacv1.AddToScheme(scheme)
+	return scheme
 }
 
 // TestApplyManifest_DocumentSplitting tests manifest document splitting logic
 func TestApplyManifest_DocumentSplitting(t *testing.T) {
 	t.Run("single document", func(t *testing.T) {
-		scheme := runtime.NewScheme()
+		scheme := newTestScheme()
+		mapper := testrestmapper.TestOnlyStaticRESTMapper(scheme)
 		dynamicClient := fake.NewSimpleDynamicClient(scheme)
 		ctx := context.Background()
 
-		err := ApplyManifest(ctx, []byte(simpleConfigMapManifest), "default", nil, dynamicClient)
+		err := ApplyManifest(ctx, []byte(simpleConfigMapManifest), "default", mapper, dynamicClient)
 		require.NoError(t, err)
 	})
 
@@ -106,11 +63,12 @@ metadata:
 data:
   key: value2`
 
-		scheme := runtime.NewScheme()
+		scheme := newTestScheme()
+		mapper := testrestmapper.TestOnlyStaticRESTMapper(scheme)
 		dynamicClient := fake.NewSimpleDynamicClient(scheme)
 		ctx := context.Background()
 
-		err := ApplyManifest(ctx, []byte(manifest), "default", nil, dynamicClient)
+		err := ApplyManifest(ctx, []byte(manifest), "default", mapper, dynamicClient)
 		require.NoError(t, err)
 	})
 
@@ -121,11 +79,12 @@ data:
 ---
 `
 
-		scheme := runtime.NewScheme()
+		scheme := newTestScheme()
+		mapper := testrestmapper.TestOnlyStaticRESTMapper(scheme)
 		dynamicClient := fake.NewSimpleDynamicClient(scheme)
 		ctx := context.Background()
 
-		err := ApplyManifest(ctx, []byte(manifest), "default", nil, dynamicClient)
+		err := ApplyManifest(ctx, []byte(manifest), "default", mapper, dynamicClient)
 		require.NoError(t, err)
 	})
 }
@@ -133,11 +92,12 @@ data:
 // TestApplyManifest_NamespaceInjection tests namespace injection for namespaced resources
 func TestApplyManifest_NamespaceInjection(t *testing.T) {
 	t.Run("injects namespace when not specified", func(t *testing.T) {
-		scheme := runtime.NewScheme()
+		scheme := newTestScheme()
+		mapper := testrestmapper.TestOnlyStaticRESTMapper(scheme)
 		dynamicClient := fake.NewSimpleDynamicClient(scheme)
 		ctx := context.Background()
 
-		err := ApplyManifest(ctx, []byte(simpleConfigMapManifest), "custom-namespace", nil, dynamicClient)
+		err := ApplyManifest(ctx, []byte(simpleConfigMapManifest), "custom-namespace", mapper, dynamicClient)
 		require.NoError(t, err)
 
 		// Verify the ConfigMap was created in the correct namespace
@@ -156,11 +116,12 @@ metadata:
 data:
   key: value`
 
-		scheme := runtime.NewScheme()
+		scheme := newTestScheme()
+		mapper := testrestmapper.TestOnlyStaticRESTMapper(scheme)
 		dynamicClient := fake.NewSimpleDynamicClient(scheme)
 		ctx := context.Background()
 
-		err := ApplyManifest(ctx, []byte(manifest), "default", nil, dynamicClient)
+		err := ApplyManifest(ctx, []byte(manifest), "default", mapper, dynamicClient)
 		require.NoError(t, err)
 
 		// Verify the ConfigMap was created in the original namespace, not the default
@@ -176,11 +137,12 @@ kind: Namespace
 metadata:
   name: new-namespace`
 
-		scheme := runtime.NewScheme()
+		scheme := newTestScheme()
+		mapper := testrestmapper.TestOnlyStaticRESTMapper(scheme)
 		dynamicClient := fake.NewSimpleDynamicClient(scheme)
 		ctx := context.Background()
 
-		err := ApplyManifest(ctx, []byte(manifest), "default", nil, dynamicClient)
+		err := ApplyManifest(ctx, []byte(manifest), "default", mapper, dynamicClient)
 		require.NoError(t, err)
 
 		// Verify the Namespace was created without a namespace field
@@ -194,11 +156,12 @@ metadata:
 // TestApplyManifest_ResourceCreation tests resource creation logic
 func TestApplyManifest_ResourceCreation(t *testing.T) {
 	t.Run("creates new resource successfully", func(t *testing.T) {
-		scheme := runtime.NewScheme()
+		scheme := newTestScheme()
+		mapper := testrestmapper.TestOnlyStaticRESTMapper(scheme)
 		dynamicClient := fake.NewSimpleDynamicClient(scheme)
 		ctx := context.Background()
 
-		err := ApplyManifest(ctx, []byte(simpleConfigMapManifest), "default", nil, dynamicClient)
+		err := ApplyManifest(ctx, []byte(simpleConfigMapManifest), "default", mapper, dynamicClient)
 		require.NoError(t, err)
 
 		// Verify the ConfigMap was created
@@ -218,11 +181,12 @@ metadata:
 data:
   key: original-value`
 
-		scheme := runtime.NewScheme()
+		scheme := newTestScheme()
+		mapper := testrestmapper.TestOnlyStaticRESTMapper(scheme)
 		dynamicClient := fake.NewSimpleDynamicClient(scheme)
 		ctx := context.Background()
 
-		err := ApplyManifest(ctx, []byte(initialManifest), "default", nil, dynamicClient)
+		err := ApplyManifest(ctx, []byte(initialManifest), "default", mapper, dynamicClient)
 		require.NoError(t, err)
 
 		// Now update with new data
@@ -233,7 +197,7 @@ metadata:
 data:
   key: updated-value`
 
-		err = ApplyManifest(ctx, []byte(updatedManifest), "default", nil, dynamicClient)
+		err = ApplyManifest(ctx, []byte(updatedManifest), "default", mapper, dynamicClient)
 		require.NoError(t, err)
 
 		// Verify the ConfigMap was updated
@@ -254,12 +218,13 @@ func TestApplyManifest_ErrorHandling(t *testing.T) {
 		manifest := `invalid: yaml: content:
   this is not: proper: yaml:`
 
-		scheme := runtime.NewScheme()
+		scheme := newTestScheme()
+		mapper := testrestmapper.TestOnlyStaticRESTMapper(scheme)
 		dynamicClient := fake.NewSimpleDynamicClient(scheme)
 		ctx := context.Background()
 
 		// Should not error - invalid documents are logged and skipped
-		err := ApplyManifest(ctx, []byte(manifest), "default", nil, dynamicClient)
+		err := ApplyManifest(ctx, []byte(manifest), "default", mapper, dynamicClient)
 		assert.NoError(t, err, "ApplyManifest should continue processing even with invalid YAML")
 	})
 
@@ -280,11 +245,12 @@ metadata:
 data:
   key: value2`
 
-		scheme := runtime.NewScheme()
+		scheme := newTestScheme()
+		mapper := testrestmapper.TestOnlyStaticRESTMapper(scheme)
 		dynamicClient := fake.NewSimpleDynamicClient(scheme)
 		ctx := context.Background()
 
-		err := ApplyManifest(ctx, []byte(manifest), "default", nil, dynamicClient)
+		err := ApplyManifest(ctx, []byte(manifest), "default", mapper, dynamicClient)
 		require.NoError(t, err)
 
 		// Verify the valid ConfigMaps were created
@@ -296,6 +262,22 @@ data:
 		obj2, err := dynamicClient.Resource(gvr).Namespace("default").Get(ctx, "another-valid-config", metav1.GetOptions{})
 		require.NoError(t, err)
 		assert.Equal(t, "another-valid-config", obj2.GetName())
+	})
+
+	t.Run("skips unknown kinds gracefully", func(t *testing.T) {
+		manifest := `apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: test-policy`
+
+		scheme := newTestScheme() // kyverno.io not registered
+		mapper := testrestmapper.TestOnlyStaticRESTMapper(scheme)
+		dynamicClient := fake.NewSimpleDynamicClient(scheme)
+		ctx := context.Background()
+
+		// Should not error - unknown kinds are logged and skipped
+		err := ApplyManifest(ctx, []byte(manifest), "default", mapper, dynamicClient)
+		assert.NoError(t, err)
 	})
 }
 
@@ -317,11 +299,12 @@ type: Opaque
 data:
   password: c2VjcmV0`
 
-		scheme := runtime.NewScheme()
+		scheme := newTestScheme()
+		mapper := testrestmapper.TestOnlyStaticRESTMapper(scheme)
 		dynamicClient := fake.NewSimpleDynamicClient(scheme)
 		ctx := context.Background()
 
-		err := ApplyManifest(ctx, []byte(manifest), "default", nil, dynamicClient)
+		err := ApplyManifest(ctx, []byte(manifest), "default", mapper, dynamicClient)
 		require.NoError(t, err)
 
 		// Verify ConfigMap was created
@@ -338,16 +321,118 @@ data:
 	})
 }
 
-// TestApplyManifest_NilClientset tests that nil clientset is handled
-func TestApplyManifest_NilClientset(t *testing.T) {
-	t.Run("works with nil kubernetes clientset", func(t *testing.T) {
-		scheme := runtime.NewScheme()
+// TestApplyManifest_RESTMapperGVR verifies that GVR resolution relies on the mapper,
+// covering types that previously required a manual switch (apps/v1, rbac, networking).
+func TestApplyManifest_RESTMapperGVR(t *testing.T) {
+	tests := []struct {
+		name     string
+		manifest string
+		gvr      schema.GroupVersionResource
+		resName  string
+	}{
+		{
+			name: "apps/v1 Deployment resolved to deployments",
+			manifest: `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-deploy
+spec:
+  selector:
+    matchLabels:
+      app: test
+  template:
+    metadata:
+      labels:
+        app: test
+    spec:
+      containers:
+      - name: test
+        image: nginx`,
+			gvr:     schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"},
+			resName: "test-deploy",
+		},
+		{
+			name: "rbac ClusterRole resolved to clusterroles (cluster-scoped, no namespace)",
+			manifest: `apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: test-clusterrole`,
+			gvr:     schema.GroupVersionResource{Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "clusterroles"},
+			resName: "test-clusterrole",
+		},
+		{
+			name: "core/v1 ServiceAccount resolved to serviceaccounts",
+			manifest: `apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: test-sa`,
+			gvr:     schema.GroupVersionResource{Group: "", Version: "v1", Resource: "serviceaccounts"},
+			resName: "test-sa",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scheme := newTestScheme()
+			mapper := testrestmapper.TestOnlyStaticRESTMapper(scheme)
+			dynamicClient := fake.NewSimpleDynamicClient(scheme)
+			ctx := context.Background()
+
+			err := ApplyManifest(ctx, []byte(tt.manifest), "default", mapper, dynamicClient)
+			require.NoError(t, err)
+
+			// Verify the resource landed at the correct GVR
+			if tt.gvr.Group == "rbac.authorization.k8s.io" {
+				// ClusterRole is cluster-scoped
+				_, err = dynamicClient.Resource(tt.gvr).Get(ctx, tt.resName, metav1.GetOptions{})
+			} else {
+				_, err = dynamicClient.Resource(tt.gvr).Namespace("default").Get(ctx, tt.resName, metav1.GetOptions{})
+			}
+			require.NoError(t, err, "resource should be reachable at expected GVR %v", tt.gvr)
+		})
+	}
+}
+
+// TestApplyManifest_RESTMapperScope verifies that namespace injection is driven by mapper scope,
+// not by a hardcoded list.
+func TestApplyManifest_RESTMapperScope(t *testing.T) {
+	t.Run("ClusterRole (rbac, cluster-scoped) receives no namespace", func(t *testing.T) {
+		manifest := `apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: test-clusterrole`
+
+		scheme := newTestScheme()
+		mapper := testrestmapper.TestOnlyStaticRESTMapper(scheme)
 		dynamicClient := fake.NewSimpleDynamicClient(scheme)
 		ctx := context.Background()
 
-		// Pass nil for kubernetes.Clientset (not used in current implementation)
-		var kubeClient *kubernetes.Clientset = nil
-		err := ApplyManifest(ctx, []byte(simpleConfigMapManifest), "default", kubeClient, dynamicClient)
+		err := ApplyManifest(ctx, []byte(manifest), "injected-ns", mapper, dynamicClient)
 		require.NoError(t, err)
+
+		gvr := schema.GroupVersionResource{Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "clusterroles"}
+		obj, err := dynamicClient.Resource(gvr).Get(ctx, "test-clusterrole", metav1.GetOptions{})
+		require.NoError(t, err)
+		assert.Empty(t, obj.GetNamespace(), "cluster-scoped resource must not receive a namespace")
+	})
+
+	t.Run("ServiceAccount (namespaced) receives injected namespace", func(t *testing.T) {
+		manifest := `apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: test-sa`
+
+		scheme := newTestScheme()
+		mapper := testrestmapper.TestOnlyStaticRESTMapper(scheme)
+		dynamicClient := fake.NewSimpleDynamicClient(scheme)
+		ctx := context.Background()
+
+		err := ApplyManifest(ctx, []byte(manifest), "injected-ns", mapper, dynamicClient)
+		require.NoError(t, err)
+
+		gvr := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "serviceaccounts"}
+		obj, err := dynamicClient.Resource(gvr).Namespace("injected-ns").Get(ctx, "test-sa", metav1.GetOptions{})
+		require.NoError(t, err)
+		assert.Equal(t, "injected-ns", obj.GetNamespace())
 	})
 }

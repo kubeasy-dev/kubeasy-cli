@@ -10,11 +10,11 @@ import (
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	yamlserializer "k8s.io/apimachinery/pkg/runtime/serializer/yaml"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
 )
 
 // FetchManifest downloads a manifest from the given URL
@@ -34,7 +34,7 @@ func FetchManifest(url string) ([]byte, error) {
 }
 
 // ApplyManifest applies a Kubernetes manifest to the cluster
-func ApplyManifest(ctx context.Context, manifestBytes []byte, namespace string, _ *kubernetes.Clientset, dynamicClient dynamic.Interface) error {
+func ApplyManifest(ctx context.Context, manifestBytes []byte, namespace string, mapper meta.RESTMapper, dynamicClient dynamic.Interface) error {
 	logger.Debug("ApplyManifest: Starting application of manifest in namespace '%s'", namespace)
 	// Create decoder for YAML content
 	decoder := yamlserializer.NewDecodingSerializer(unstructured.UnstructuredJSONScheme)
@@ -66,15 +66,16 @@ func ApplyManifest(ctx context.Context, manifestBytes []byte, namespace string, 
 		objKind := obj.GetKind()
 		logger.Debug("ApplyManifest: Processing document #%d - Kind: %s, Name: %s", docNum, objKind, objName)
 
-		// Get the GVR (Group Version Resource) for the object
-		gvr := GetResourceGVR(gvk)
-		if gvr.Resource == "" {
-			logger.Warning("ApplyManifest: Could not determine GVR for Kind: %s, Group: %s, Version: %s in document #%d. Skipping.", objKind, gvk.Group, gvk.Version, docNum)
+		// Get the GVR and scope via the REST mapper
+		mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+		if err != nil {
+			logger.Warning("ApplyManifest: Could not find mapping for Kind: %s, Group: %s, Version: %s in document #%d. Skipping.", objKind, gvk.Group, gvk.Version, docNum)
 			continue
 		}
+		gvr := mapping.Resource
 
 		// Set namespace for namespaced resources
-		isNamespaced := IsNamespaced(objKind)
+		isNamespaced := mapping.Scope.Name() == meta.RESTScopeNameNamespace
 
 		// Apply the resource
 		var createdOrUpdated *unstructured.Unstructured
@@ -142,15 +143,4 @@ func ApplyManifest(ctx context.Context, manifestBytes []byte, namespace string, 
 
 	logger.Debug("ApplyManifest: Finished applying manifest in namespace '%s'", namespace)
 	return nil // Return nil even if some documents failed, as per previous logic
-}
-
-// IsNamespaced checks if a given Kubernetes kind is typically namespaced.
-// This is a helper function and might not cover all edge cases or CRDs.
-func IsNamespaced(kind string) bool {
-	switch strings.ToLower(kind) {
-	case "namespace", "node", "persistentvolume", "mutatingwebhookconfiguration", "validatingwebhookconfiguration", "customresourcedefinition", "clusterrole", "clusterrolebinding", "storageclass", "volumeattachment", "runtimeclass", "podsecuritypolicy", "priorityclass", "csidriver", "csinode", "apiservice", "certificatesigningrequest":
-		return false
-	default:
-		return true
-	}
 }

@@ -15,7 +15,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -254,53 +253,6 @@ func DeleteNamespace(ctx context.Context, clientset kubernetes.Interface, namesp
 
 	logger.Info("Namespace '%s' deletion initiated successfully.", namespace)
 	return nil
-}
-
-// GetResourceGVR returns the Group-Version-Resource for a Kubernetes resource
-func GetResourceGVR(gvk *schema.GroupVersionKind) schema.GroupVersionResource {
-	gvr := schema.GroupVersionResource{
-		Group:    gvk.Group,
-		Version:  gvk.Version,
-		Resource: strings.ToLower(gvk.Kind) + "s", // Simple pluralization
-	}
-
-	// Handle special cases and exceptions
-	switch strings.ToLower(gvk.Kind) {
-	case "deployment", "daemonset", "statefulset", "replicaset":
-		if gvk.Group == "apps" {
-			gvr.Resource = strings.ToLower(gvk.Kind) + "s"
-		}
-	case "endpoints", "configmap", "secret", "service", "serviceaccount", "namespace":
-		if gvk.Group == "" {
-			gvr.Resource = strings.ToLower(gvk.Kind) + "s"
-		}
-	case "ingress":
-		if gvk.Group == "networking.k8s.io" || gvk.Group == "extensions" {
-			gvr.Resource = "ingresses"
-		}
-	case "networkpolicy":
-		if gvk.Group == "networking.k8s.io" {
-			gvr.Resource = "networkpolicies"
-		}
-	case "customresourcedefinition":
-		if gvk.Group == "apiextensions.k8s.io" {
-			gvr.Resource = "customresourcedefinitions"
-		}
-	case "clusterrole", "clusterrolebinding", "role", "rolebinding":
-		if gvk.Group == "rbac.authorization.k8s.io" {
-			gvr.Resource = strings.ToLower(gvk.Kind) + "s"
-		}
-	case "endpoint":
-		if gvk.Group == "" {
-			gvr.Resource = "endpoints"
-		}
-	case "podsecuritypolicy":
-		if gvk.Group == "policy" {
-			gvr.Resource = "podsecuritypolicies"
-		}
-	}
-
-	return gvr
 }
 
 // WaitForDeploymentsReady waits for deployments to become ready in a namespace

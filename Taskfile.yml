@@ -10,7 +10,7 @@ vars:
   # K8S_VERSION should match pkg/constants/const.go KindNodeImage version.
   # Both are managed by Renovate and grouped together to prevent version drift.
   # renovate: datasource=docker depName=kindest/node
-  K8S_VERSION: "1.35.0"
+  K8S_VERSION: "1.35.1"
   GOPATH:
     sh: go env GOPATH
   LDFLAGS: >-

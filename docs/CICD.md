@@ -74,18 +74,17 @@ The CI/CD pipeline is built with GitHub Actions and handles:
   - macOS: amd64 (Intel), arm64 (Apple Silicon)
   - Windows: amd64, arm64
 - Generate checksums
-- Upload binaries to Cloudflare R2
 - Create GitHub Release with artifacts
+- Upload `install.sh` and `latest` version file to Cloudflare R2
 
 #### NPM Publish Phase
-- Wait for binaries to be available on R2
 - Run `npm ci` and `npm publish`
 - Publish `@kubeasy-dev/kubeasy-cli` package
 
 **Artifacts:**
 - GitHub Release with binaries and checksums
-- NPM package with binary downloader
-- Binaries on `https://download.kubeasy.dev`
+- NPM package (downloads binaries from GitHub Releases)
+- Install script and latest version file on `https://download.kubeasy.dev`
 
 ### 4. AI Code Review (`claude-code-review.yml`)
 
@@ -138,7 +137,9 @@ git push --follow-tags
 Defines the release build process:
 - Binary build settings (LDFLAGS, platforms, architectures)
 - Archive formats (tar.gz for Unix, zip for Windows)
-- Cloudflare R2 upload configuration
+- Cloudflare R2 upload for install script and latest version file
+- GitHub Release with binaries and checksums
+- Homebrew cask and Scoop manifest updates
 - Changelog generation rules
 
 Key features:
@@ -156,7 +157,7 @@ NPM package configuration:
 
 The NPM package acts as a wrapper that:
 1. Detects user's platform (OS + architecture)
-2. Downloads the correct binary from R2
+2. Downloads the correct binary from GitHub Releases
 3. Installs it globally as `kubeasy`
 
 ## Monitoring Releases
@@ -220,9 +221,8 @@ golangci-lint run --config .github/linters/.golangci.yml
 **Problem:** Users can't download binaries after NPM install
 
 **Solutions:**
-- Verify binaries are uploaded to R2: `https://download.kubeasy.dev/kubeasy-cli/vX.Y.Z/`
-- Check R2 credentials are valid
-- Ensure sufficient wait time in NPM publish job
+- Verify binaries are available on the GitHub Release page
+- Check that the release was created successfully by GoReleaser
 
 ### GoReleaser Build Fails
 
@@ -240,8 +240,8 @@ golangci-lint run --config .github/linters/.golangci.yml
 Required secrets in GitHub repository settings:
 - `GITHUB_TOKEN` - Auto-provided, used for releases
 - `NPM_TOKEN` - NPM authentication for publishing
-- `R2_ACCESS_KEY_ID` - Cloudflare R2 access key
-- `R2_SECRET_ACCESS_KEY` - Cloudflare R2 secret key
+- `R2_ACCESS_KEY_ID` - Cloudflare R2 access key (for install script and latest version file)
+- `R2_SECRET_ACCESS_KEY` - Cloudflare R2 secret key (for install script and latest version file)
 
 ### Permissions
 
@@ -274,7 +274,7 @@ Typical speedup: 2-3 minutes per workflow run
 
 Jobs run in parallel when possible:
 - Pre-release checks run before build
-- Build and NPM publish can run in parallel (NPM waits for R2)
+- NPM publish runs after build completes
 
 ### Smart Dependencies
 

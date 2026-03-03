@@ -9,6 +9,7 @@
 set -e
 
 DOWNLOAD_BASE="https://download.kubeasy.dev"
+GITHUB_RELEASE_BASE="https://github.com/kubeasy-dev/kubeasy-cli/releases/download"
 PROJECT_NAME="kubeasy-cli"
 
 main() {
@@ -23,7 +24,7 @@ main() {
     trap 'rm -rf "$tmpdir"' EXIT
 
     archive_name="${PROJECT_NAME}_${version}_${os}_${arch}.tar.gz"
-    url="${DOWNLOAD_BASE}/${PROJECT_NAME}/${version}/${archive_name}"
+    url="${GITHUB_RELEASE_BASE}/${version}/${archive_name}"
 
     echo "Downloading ${url}..."
     if command -v curl >/dev/null 2>&1; then

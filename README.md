@@ -15,72 +15,38 @@ A command-line tool to learn Kubernetes through practical challenges. Create loc
 
 ## Installation
 
+### Homebrew (macOS)
+
 ```bash
-# Via npm
+brew install kubeasy-dev/homebrew-tap/kubeasy
+```
+
+### Scoop (Windows)
+
+```powershell
+scoop bucket add kubeasy https://github.com/kubeasy-dev/scoop-bucket
+scoop install kubeasy
+```
+
+### NPM
+
+```bash
 npm install -g @kubeasy-dev/kubeasy-cli
 ```
 
-## Usage
+### Shell script (Linux/macOS)
 
 ```bash
-# Login with API key (required before setup)
-kubeasy login
-
-# Setup local environment (creates Kind cluster with ArgoCD)
-kubeasy setup
-
-# Get challenge information
-kubeasy challenge get <challenge-slug>
-
-# Start a challenge
-kubeasy challenge start <challenge-slug>
-
-# Submit your solution
-kubeasy challenge submit <challenge-slug>
-
-# Reset challenge (clears resources and backend progress)
-kubeasy challenge reset <challenge-slug>
-
-# Clean challenge (removes resources only, keeps progress)
-kubeasy challenge clean <challenge-slug>
+curl -fsSL https://download.kubeasy.dev/install.sh | sh
 ```
 
-## Dev Mode (Challenge Creators)
+### GitHub Releases
 
-```bash
-# Scaffold a new challenge directory
-kubeasy dev create
-
-# Display local challenge metadata (no cluster needed)
-kubeasy dev get
-
-# Validate challenge.yaml structure (no cluster needed)
-kubeasy dev lint
-
-# Deploy local manifests to the Kind cluster
-kubeasy dev apply
-
-# Run validations locally without submitting to API
-kubeasy dev validate
-
-# Apply manifests and run validations in one step
-kubeasy dev test
-
-# Show pods, events, and objective count for a deployed challenge
-kubeasy dev status
-
-# Stream logs from challenge pods
-kubeasy dev logs
-
-# Remove dev challenge resources from the cluster
-kubeasy dev clean
-```
+Download the latest release from the [releases page](https://github.com/kubeasy-dev/kubeasy-cli/releases/latest).
 
 ## Documentation
 
-See [online docs](https://docs.kubeasy.dev/developer/contributing) for contribution guidelines, setup instructions, and development workflow.
-
-See [CLAUDE.md](./CLAUDE.md) for detailed architecture and development guidance.
+For usage instructions, CLI commands, and contribution guidelines, see the [online documentation](https://docs.kubeasy.dev).
 
 ## Telemetry
 

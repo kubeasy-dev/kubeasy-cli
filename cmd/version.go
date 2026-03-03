@@ -55,7 +55,10 @@ func fetchLatestVersion() (string, error) {
 	url := constants.DownloadBaseURL + "/latest"
 
 	client := &http.Client{Timeout: 5 * time.Second}
-	req, _ := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
 	req.Header.Set("User-Agent", "kubeasy-cli-version-check")
 
 	resp, err := client.Do(req) //nolint:gosec // URL built from hardcoded constant, not user input

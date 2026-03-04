@@ -123,10 +123,10 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           TAP_GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
-  # Publish to NPM - must wait for binaries to be uploaded to R2
+  # Publish to NPM - must wait for GitHub Release to be created with binaries
   publish-npm:
     name: Publish to NPM
-    needs: [build] # Wait for build to complete and upload to R2
+    needs: [build] # Wait for GitHub Release to be created with binaries
     runs-on: ubuntu-latest
     permissions:
       contents: read

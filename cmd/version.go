@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// versionCmd prints the current CLI version and checks NPM for updates.
+// versionCmd prints the current CLI version and checks the R2 CDN for updates.
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version and check for updates",
@@ -40,8 +40,8 @@ var versionCmd = &cobra.Command{
 		case 0:
 			fmt.Println("You're using the latest version.")
 		case 1:
-			// Local version is newer than NPM (e.g., dev build)
-			fmt.Printf("Local version is newer than NPM (%s > %s).\n", current, latest)
+			// Local version is newer than latest release (e.g., dev build)
+			fmt.Printf("Local version is newer than latest release (%s > %s).\n", current, latest)
 		}
 	},
 }

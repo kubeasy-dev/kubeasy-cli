@@ -10,7 +10,7 @@ import (
 	"github.com/kubeasy-dev/kubeasy-cli/internal/ui"
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 // challengeMetadata holds the full challenge.yaml content for display.

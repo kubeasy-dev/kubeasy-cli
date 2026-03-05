@@ -7,7 +7,7 @@ import (
 	"slices"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/validation"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 // LintSeverity represents the severity of a lint issue.

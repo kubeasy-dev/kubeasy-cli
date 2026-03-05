@@ -2,15 +2,15 @@
 
 # kubeasy-cli
 
-A command-line tool to learn Kubernetes through practical challenges. Create local Kind clusters, deploy challenges via ArgoCD, and validate solutions using a Kubernetes operator.
+A command-line tool to learn Kubernetes through practical challenges. Create local Kind clusters, deploy challenges via OCI artifacts, and validate solutions using a CLI-based validation system.
 
 ## Features
 
 - Cross-platform support (Linux, macOS, Windows)
-- Local Kind cluster management with ArgoCD
+- Local Kind cluster management with Kyverno
 - Challenge deployment and validation
 - Progress tracking with backend integration
-- 6 specialized validation types for comprehensive testing
+- 5 specialized validation types for comprehensive testing
 - Dev mode for challenge creators (scaffold, deploy, validate, lint locally)
 
 ## Installation
@@ -26,7 +26,7 @@ npm install -g @kubeasy-dev/kubeasy-cli
 # Login with API key (required before setup)
 kubeasy login
 
-# Setup local environment (creates Kind cluster with ArgoCD)
+# Setup local environment (creates Kind cluster with Kyverno and local-path-provisioner)
 kubeasy setup
 
 # Get challenge information

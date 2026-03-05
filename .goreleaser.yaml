@@ -35,20 +35,7 @@ archives:
 checksum:
   name_template: "checksums.txt"
 blobs:
-  - provider: s3
-    bucket: kubeasy-cli-binaries
-    region: weur
-    ids:
-      - archive
-      - checksums
-    endpoint: https://57e2edb42742bf00d9a2526736f3ea36.r2.cloudflarestorage.com
-    acl: public-read
-    extra_files:
-      - glob: scripts/install.sh
-        name_template: install.sh
-      - glob: .latest-version
-        name_template: latest
-  # Upload install.sh and latest to bucket root (not under project/version/)
+  # Upload install.sh and latest to bucket root only
   - provider: s3
     bucket: kubeasy-cli-binaries
     region: weur

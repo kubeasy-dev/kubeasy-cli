@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// versionCmd prints the current CLI version and checks NPM for updates.
+// versionCmd prints the current CLI version and checks the R2 CDN for updates.
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version and check for updates",
@@ -22,10 +21,10 @@ var versionCmd = &cobra.Command{
 		fmt.Printf("kubeasy-cli %s\n", current)
 		fmt.Printf("Go %s - %s/%s\n", runtime.Version(), runtime.GOOS, runtime.GOARCH)
 
-		latest, err := fetchNPMLatestVersion("@kubeasy-dev/kubeasy-cli")
+		latest, err := fetchLatestVersion()
 		if err != nil {
 			// Non-blocking: just inform user that update check failed
-			fmt.Printf("Unable to check for updates on NPM: %v\n", err)
+			fmt.Printf("Unable to check for updates: %v\n", err)
 			return
 		}
 
@@ -36,13 +35,13 @@ var versionCmd = &cobra.Command{
 		switch compareSemver(curNorm, latNorm) {
 		case -1:
 			fmt.Printf("A new version is available: %s (you have %s)\n", latest, current)
-			fmt.Println("Update with:")
-			fmt.Println("  npm i -g @kubeasy-dev/kubeasy-cli@latest")
+			fmt.Println("Download it from:")
+			fmt.Printf("  %s/kubeasy-cli/releases/latest\n", constants.GithubRootURL)
 		case 0:
 			fmt.Println("You're using the latest version.")
 		case 1:
-			// Local version is newer than NPM (e.g., dev build)
-			fmt.Printf("Local version is newer than NPM (%s > %s).\n", current, latest)
+			// Local version is newer than latest release (e.g., dev build)
+			fmt.Printf("Local version is newer than latest release (%s > %s).\n", current, latest)
 		}
 	},
 }
@@ -51,17 +50,18 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 }
 
-// fetchNPMLatestVersion returns the latest tag from NPM dist-tags for a package.
-func fetchNPMLatestVersion(pkg string) (string, error) {
-	// Scoped packages must be URL-encoded for this endpoint
-	encoded := strings.ReplaceAll(pkg, "/", "%2F")
-	url := fmt.Sprintf("https://registry.npmjs.org/-/package/%s/dist-tags", encoded)
+// fetchLatestVersion returns the latest version tag from the download CDN.
+func fetchLatestVersion() (string, error) {
+	url := constants.DownloadBaseURL + "/latest"
 
 	client := &http.Client{Timeout: 5 * time.Second}
-	req, _ := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
 	req.Header.Set("User-Agent", "kubeasy-cli-version-check")
 
-	resp, err := client.Do(req) //nolint:gosec // URL built from hardcoded package name, not user input
+	resp, err := client.Do(req) //nolint:gosec // URL built from hardcoded constant, not user input
 	if err != nil {
 		return "", err
 	}
@@ -73,14 +73,11 @@ func fetchNPMLatestVersion(pkg string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var tags map[string]string
-	if err := json.Unmarshal(body, &tags); err != nil {
-		return "", err
+	version := strings.TrimSpace(string(body))
+	if version == "" {
+		return "", fmt.Errorf("empty version response")
 	}
-	if latest, ok := tags["latest"]; ok && latest != "" {
-		return latest, nil
-	}
-	return "", fmt.Errorf("tag 'latest' not found")
+	return version, nil
 }
 
 // normalizeSemver trims a leading 'v' and strips pre-release/build metadata for comparison.

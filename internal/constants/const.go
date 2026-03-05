@@ -9,9 +9,13 @@ var KeyringServiceName = "kubeasy-cli"
 
 var GithubRootURL = "https://github.com/kubeasy-dev"
 
+// DownloadBaseURL is the base URL for the Kubeasy download CDN (Cloudflare R2).
+// Used by the version checker to fetch the latest version tag.
+var DownloadBaseURL = "https://download.kubeasy.dev"
+
 var ExercisesRepoURL = GithubRootURL + "/challenges"
 
-var ExercicesRepoBranch = "challenge/refactoring-2024"
+var ExercicesRepoBranch = "main"
 
 var Version = "dev"
 

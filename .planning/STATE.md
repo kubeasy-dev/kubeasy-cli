@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Completed 02-02-PLAN.md (TDD: submit.go RunE guard tests)"
-last_updated: "2026-03-09T14:28:15.348Z"
+stopped_at: "Completed 02-03-PLAN.md (TDD: reset.go and clean.go RunE guard tests)"
+last_updated: "2026-03-09T14:31:12.109Z"
 last_activity: 2026-03-09 — Completed 01-01-PLAN.md (TDD Red Phase)
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
   percent: 67
 ---
 
@@ -30,7 +30,7 @@ Plan: 1 of ? in current phase
 Status: In progress
 Last activity: 2026-03-09 — Completed 01-01-PLAN.md (TDD Red Phase)
 
-Progress: [███████░░░] 67%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ Progress: [███████░░░] 67%
 | Phase 01-safety-hardening P03 | 5m | 2 tasks | 4 files |
 | Phase 02-command-test-coverage P01 | 2m | 1 tasks | 3 files |
 | Phase 02-command-test-coverage P02 | 5m | 1 tasks | 2 files |
+| Phase 02-command-test-coverage P03 | 8m | 1 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -73,6 +74,8 @@ Recent decisions affecting current work:
 - [Phase 02-command-test-coverage]: Used ui.SetCIMode(true) in TestMain to suppress pterm spinner goroutine data races under -race
 - [Phase 02-command-test-coverage]: Function vars (apiGetChallenge, apiGetChallengeProgress, apiStartChallenge) front direct api.* calls to enable test injection in start.go
 - [Phase 02-command-test-coverage]: Named vars apiGetChallengeForSubmit / apiGetProgressForSubmit to avoid collision with start.go vars in same package cmd
+- [Phase 02-command-test-coverage]: Added var getChallengeFn = getChallenge to reset.go for test injection, aligning with function-var injection pattern used in start.go and submit.go
+- [Phase 02-command-test-coverage]: validateChallengeSlug placed as first RunE statement in reset.go to enable no-mock slug tests and align with clean.go pattern
 
 ### Pending Todos
 
@@ -84,6 +87,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-09T14:28:15.346Z
-Stopped at: Completed 02-02-PLAN.md (TDD: submit.go RunE guard tests)
+Last session: 2026-03-09T14:31:12.107Z
+Stopped at: Completed 02-03-PLAN.md (TDD: reset.go and clean.go RunE guard tests)
 Resume file: None

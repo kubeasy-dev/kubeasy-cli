@@ -112,8 +112,7 @@ func ApplyManifest(ctx context.Context, manifestBytes []byte, namespace string, 
 				existingObj, updateErr = resourceClient.Get(ctx, objName, metav1.GetOptions{})
 
 				if updateErr != nil {
-					logger.Error("ApplyManifest: Failed to get existing resource %s/%s for update: %v. Skipping update for document #%d.", objKind, objName, updateErr, docNum)
-					continue
+					return fmt.Errorf("failed to get %s/%s for update: %w", objKind, objName, updateErr)
 				}
 
 				// Set the resourceVersion from the existing object
@@ -122,17 +121,13 @@ func ApplyManifest(ctx context.Context, manifestBytes []byte, namespace string, 
 				_, updateErr = resourceClient.Update(ctx, obj, metav1.UpdateOptions{})
 
 				if updateErr != nil {
-					// Log update error but continue processing other documents
-					logger.Warning("ApplyManifest: Error updating resource %s/%s in document #%d: %v", objKind, objName, docNum, updateErr)
-					continue // Continue with the next document
+					return fmt.Errorf("failed to update %s/%s: %w", objKind, objName, updateErr)
 				}
 				logger.Info("ApplyManifest: Resource %s/%s updated successfully (document #%d).", objKind, objName, docNum)
 				continue // Continue with the next document after successful update
 			}
 
-			// Otherwise log the creation error and continue
-			logger.Warning("ApplyManifest: Error creating resource %s/%s in document #%d: %v", objKind, objName, docNum, err)
-			continue // Continue with the next document
+			return fmt.Errorf("failed to create %s/%s: %w", objKind, objName, err)
 		}
 
 		// Log success if createdOrUpdated is not nil (which it should be on success)
@@ -142,5 +137,5 @@ func ApplyManifest(ctx context.Context, manifestBytes []byte, namespace string, 
 	}
 
 	logger.Debug("ApplyManifest: Finished applying manifest in namespace '%s'", namespace)
-	return nil // Return nil even if some documents failed, as per previous logic
+	return nil
 }

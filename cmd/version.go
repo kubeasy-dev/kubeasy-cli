@@ -61,7 +61,7 @@ func fetchLatestVersion() (string, error) {
 	}
 	req.Header.Set("User-Agent", "kubeasy-cli-version-check")
 
-	resp, err := client.Do(req) //nolint:gosec // URL built from hardcoded constant, not user input
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}

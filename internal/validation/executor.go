@@ -70,19 +70,44 @@ func (e *Executor) Execute(ctx context.Context, v Validation) Result {
 	var err error
 	switch v.Type {
 	case TypeStatus:
-		spec := v.Spec.(StatusSpec)
+		spec, ok := v.Spec.(StatusSpec)
+		if !ok {
+			result.Message = fmt.Sprintf("internal error: expected StatusSpec, got %T", v.Spec)
+			result.Duration = time.Since(start)
+			return result
+		}
 		result.Passed, result.Message, err = e.executeStatus(ctx, spec)
 	case TypeCondition:
-		spec := v.Spec.(ConditionSpec)
+		spec, ok := v.Spec.(ConditionSpec)
+		if !ok {
+			result.Message = fmt.Sprintf("internal error: expected ConditionSpec, got %T", v.Spec)
+			result.Duration = time.Since(start)
+			return result
+		}
 		result.Passed, result.Message, err = e.executeCondition(ctx, spec)
 	case TypeLog:
-		spec := v.Spec.(LogSpec)
+		spec, ok := v.Spec.(LogSpec)
+		if !ok {
+			result.Message = fmt.Sprintf("internal error: expected LogSpec, got %T", v.Spec)
+			result.Duration = time.Since(start)
+			return result
+		}
 		result.Passed, result.Message, err = e.executeLog(ctx, spec)
 	case TypeEvent:
-		spec := v.Spec.(EventSpec)
+		spec, ok := v.Spec.(EventSpec)
+		if !ok {
+			result.Message = fmt.Sprintf("internal error: expected EventSpec, got %T", v.Spec)
+			result.Duration = time.Since(start)
+			return result
+		}
 		result.Passed, result.Message, err = e.executeEvent(ctx, spec)
 	case TypeConnectivity:
-		spec := v.Spec.(ConnectivitySpec)
+		spec, ok := v.Spec.(ConnectivitySpec)
+		if !ok {
+			result.Message = fmt.Sprintf("internal error: expected ConnectivitySpec, got %T", v.Spec)
+			result.Duration = time.Since(start)
+			return result
+		}
 		result.Passed, result.Message, err = e.executeConnectivity(ctx, spec)
 	default:
 		result.Message = fmt.Sprintf("Unknown validation type: %s", v.Type)

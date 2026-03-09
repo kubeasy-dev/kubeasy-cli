@@ -24,16 +24,28 @@ jobs:
           prompt: |
             REPO: ${{ github.repository }}
 
-            Perform weekly repository maintenance:
+            Perform weekly repository maintenance. IMPORTANT: Renovate is already configured
+            to handle ALL dependency version updates (npm, Go modules, GitHub Actions).
+            Do NOT create issues for outdated packages or pending version bumps — check first
+            if Renovate's Dependency Dashboard (issue #3) or an open PR already tracks it.
 
-            1. Check for outdated dependencies in package.json
-            2. Scan for security vulnerabilities using `npm audit`
-            3. Review open issues older than 90 days
-            4. Check for TODO comments in recent commits
-            5. Verify README.md examples still work
+            Focus only on these tasks:
 
-            Create many issues for any findings with detailed descriptions and steps to reproduce.
-            If critical security issues are found, also comment on open PRs.
+            1. **Security vulnerabilities**: Run `npm audit --json` and report CVEs that CANNOT
+               be fixed by simply updating a package version (e.g. abandoned packages with no fix).
+               Skip vulnerabilities where `npm audit fix` or a Renovate PR would resolve them.
+
+            2. **Stale open issues**: Review open issues older than 90 days. Summarize them and
+               suggest if any should be closed (resolved, won't fix, duplicate).
+
+            3. **TODO/FIXME comments**: Check recent commits (last 4 weeks) for TODO or FIXME
+               comments that were added but not tracked in issues.
+
+            4. **README drift**: Verify that the install command examples in README.md still work
+               by checking the current release tag and URL patterns.
+
+            Before creating ANY issue, search open issues and PRs to confirm it's not a duplicate.
+            Create issues only for genuinely new, actionable findings.
 
           claude_args: |
-            --allowedTools "Read,Bash(npm:*),Bash(gh issue:*),Bash(git:*)"
+            --allowedTools "Read,Bash(npm:*),Bash(gh issue:*),Bash(gh pr:*),Bash(git:*)"

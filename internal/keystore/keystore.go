@@ -57,7 +57,7 @@ var (
 
 // credentials represents the structure of the credentials file
 type credentials struct {
-	APIKey string `json:"api_key,omitempty"` //nolint:gosec // struct is unexported; exported field required for json serialization
+	APIKey string `json:"api_key,omitempty"`
 }
 
 // StorageType indicates which storage backend is being used
@@ -251,7 +251,7 @@ func setToFile(apiKey string) error {
 		APIKey: apiKey,
 	}
 
-	data, err := json.MarshalIndent(creds, "", "  ")
+	data, err := json.MarshalIndent(creds, "", "  ") //nolint:gosec // credentials struct contains API key by design
 	if err != nil {
 		return fmt.Errorf("failed to marshal credentials: %w", err)
 	}

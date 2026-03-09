@@ -8,6 +8,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// getChallengeFn allows tests to inject a fake getChallenge implementation.
+var getChallengeFn = getChallenge
+
 var resetChallengeCmd = &cobra.Command{
 	Use:   "reset [challenge-slug]",
 	Short: "Reset a challenge",
@@ -16,10 +19,15 @@ var resetChallengeCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		challengeSlug := args[0]
 
+		// Align with clean.go: validate slug before any API or cluster call
+		if err := validateChallengeSlug(challengeSlug); err != nil {
+			return err
+		}
+
 		ui.Section(fmt.Sprintf("Resetting Challenge: %s", challengeSlug))
 
 		// Verify challenge exists
-		_, err := getChallenge(challengeSlug)
+		_, err := getChallengeFn(challengeSlug)
 		if err != nil {
 			ui.Error(err.Error())
 			return err

@@ -24,7 +24,12 @@ Five phases that progressively harden the validation system: first eliminate cra
   3. A production build does not load challenge YAML from `~/Workspace/kubeasy/challenges/` — it fetches from GitHub or uses an explicit flag/env var
   4. Unit tests verify that `getGVRForKind` returns a clear error for unsupported kinds without panicking
   5. Unit tests verify that `FindLocalChallengeFile` does not resolve the developer hardcoded path in production builds
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Write failing tests (RED) for all 5 safety behaviors
+- [ ] 01-02-PLAN.md — Fix Execute() bare type assertions with comma-ok (SAFE-01, TST-04)
+- [ ] 01-03-PLAN.md — Remove hardcoded loader path + add slug validation to 3 commands (SAFE-02, SAFE-03, TST-05)
 
 ### Phase 2: Command Test Coverage
 **Goal**: The four core production commands have unit tests that catch regressions in their primary flows and error paths
@@ -73,7 +78,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Safety Hardening | 0/? | Not started | - |
+| 1. Safety Hardening | 0/3 | Not started | - |
 | 2. Command Test Coverage | 0/? | Not started | - |
 | 3. Error Handling | 0/? | Not started | - |
 | 4. Code Quality | 0/? | Not started | - |

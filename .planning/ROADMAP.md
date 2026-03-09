@@ -70,7 +70,12 @@ Plans:
   1. `internal/api/client.go` has no alias functions; every caller in `cmd/` uses the single canonical function name for each API operation
   2. The walk-and-apply directory traversal logic exists in exactly one place in `internal/deployer/`; `challenge.go` and `local.go` both call the shared helper
   3. `WaitForDeploymentsReady` and `WaitForStatefulSetsReady` use `wait.PollUntilContextTimeout` with backoff — no `time.Sleep` in a fixed loop
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 04-01-PLAN.md — Remove 6 alias functions from api/client.go; update cmd/ callers to canonical names (QUAL-01)
+- [ ] 04-02-PLAN.md — Extract shared applyManifestDirs helper; remove duplicate loops in challenge.go and local.go (QUAL-02)
+- [ ] 04-03-PLAN.md — Replace fixed-sleep polling in kube/client.go with wait.PollUntilContextTimeout (QUAL-03)
 
 ### Phase 5: Security Hardening
 **Goal**: Connectivity validation uses no shell and FetchManifest cannot be called with arbitrary URLs
@@ -91,5 +96,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Safety Hardening | 3/3 | Complete   | 2026-03-09 |
 | 2. Command Test Coverage | 1/3 | In Progress|  |
 | 3. Error Handling | 3/3 | Complete   | 2026-03-09 |
-| 4. Code Quality | 0/? | Not started | - |
+| 4. Code Quality | 0/3 | Not started | - |
 | 5. Security Hardening | 0/? | Not started | - |

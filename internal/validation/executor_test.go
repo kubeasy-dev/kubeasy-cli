@@ -2563,3 +2563,100 @@ func TestExecuteStatus_MultipleChecksComprehensive(t *testing.T) {
 		assert.Contains(t, msg, "availableReplicas")
 	})
 }
+
+// TestExecute_MalformedSpec verifies that Execute() returns Result{Passed:false} without panicking
+// when given a Validation with a mismatched or nil Spec type.
+// RED: Currently, executor.go uses bare type assertions (v.Spec.(StatusSpec)) that panic on wrong type.
+// These tests will FAIL (panic recovered as test failure) until SAFE-01 is fixed.
+func TestExecute_MalformedSpec(t *testing.T) {
+	executor := NewExecutor(
+		fake.NewClientset(),
+		dynamicfake.NewSimpleDynamicClient(runtime.NewScheme()),
+		&rest.Config{},
+		"test-ns",
+	)
+	ctx := context.Background()
+
+	tests := []struct {
+		name    string
+		valType ValidationType
+	}{
+		{name: "status_wrong_type", valType: TypeStatus},
+		{name: "condition_wrong_type", valType: TypeCondition},
+		{name: "log_wrong_type", valType: TypeLog},
+		{name: "event_wrong_type", valType: TypeEvent},
+		{name: "connectivity_wrong_type", valType: TypeConnectivity},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			v := Validation{
+				Key:  "x",
+				Type: tc.valType,
+				Spec: "wrong", // string is never any of the expected spec types
+			}
+			var result Result
+			require.NotPanics(t, func() {
+				result = executor.Execute(ctx, v)
+			}, "Execute() must not panic on wrong Spec type")
+			assert.False(t, result.Passed, "result must be Passed=false on mismatched Spec")
+			assert.Equal(t, "x", result.Key)
+		})
+	}
+
+	t.Run("nil_spec", func(t *testing.T) {
+		v := Validation{
+			Key:  "x",
+			Type: TypeStatus,
+			Spec: nil,
+		}
+		var result Result
+		require.NotPanics(t, func() {
+			result = executor.Execute(ctx, v)
+		}, "Execute() must not panic on nil Spec")
+		assert.False(t, result.Passed, "result must be Passed=false on nil Spec")
+		assert.Equal(t, "x", result.Key)
+	})
+}
+
+// TestGetGVRForKind_UnsupportedKind verifies that getGVRForKind returns an error
+// containing "unsupported resource kind" for kinds not in the switch statement.
+func TestGetGVRForKind_UnsupportedKind(t *testing.T) {
+	unsupportedKinds := []string{"CronJob", "Namespace", "ClusterRole"}
+	for _, kind := range unsupportedKinds {
+		kind := kind
+		t.Run(kind, func(t *testing.T) {
+			_, err := getGVRForKind(kind)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "unsupported resource kind")
+		})
+	}
+}
+
+// TestGetGVRForKind_SupportedKinds verifies that getGVRForKind returns a valid GVR
+// for all 7 supported kinds.
+func TestGetGVRForKind_SupportedKinds(t *testing.T) {
+	tests := []struct {
+		kind             string
+		expectedResource string
+	}{
+		{kind: "Deployment", expectedResource: "deployments"},
+		{kind: "StatefulSet", expectedResource: "statefulsets"},
+		{kind: "DaemonSet", expectedResource: "daemonsets"},
+		{kind: "ReplicaSet", expectedResource: "replicasets"},
+		{kind: "Job", expectedResource: "jobs"},
+		{kind: "Pod", expectedResource: "pods"},
+		{kind: "Service", expectedResource: "services"},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.kind, func(t *testing.T) {
+			gvr, err := getGVRForKind(tc.kind)
+			require.NoError(t, err)
+			assert.NotEmpty(t, gvr.Resource)
+			assert.Equal(t, tc.expectedResource, gvr.Resource)
+		})
+	}
+}

@@ -49,7 +49,11 @@ func FindLocalChallengeFile(slug string) string {
 	paths := []string{
 		filepath.Join(".", slug, "challenge.yaml"),
 		filepath.Join("..", "challenges", slug, "challenge.yaml"),
-		filepath.Join(os.Getenv("HOME"), "Workspace", "kubeasy", "challenges", slug, "challenge.yaml"),
+	}
+
+	// Developer override: set KUBEASY_LOCAL_CHALLENGES_DIR to load from local clone
+	if localDir := os.Getenv("KUBEASY_LOCAL_CHALLENGES_DIR"); localDir != "" {
+		paths = append(paths, filepath.Join(localDir, slug, "challenge.yaml"))
 	}
 
 	for _, p := range paths {

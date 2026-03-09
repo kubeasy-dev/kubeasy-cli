@@ -22,7 +22,7 @@
 ### Error Handling
 
 - [x] **ERR-01**: `ApplyManifest` collecte et retourne les erreurs des ressources critiques au lieu de retourner systématiquement `nil`
-- [ ] **ERR-02**: Toutes les fonctions de `internal/api/client.go` acceptent un `ctx context.Context` et le propagent aux requêtes HTTP (Ctrl-C annule immédiatement)
+- [x] **ERR-02**: Toutes les fonctions de `internal/api/client.go` acceptent un `ctx context.Context` et le propagent aux requêtes HTTP (Ctrl-C annule immédiatement)
 - [x] **ERR-03**: `constants.WebsiteURL` utilise `KUBEASY_API_URL` comme fallback d'environnement pour les builds locaux sans GoReleaser
 
 ### Code Quality
@@ -76,7 +76,7 @@
 | TST-02 | Phase 2 | Complete |
 | TST-03 | Phase 2 | Complete |
 | ERR-01 | Phase 3 | Complete |
-| ERR-02 | Phase 3 | Pending |
+| ERR-02 | Phase 3 | Complete |
 | ERR-03 | Phase 3 | Complete |
 | QUAL-01 | Phase 4 | Pending |
 | QUAL-02 | Phase 4 | Pending |

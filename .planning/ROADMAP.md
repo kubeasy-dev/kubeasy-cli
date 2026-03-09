@@ -55,7 +55,12 @@ Plans:
   1. When a manifest fails to apply during `kubeasy challenge start`, the command exits with a non-zero code and a user-visible error message — not silent success
   2. Pressing Ctrl-C during `kubeasy challenge start` or `submit` cancels the in-flight HTTP request within one second; the CLI exits cleanly rather than hanging for 30 seconds
   3. Setting `KUBEASY_API_URL=https://staging.kubeasy.com go run main.go challenge get <slug>` reaches the staging backend without requiring a GoReleaser build
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 03-01-PLAN.md — Fix ApplyManifest critical error handling + manifest_test.go (ERR-01)
+- [ ] 03-02-PLAN.md — Add KUBEASY_API_URL init() + const_test.go (ERR-03)
+- [ ] 03-03-PLAN.md — Thread ctx through all api.* functions and cmd/ callers (ERR-02)
 
 ### Phase 4: Code Quality
 **Goal**: The API package exposes one name per operation, manifest walking is not duplicated between deployers, and readiness polling uses backoff
@@ -85,6 +90,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Safety Hardening | 3/3 | Complete   | 2026-03-09 |
 | 2. Command Test Coverage | 1/3 | In Progress|  |
-| 3. Error Handling | 0/? | Not started | - |
+| 3. Error Handling | 0/3 | Not started | - |
 | 4. Code Quality | 0/? | Not started | - |
 | 5. Security Hardening | 0/? | Not started | - |

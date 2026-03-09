@@ -6,7 +6,7 @@ Five phases that progressively harden the validation system: first eliminate cra
 
 ## Phases
 
-- [ ] **Phase 1: Safety Hardening** - Eliminate panics in the executor and enforce slug validation on all production commands
+- [x] **Phase 1: Safety Hardening** - Eliminate panics in the executor and enforce slug validation on all production commands (completed 2026-03-09)
 - [ ] **Phase 2: Command Test Coverage** - Unit tests for the four core user-facing commands and their error paths
 - [ ] **Phase 3: Error Handling** - Surface manifest errors, propagate Ctrl-C cancellation, and fix the localhost URL default
 - [ ] **Phase 4: Code Quality** - Remove alias proliferation, deduplicate walk-and-apply logic, replace fixed polling with backoff
@@ -78,7 +78,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Safety Hardening | 2/3 | In Progress|  |
+| 1. Safety Hardening | 3/3 | Complete   | 2026-03-09 |
 | 2. Command Test Coverage | 0/? | Not started | - |
 | 3. Error Handling | 0/? | Not started | - |
 | 4. Code Quality | 0/? | Not started | - |

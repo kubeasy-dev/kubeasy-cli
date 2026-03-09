@@ -10,6 +10,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	apiGetChallengeForSubmit = api.GetChallenge
+	apiGetProgressForSubmit  = api.GetChallengeProgress
+)
+
 var submitCmd = &cobra.Command{
 	Use:   "submit [challenge-slug]",
 	Short: "Submit a challenge solution",
@@ -29,7 +34,7 @@ Make sure you have completed the challenge before submitting.`,
 
 		// Verify challenge exists
 		err := ui.WaitMessage("Verifying challenge", func() error {
-			_, err := api.GetChallenge(challengeSlug)
+			_, err := apiGetChallengeForSubmit(challengeSlug)
 			return err
 		})
 		if err != nil {
@@ -41,7 +46,7 @@ Make sure you have completed the challenge before submitting.`,
 		var progress *api.ChallengeStatusResponse
 		err = ui.WaitMessage("Checking progress", func() error {
 			var err error
-			progress, err = api.GetChallengeProgress(challengeSlug)
+			progress, err = apiGetProgressForSubmit(challengeSlug)
 			return err
 		})
 		if err != nil {

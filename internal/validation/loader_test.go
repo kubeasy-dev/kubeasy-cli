@@ -631,6 +631,36 @@ func TestLoadFromURL_Security(t *testing.T) {
 	}
 }
 
+// TestFindLocalChallengeFile_NoHardcodedPath verifies that when KUBEASY_LOCAL_CHALLENGES_DIR
+// is unset and the challenge doesn't exist locally, FindLocalChallengeFile returns empty.
+// RED: Before SAFE-03 fix, this test passes vacuously (hardcoded ~/Workspace path doesn't
+// have a real challenge.yaml either). After fix, behavior is verified by _HonorsEnvVar.
+func TestFindLocalChallengeFile_NoHardcodedPath(t *testing.T) {
+	t.Setenv("KUBEASY_LOCAL_CHALLENGES_DIR", "")
+	found := FindLocalChallengeFile("nonexistent-challenge-xyz")
+	assert.Empty(t, found, "should return empty when challenge doesn't exist and env var is unset")
+}
+
+// TestFindLocalChallengeFile_HonorsEnvVar verifies that FindLocalChallengeFile uses
+// KUBEASY_LOCAL_CHALLENGES_DIR env var to locate challenges.
+// RED: This test FAILS because the env var lookup is not yet implemented in loader.go.
+func TestFindLocalChallengeFile_HonorsEnvVar(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("KUBEASY_LOCAL_CHALLENGES_DIR", tmpDir)
+
+	// Create challenge directory and challenge.yaml inside tmpDir
+	challengeDir := filepath.Join(tmpDir, "my-challenge")
+	err := os.MkdirAll(challengeDir, 0755)
+	require.NoError(t, err)
+
+	err = os.WriteFile(filepath.Join(challengeDir, "challenge.yaml"), []byte("objectives: []"), 0600)
+	require.NoError(t, err)
+
+	found := FindLocalChallengeFile("my-challenge")
+	assert.NotEmpty(t, found, "should find challenge.yaml via KUBEASY_LOCAL_CHALLENGES_DIR")
+	assert.Contains(t, found, "my-challenge/challenge.yaml")
+}
+
 // TestConstants tests that constants are set correctly
 func TestConstants(t *testing.T) {
 	assert.Equal(t, "https://raw.githubusercontent.com/kubeasy-dev/challenges/main", ChallengesRepoBaseURL)

@@ -10,14 +10,14 @@
 - [ ] **TST-01**: Les tests unitaires couvrent le `RunE` de `cmd/start.go` (slug validation, progress state, API call sequence)
 - [ ] **TST-02**: Les tests unitaires couvrent le `RunE` de `cmd/submit.go` (chargement validations, exécution, soumission résultats)
 - [ ] **TST-03**: Les tests unitaires couvrent le `RunE` de `cmd/reset.go` et `cmd/clean.go`
-- [ ] **TST-04**: Les tests unitaires couvrent le chemin d'erreur de `getGVRForKind` pour les kinds non supportés
-- [ ] **TST-05**: Les tests unitaires vérifient que `FindLocalChallengeFile` ne charge pas le chemin développeur hardcodé en production
+- [x] **TST-04**: Les tests unitaires couvrent le chemin d'erreur de `getGVRForKind` pour les kinds non supportés
+- [x] **TST-05**: Les tests unitaires vérifient que `FindLocalChallengeFile` ne charge pas le chemin développeur hardcodé en production
 
 ### Safety
 
-- [ ] **SAFE-01**: Toutes les assertions de type `v.Spec.(XxxSpec)` dans `executor.go` utilisent la forme `comma-ok` et retournent un `Result` avec `Passed: false` au lieu de paniquer
-- [ ] **SAFE-02**: `validateChallengeSlug` est appelé au début du `RunE` de `start`, `submit`, `reset`, et `clean` avant tout appel API ou cluster
-- [ ] **SAFE-03**: Le chemin hardcodé `~/Workspace/kubeasy/challenges/` est supprimé de `loader.go` ; le développement local utilise une variable d'environnement ou un flag explicite
+- [x] **SAFE-01**: Toutes les assertions de type `v.Spec.(XxxSpec)` dans `executor.go` utilisent la forme `comma-ok` et retournent un `Result` avec `Passed: false` au lieu de paniquer
+- [x] **SAFE-02**: `validateChallengeSlug` est appelé au début du `RunE` de `start`, `submit`, `reset`, et `clean` avant tout appel API ou cluster
+- [x] **SAFE-03**: Le chemin hardcodé `~/Workspace/kubeasy/challenges/` est supprimé de `loader.go` ; le développement local utilise une variable d'environnement ou un flag explicite
 
 ### Error Handling
 
@@ -67,11 +67,11 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SAFE-01 | Phase 1 | Pending |
-| SAFE-02 | Phase 1 | Pending |
-| SAFE-03 | Phase 1 | Pending |
-| TST-04 | Phase 1 | Pending |
-| TST-05 | Phase 1 | Pending |
+| SAFE-01 | Phase 1 | Complete |
+| SAFE-02 | Phase 1 | Complete |
+| SAFE-03 | Phase 1 | Complete |
+| TST-04 | Phase 1 | Complete |
+| TST-05 | Phase 1 | Complete |
 | TST-01 | Phase 2 | Pending |
 | TST-02 | Phase 2 | Pending |
 | TST-03 | Phase 2 | Pending |

@@ -20,6 +20,11 @@ Make sure you have completed the challenge before submitting.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		challengeSlug := args[0]
 
+		// SAFE-02: validate slug before any API or cluster call
+		if err := validateChallengeSlug(challengeSlug); err != nil {
+			return err
+		}
+
 		ui.Section(fmt.Sprintf("Submitting Challenge: %s", challengeSlug))
 
 		// Verify challenge exists

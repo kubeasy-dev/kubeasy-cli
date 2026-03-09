@@ -20,6 +20,11 @@ var startChallengeCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		challengeSlug := args[0]
 
+		// SAFE-02: validate slug before any API or cluster call
+		if err := validateChallengeSlug(challengeSlug); err != nil {
+			return err
+		}
+
 		ui.Section(fmt.Sprintf("Starting Challenge: %s", challengeSlug))
 
 		// Fetch challenge details

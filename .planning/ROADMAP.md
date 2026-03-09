@@ -40,7 +40,12 @@ Plans:
   2. Running `task test:unit` exercises the `RunE` of `cmd/submit.go` including validation loading, execution, and result submission
   3. Running `task test:unit` exercises the `RunE` of `cmd/reset.go` and `cmd/clean.go` including their error paths
   4. A simulated API failure in any of the four commands causes the test to assert a non-nil error return from `RunE` — not a panic
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Add function vars to start.go + write start_test.go (TST-01)
+- [ ] 02-02-PLAN.md — Add function vars to submit.go + write submit_test.go (TST-02)
+- [ ] 02-03-PLAN.md — Fix reset.go + write reset_test.go and clean_test.go (TST-03)
 
 ### Phase 3: Error Handling
 **Goal**: Errors from manifest application are surfaced to the user, Ctrl-C cancels in-flight API requests immediately, and local builds can point at a real backend without GoReleaser
@@ -79,7 +84,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Safety Hardening | 3/3 | Complete   | 2026-03-09 |
-| 2. Command Test Coverage | 0/? | Not started | - |
+| 2. Command Test Coverage | 0/3 | Not started | - |
 | 3. Error Handling | 0/? | Not started | - |
 | 4. Code Quality | 0/? | Not started | - |
 | 5. Security Hardening | 0/? | Not started | - |

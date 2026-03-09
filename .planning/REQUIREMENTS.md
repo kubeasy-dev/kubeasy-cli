@@ -67,28 +67,28 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TST-01 | Phase ? | Pending |
-| TST-02 | Phase ? | Pending |
-| TST-03 | Phase ? | Pending |
-| TST-04 | Phase ? | Pending |
-| TST-05 | Phase ? | Pending |
-| SAFE-01 | Phase ? | Pending |
-| SAFE-02 | Phase ? | Pending |
-| SAFE-03 | Phase ? | Pending |
-| ERR-01 | Phase ? | Pending |
-| ERR-02 | Phase ? | Pending |
-| ERR-03 | Phase ? | Pending |
-| QUAL-01 | Phase ? | Pending |
-| QUAL-02 | Phase ? | Pending |
-| QUAL-03 | Phase ? | Pending |
-| SEC-01 | Phase ? | Pending |
-| SEC-02 | Phase ? | Pending |
+| SAFE-01 | Phase 1 | Pending |
+| SAFE-02 | Phase 1 | Pending |
+| SAFE-03 | Phase 1 | Pending |
+| TST-04 | Phase 1 | Pending |
+| TST-05 | Phase 1 | Pending |
+| TST-01 | Phase 2 | Pending |
+| TST-02 | Phase 2 | Pending |
+| TST-03 | Phase 2 | Pending |
+| ERR-01 | Phase 3 | Pending |
+| ERR-02 | Phase 3 | Pending |
+| ERR-03 | Phase 3 | Pending |
+| QUAL-01 | Phase 4 | Pending |
+| QUAL-02 | Phase 4 | Pending |
+| QUAL-03 | Phase 4 | Pending |
+| SEC-01 | Phase 5 | Pending |
+| SEC-02 | Phase 5 | Pending |
 
 **Coverage:**
 - v1 requirements: 16 total
-- Mapped to phases: 0
-- Unmapped: 16 ⚠️
+- Mapped to phases: 16
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-09*
-*Last updated: 2026-03-09 after initial definition*
+*Last updated: 2026-03-09 after roadmap creation*

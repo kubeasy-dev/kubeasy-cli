@@ -12,6 +12,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	apiGetChallenge         = api.GetChallenge
+	apiGetChallengeProgress = api.GetChallengeProgress
+	apiStartChallenge       = api.StartChallenge
+)
+
 var startChallengeCmd = &cobra.Command{
 	Use:   "start [challenge-slug]",
 	Short: "Start a challenge",
@@ -31,7 +37,7 @@ var startChallengeCmd = &cobra.Command{
 		var challenge *api.ChallengeEntity
 		err := ui.WaitMessage("Fetching challenge details", func() error {
 			var err error
-			challenge, err = api.GetChallenge(challengeSlug)
+			challenge, err = apiGetChallenge(challengeSlug)
 			return err
 		})
 		if err != nil {
@@ -45,7 +51,7 @@ var startChallengeCmd = &cobra.Command{
 		var progress *api.ChallengeStatusResponse
 		err = ui.WaitMessage("Checking challenge progress", func() error {
 			var err error
-			progress, err = api.GetChallengeProgress(challengeSlug)
+			progress, err = apiGetChallengeProgress(challengeSlug)
 			return err
 		})
 		if err != nil {
@@ -103,7 +109,7 @@ var startChallengeCmd = &cobra.Command{
 
 		// Step 4: Register progress
 		err = ui.WaitMessage("Registering challenge progress", func() error {
-			return api.StartChallenge(challengeSlug)
+			return apiStartChallenge(challengeSlug)
 		})
 		if err != nil {
 			ui.Error("Failed to start challenge")

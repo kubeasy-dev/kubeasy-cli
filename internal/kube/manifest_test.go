@@ -2,6 +2,7 @@ package kube
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,11 +10,13 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta/testrestmapper"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/dynamic/fake"
 )
 
@@ -391,6 +394,111 @@ metadata:
 			require.NoError(t, err, "resource should be reachable at expected GVR %v", tt.gvr)
 		})
 	}
+}
+
+// TestApplyManifest_CreateFailure_Critical verifies that a create failure (not IsAlreadyExists, not IsNotFound)
+// causes ApplyManifest to return a non-nil error immediately.
+func TestApplyManifest_CreateFailure_Critical(t *testing.T) {
+	const podManifest = `apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod
+spec:
+  containers:
+    - name: test
+      image: nginx`
+
+	scheme := newTestScheme()
+	mapper := testrestmapper.TestOnlyStaticRESTMapper(scheme)
+	dynamicClient := fake.NewSimpleDynamicClient(scheme)
+
+	// Inject a "forbidden" error on Create (not IsAlreadyExists, not IsNotFound)
+	forbiddenErr := apierrors.NewForbidden(schema.GroupResource{Resource: "pods"}, "test-pod", fmt.Errorf("access denied"))
+	dynamicClient.PrependReactor("create", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, forbiddenErr
+	})
+
+	ctx := context.Background()
+	err := ApplyManifest(ctx, []byte(podManifest), "default", mapper, dynamicClient)
+	require.Error(t, err, "ApplyManifest should return an error on critical create failure")
+	assert.Contains(t, err.Error(), "failed to create", "error message should contain 'failed to create'")
+}
+
+// TestApplyManifest_UpdateFailure_Critical verifies that an update failure causes ApplyManifest
+// to return a non-nil error immediately.
+func TestApplyManifest_UpdateFailure_Critical(t *testing.T) {
+	const podManifest = `apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod
+spec:
+  containers:
+    - name: test
+      image: nginx`
+
+	scheme := newTestScheme()
+	mapper := testrestmapper.TestOnlyStaticRESTMapper(scheme)
+
+	// Pre-populate the fake client with an existing pod so Create returns AlreadyExists
+	existingPod := &unstructured.Unstructured{}
+	existingPod.SetAPIVersion("v1")
+	existingPod.SetKind("Pod")
+	existingPod.SetName("test-pod")
+	existingPod.SetNamespace("default")
+	existingPod.SetResourceVersion("1")
+	dynamicClient := fake.NewSimpleDynamicClient(scheme, existingPod)
+
+	// Inject an error on Update
+	updateErr := apierrors.NewInternalError(fmt.Errorf("update failed"))
+	dynamicClient.PrependReactor("update", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, updateErr
+	})
+
+	ctx := context.Background()
+	err := ApplyManifest(ctx, []byte(podManifest), "default", mapper, dynamicClient)
+	require.Error(t, err, "ApplyManifest should return an error on critical update failure")
+	assert.Contains(t, err.Error(), "failed to update", "error message should contain 'failed to update'")
+}
+
+// TestApplyManifest_DecodeError_Skipped verifies that malformed YAML (not valid Kubernetes YAML)
+// is skipped gracefully without returning an error.
+func TestApplyManifest_DecodeError_Skipped(t *testing.T) {
+	scheme := newTestScheme()
+	mapper := testrestmapper.TestOnlyStaticRESTMapper(scheme)
+	dynamicClient := fake.NewSimpleDynamicClient(scheme)
+	ctx := context.Background()
+
+	// Malformed YAML that cannot be decoded as a Kubernetes object
+	badYAML := []byte("not: valid: kubernetes: yaml\nwith: bad: structure")
+	err := ApplyManifest(ctx, badYAML, "default", mapper, dynamicClient)
+	assert.NoError(t, err, "decode errors should be skipped (return nil)")
+}
+
+// TestApplyManifest_IsNotFound_Skipped verifies that an IsNotFound error on Create
+// (API group not yet installed) is skipped without returning an error.
+func TestApplyManifest_IsNotFound_Skipped(t *testing.T) {
+	const podManifest = `apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod
+spec:
+  containers:
+    - name: test
+      image: nginx`
+
+	scheme := newTestScheme()
+	mapper := testrestmapper.TestOnlyStaticRESTMapper(scheme)
+	dynamicClient := fake.NewSimpleDynamicClient(scheme)
+
+	// Inject IsNotFound on Create (simulates API group not installed)
+	notFoundErr := apierrors.NewNotFound(schema.GroupResource{Resource: "pods"}, "test-pod")
+	dynamicClient.PrependReactor("create", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, notFoundErr
+	})
+
+	ctx := context.Background()
+	err := ApplyManifest(ctx, []byte(podManifest), "default", mapper, dynamicClient)
+	assert.NoError(t, err, "IsNotFound on create should be skipped (return nil)")
 }
 
 // TestApplyManifest_RESTMapperScope verifies that namespace injection is driven by mapper scope,

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -63,7 +64,7 @@ func TestGetProfile_Success(t *testing.T) {
 	defer server.Close()
 	defer overrideServerURL(t, server.URL)()
 
-	profile, err := GetProfile()
+	profile, err := GetProfile(context.Background())
 
 	require.NoError(t, err)
 	assert.Equal(t, "Test", profile.FirstName)
@@ -84,7 +85,7 @@ func TestGetProfile_APIError(t *testing.T) {
 	defer server.Close()
 	defer overrideServerURL(t, server.URL)()
 
-	profile, err := GetProfile()
+	profile, err := GetProfile(context.Background())
 
 	require.Error(t, err)
 	assert.Nil(t, profile)
@@ -103,7 +104,7 @@ func TestGetProfile_InvalidJSON(t *testing.T) {
 	defer server.Close()
 	defer overrideServerURL(t, server.URL)()
 
-	profile, err := GetProfile()
+	profile, err := GetProfile(context.Background())
 
 	require.Error(t, err)
 	assert.Nil(t, profile)
@@ -122,7 +123,7 @@ func TestGetUserProfile_Alias(t *testing.T) {
 	defer server.Close()
 	defer overrideServerURL(t, server.URL)()
 
-	profile, err := GetUserProfile()
+	profile, err := GetUserProfile(context.Background())
 
 	require.NoError(t, err)
 	assert.Equal(t, "Test", profile.FirstName)
@@ -153,7 +154,7 @@ func TestGetChallengeBySlug_Success(t *testing.T) {
 	defer server.Close()
 	defer overrideServerURL(t, server.URL)()
 
-	challenge, err := GetChallengeBySlug("pod-evicted")
+	challenge, err := GetChallengeBySlug(context.Background(), "pod-evicted")
 
 	require.NoError(t, err)
 	assert.Equal(t, 123, challenge.ID)
@@ -174,7 +175,7 @@ func TestGetChallengeBySlug_NotFound(t *testing.T) {
 	defer server.Close()
 	defer overrideServerURL(t, server.URL)()
 
-	challenge, err := GetChallengeBySlug("nonexistent")
+	challenge, err := GetChallengeBySlug(context.Background(), "nonexistent")
 
 	require.Error(t, err)
 	assert.Nil(t, challenge)
@@ -200,7 +201,7 @@ func TestGetChallengeStatus_Success(t *testing.T) {
 	defer server.Close()
 	defer overrideServerURL(t, server.URL)()
 
-	status, err := GetChallengeStatus("pod-evicted")
+	status, err := GetChallengeStatus(context.Background(), "pod-evicted")
 
 	require.NoError(t, err)
 	assert.Equal(t, "in_progress", status.Status)
@@ -227,7 +228,7 @@ func TestStartChallengeWithResponse_Success(t *testing.T) {
 	defer server.Close()
 	defer overrideServerURL(t, server.URL)()
 
-	response, err := StartChallengeWithResponse("pod-evicted")
+	response, err := StartChallengeWithResponse(context.Background(), "pod-evicted")
 
 	require.NoError(t, err)
 	assert.Equal(t, "in_progress", response.Status)
@@ -252,7 +253,7 @@ func TestStartChallenge_BackwardCompatibility(t *testing.T) {
 	defer server.Close()
 	defer overrideServerURL(t, server.URL)()
 
-	err := StartChallenge("pod-evicted")
+	err := StartChallenge(context.Background(), "pod-evicted")
 
 	require.NoError(t, err)
 }
@@ -288,7 +289,7 @@ func TestSubmitChallenge_Success(t *testing.T) {
 			{ObjectiveKey: "obj-2", Passed: true, Message: strPtr("Passed")},
 		},
 	}
-	response, err := SubmitChallenge("pod-evicted", req)
+	response, err := SubmitChallenge(context.Background(), "pod-evicted", req)
 
 	require.NoError(t, err)
 	assert.True(t, response.Success)
@@ -315,7 +316,7 @@ func TestSubmitChallenge_PartialSuccess(t *testing.T) {
 			{ObjectiveKey: "obj-1", Passed: false, Message: strPtr("Failed")},
 		},
 	}
-	response, err := SubmitChallenge("pod-evicted", req)
+	response, err := SubmitChallenge(context.Background(), "pod-evicted", req)
 
 	require.NoError(t, err)
 	assert.False(t, response.Success)
@@ -337,7 +338,7 @@ func TestSendSubmit_Success(t *testing.T) {
 	results := []ObjectiveResult{
 		{ObjectiveKey: "obj-1", Passed: true, Message: strPtr("Passed")},
 	}
-	err := SendSubmit("pod-evicted", results)
+	err := SendSubmit(context.Background(), "pod-evicted", results)
 
 	require.NoError(t, err)
 }
@@ -361,7 +362,7 @@ func TestSendSubmit_Failure(t *testing.T) {
 	results := []ObjectiveResult{
 		{ObjectiveKey: "obj-1", Passed: false, Message: strPtr("Failed")},
 	}
-	err := SendSubmit("pod-evicted", results)
+	err := SendSubmit(context.Background(), "pod-evicted", results)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Validation failed")
@@ -386,7 +387,7 @@ func TestResetChallenge_Success(t *testing.T) {
 	defer server.Close()
 	defer overrideServerURL(t, server.URL)()
 
-	response, err := ResetChallenge("pod-evicted")
+	response, err := ResetChallenge(context.Background(), "pod-evicted")
 
 	require.NoError(t, err)
 	assert.True(t, response.Success)
@@ -406,7 +407,7 @@ func TestResetChallengeProgress_Success(t *testing.T) {
 	defer server.Close()
 	defer overrideServerURL(t, server.URL)()
 
-	err := ResetChallengeProgress("pod-evicted")
+	err := ResetChallengeProgress(context.Background(), "pod-evicted")
 
 	require.NoError(t, err)
 }
@@ -427,7 +428,7 @@ func TestResetChallengeProgress_Failure(t *testing.T) {
 	defer server.Close()
 	defer overrideServerURL(t, server.URL)()
 
-	err := ResetChallengeProgress("pod-evicted")
+	err := ResetChallengeProgress(context.Background(), "pod-evicted")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Reset failed")
@@ -455,7 +456,7 @@ func TestGetChallenge_Alias(t *testing.T) {
 	defer server.Close()
 	defer overrideServerURL(t, server.URL)()
 
-	challenge, err := GetChallenge("test")
+	challenge, err := GetChallenge(context.Background(), "test")
 
 	require.NoError(t, err)
 	assert.Equal(t, 456, challenge.ID)
@@ -474,7 +475,7 @@ func TestGetChallengeProgress_Alias(t *testing.T) {
 	defer server.Close()
 	defer overrideServerURL(t, server.URL)()
 
-	status, err := GetChallengeProgress("test")
+	status, err := GetChallengeProgress(context.Background(), "test")
 
 	require.NoError(t, err)
 	assert.Equal(t, "completed", status.Status)
@@ -514,7 +515,7 @@ func TestLogin_Success(t *testing.T) {
 	defer server.Close()
 	defer overrideServerURL(t, server.URL)()
 
-	result, err := Login()
+	result, err := Login(context.Background())
 
 	require.NoError(t, err)
 	assert.Equal(t, "Paul", result.FirstName)
@@ -537,7 +538,7 @@ func TestLogin_APIError(t *testing.T) {
 	defer server.Close()
 	defer overrideServerURL(t, server.URL)()
 
-	result, err := Login()
+	result, err := Login(context.Background())
 
 	require.Error(t, err)
 	assert.Nil(t, result)
@@ -563,7 +564,7 @@ func TestTrackSetup_Success(t *testing.T) {
 	defer server.Close()
 	defer overrideServerURL(t, server.URL)()
 
-	TrackSetup()
+	TrackSetup(context.Background())
 
 	assert.True(t, called, "expected tracking request to be sent")
 }
@@ -573,7 +574,7 @@ func TestTrackSetup_NoAuth(t *testing.T) {
 	_ = keyring.Delete(constants.KeyringServiceName, "api_key")
 
 	// Should not panic
-	TrackSetup()
+	TrackSetup(context.Background())
 }
 
 func TestGetAuthToken_NoKeyring(t *testing.T) {
@@ -582,7 +583,7 @@ func TestGetAuthToken_NoKeyring(t *testing.T) {
 
 	defer overrideServerURL(t, "http://localhost:9999")()
 
-	_, err := GetProfile()
+	_, err := GetProfile(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "please run 'kubeasy login'")
 }

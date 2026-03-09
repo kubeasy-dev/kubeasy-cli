@@ -34,7 +34,7 @@ Make sure you have completed the challenge before submitting.`,
 
 		// Verify challenge exists
 		err := ui.WaitMessage("Verifying challenge", func() error {
-			_, err := apiGetChallengeForSubmit(challengeSlug)
+			_, err := apiGetChallengeForSubmit(cmd.Context(), challengeSlug)
 			return err
 		})
 		if err != nil {
@@ -46,7 +46,7 @@ Make sure you have completed the challenge before submitting.`,
 		var progress *api.ChallengeStatusResponse
 		err = ui.WaitMessage("Checking progress", func() error {
 			var err error
-			progress, err = apiGetProgressForSubmit(challengeSlug)
+			progress, err = apiGetProgressForSubmit(cmd.Context(), challengeSlug)
 			return err
 		})
 		if err != nil {
@@ -155,7 +155,7 @@ Make sure you have completed the challenge before submitting.`,
 		if allPassed {
 			ui.Success("All validations passed!")
 			ui.Info("Sending results to server...")
-			err = api.SendSubmit(challengeSlug, apiResults)
+			err = api.SendSubmit(cmd.Context(), challengeSlug, apiResults)
 			if err == nil {
 				ui.Println()
 				ui.Success(fmt.Sprintf("Congratulations! Challenge '%s' completed!", challengeSlug))
@@ -164,7 +164,7 @@ Make sure you have completed the challenge before submitting.`,
 		} else {
 			ui.Error("Some validations failed")
 			ui.Info("Review the results above and try again")
-			err = api.SendSubmit(challengeSlug, apiResults)
+			err = api.SendSubmit(cmd.Context(), challengeSlug, apiResults)
 		}
 
 		if err != nil {

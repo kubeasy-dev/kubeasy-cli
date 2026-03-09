@@ -37,7 +37,7 @@ var startChallengeCmd = &cobra.Command{
 		var challenge *api.ChallengeEntity
 		err := ui.WaitMessage("Fetching challenge details", func() error {
 			var err error
-			challenge, err = apiGetChallenge(challengeSlug)
+			challenge, err = apiGetChallenge(cmd.Context(), challengeSlug)
 			return err
 		})
 		if err != nil {
@@ -51,7 +51,7 @@ var startChallengeCmd = &cobra.Command{
 		var progress *api.ChallengeStatusResponse
 		err = ui.WaitMessage("Checking challenge progress", func() error {
 			var err error
-			progress, err = apiGetChallengeProgress(challengeSlug)
+			progress, err = apiGetChallengeProgress(cmd.Context(), challengeSlug)
 			return err
 		})
 		if err != nil {
@@ -109,7 +109,7 @@ var startChallengeCmd = &cobra.Command{
 
 		// Step 4: Register progress
 		err = ui.WaitMessage("Registering challenge progress", func() error {
-			return apiStartChallenge(challengeSlug)
+			return apiStartChallenge(cmd.Context(), challengeSlug)
 		})
 		if err != nil {
 			ui.Error("Failed to start challenge")

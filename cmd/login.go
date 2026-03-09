@@ -57,7 +57,7 @@ After successful login, you will be able to use commands requiring authenticatio
 
 			if reuse {
 				// Try to fetch profile and track login in a single call
-				loginResp, perr := api.Login()
+				loginResp, perr := api.Login(cmd.Context())
 				if perr != nil {
 					ui.Warning("Token exists but failed to fetch profile")
 					ui.Info("You may need to login again")
@@ -126,7 +126,7 @@ After successful login, you will be able to use commands requiring authenticatio
 		}
 
 		// Verify by fetching profile and track login in a single call
-		loginResp, err := api.Login()
+		loginResp, err := api.Login(cmd.Context())
 		if err != nil {
 			ui.Warning("Logged in, but failed to fetch profile")
 			logger.Error("Failed to fetch profile after login: %v", err)

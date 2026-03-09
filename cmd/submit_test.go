@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -25,10 +26,10 @@ func TestSubmitRunE_ProgressNil(t *testing.T) {
 		apiGetProgressForSubmit = origGetProgress
 	})
 
-	apiGetChallengeForSubmit = func(slug string) (*api.ChallengeEntity, error) {
+	apiGetChallengeForSubmit = func(ctx context.Context, slug string) (*api.ChallengeEntity, error) {
 		return &api.ChallengeEntity{Title: "Test"}, nil
 	}
-	apiGetProgressForSubmit = func(slug string) (*api.ChallengeStatusResponse, error) {
+	apiGetProgressForSubmit = func(ctx context.Context, slug string) (*api.ChallengeStatusResponse, error) {
 		return nil, nil
 	}
 
@@ -45,10 +46,10 @@ func TestSubmitRunE_AlreadyCompleted(t *testing.T) {
 		apiGetProgressForSubmit = origGetProgress
 	})
 
-	apiGetChallengeForSubmit = func(slug string) (*api.ChallengeEntity, error) {
+	apiGetChallengeForSubmit = func(ctx context.Context, slug string) (*api.ChallengeEntity, error) {
 		return &api.ChallengeEntity{Title: "Test"}, nil
 	}
-	apiGetProgressForSubmit = func(slug string) (*api.ChallengeStatusResponse, error) {
+	apiGetProgressForSubmit = func(ctx context.Context, slug string) (*api.ChallengeStatusResponse, error) {
 		return &api.ChallengeStatusResponse{Status: "completed"}, nil
 	}
 
@@ -63,7 +64,7 @@ func TestSubmitRunE_APIFailure(t *testing.T) {
 		apiGetChallengeForSubmit = origGetChallenge
 	})
 
-	apiGetChallengeForSubmit = func(slug string) (*api.ChallengeEntity, error) {
+	apiGetChallengeForSubmit = func(ctx context.Context, slug string) (*api.ChallengeEntity, error) {
 		return nil, fmt.Errorf("network error")
 	}
 

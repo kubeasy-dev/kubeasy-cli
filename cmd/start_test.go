@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -25,10 +26,10 @@ func TestStartRunE_AlreadyInProgress(t *testing.T) {
 		apiGetChallengeProgress = origGetProgress
 	})
 
-	apiGetChallenge = func(slug string) (*api.ChallengeEntity, error) {
+	apiGetChallenge = func(ctx context.Context, slug string) (*api.ChallengeEntity, error) {
 		return &api.ChallengeEntity{Title: "Test"}, nil
 	}
-	apiGetChallengeProgress = func(slug string) (*api.ChallengeStatusResponse, error) {
+	apiGetChallengeProgress = func(ctx context.Context, slug string) (*api.ChallengeStatusResponse, error) {
 		return &api.ChallengeStatusResponse{Status: "in_progress"}, nil
 	}
 
@@ -45,10 +46,10 @@ func TestStartRunE_AlreadyCompleted(t *testing.T) {
 		apiGetChallengeProgress = origGetProgress
 	})
 
-	apiGetChallenge = func(slug string) (*api.ChallengeEntity, error) {
+	apiGetChallenge = func(ctx context.Context, slug string) (*api.ChallengeEntity, error) {
 		return &api.ChallengeEntity{Title: "Test"}, nil
 	}
-	apiGetChallengeProgress = func(slug string) (*api.ChallengeStatusResponse, error) {
+	apiGetChallengeProgress = func(ctx context.Context, slug string) (*api.ChallengeStatusResponse, error) {
 		return &api.ChallengeStatusResponse{Status: "completed"}, nil
 	}
 
@@ -63,7 +64,7 @@ func TestStartRunE_APIFailure(t *testing.T) {
 		apiGetChallenge = origGetChallenge
 	})
 
-	apiGetChallenge = func(slug string) (*api.ChallengeEntity, error) {
+	apiGetChallenge = func(ctx context.Context, slug string) (*api.ChallengeEntity, error) {
 		return nil, fmt.Errorf("network error")
 	}
 

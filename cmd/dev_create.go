@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -35,26 +36,26 @@ var defaultChallengeDifficulties = devutils.ValidDifficulties
 
 // fetchMetadata fetches challenge types, themes, and difficulties from the API.
 // Falls back to hardcoded defaults when the API is unreachable.
-func fetchMetadata() (types, themes, difficulties []string) {
+func fetchMetadata(ctx context.Context) (types, themes, difficulties []string) {
 	types = defaultChallengeTypes
 	themes = defaultChallengeThemes
 	difficulties = defaultChallengeDifficulties
 
-	if t, err := api.GetTypes(); err == nil {
+	if t, err := api.GetTypes(ctx); err == nil {
 		types = t
 	} else {
 		logger.Debug("Failed to fetch types from API: %v", err)
 		ui.Warning("Could not fetch challenge types from API — using offline defaults.")
 	}
 
-	if t, err := api.GetThemes(); err == nil {
+	if t, err := api.GetThemes(ctx); err == nil {
 		themes = t
 	} else {
 		logger.Debug("Failed to fetch themes from API: %v", err)
 		ui.Warning("Could not fetch challenge themes from API — using offline defaults.")
 	}
 
-	if d, err := api.GetDifficulties(); err == nil {
+	if d, err := api.GetDifficulties(ctx); err == nil {
 		difficulties = d
 	} else {
 		logger.Debug("Failed to fetch difficulties from API: %v", err)
@@ -187,7 +188,7 @@ In non-interactive mode, use flags: --name, --type, --theme, --difficulty.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ui.Section("Create New Challenge")
 
-		challengeTypes, challengeThemes, challengeDifficulties := fetchMetadata()
+		challengeTypes, challengeThemes, challengeDifficulties := fetchMetadata(cmd.Context())
 
 		interactive := term.IsTerminal(int(os.Stdin.Fd()))
 

@@ -22,13 +22,13 @@ func parseErrorResponse(resp *http.Response, body []byte) error {
 }
 
 // GetProfile fetches the current user's profile via GET /api/cli/user
-func GetProfile() (*UserProfile, error) {
+func GetProfile(ctx context.Context) (*UserProfile, error) {
 	client, err := NewAuthenticatedClient()
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.GetUserWithResponse(context.Background())
+	resp, err := client.GetUserWithResponse(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
@@ -46,13 +46,13 @@ func GetProfile() (*UserProfile, error) {
 
 // Login sends a POST /api/cli/user with CLI metadata, combining profile fetch
 // and login tracking in a single call.
-func Login() (*LoginResponse, error) {
+func Login(ctx context.Context) (*LoginResponse, error) {
 	client, err := NewAuthenticatedClient()
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.LoginUserWithResponse(context.Background(), apigen.LoginUserJSONRequestBody{
+	resp, err := client.LoginUserWithResponse(ctx, apigen.LoginUserJSONRequestBody{
 		CliVersion: constants.Version,
 		Os:         runtime.GOOS,
 		Arch:       runtime.GOARCH,
@@ -74,18 +74,18 @@ func Login() (*LoginResponse, error) {
 }
 
 // GetUserProfile is an alias for GetProfile for consistency with type names
-func GetUserProfile() (*UserProfile, error) {
-	return GetProfile()
+func GetUserProfile(ctx context.Context) (*UserProfile, error) {
+	return GetProfile(ctx)
 }
 
 // GetChallengeBySlug fetches a challenge by its slug
-func GetChallengeBySlug(slug string) (*ChallengeEntity, error) {
+func GetChallengeBySlug(ctx context.Context, slug string) (*ChallengeEntity, error) {
 	client, err := NewAuthenticatedClient()
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.GetChallengeWithResponse(context.Background(), slug)
+	resp, err := client.GetChallengeWithResponse(ctx, slug)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
@@ -112,13 +112,13 @@ func GetChallengeBySlug(slug string) (*ChallengeEntity, error) {
 }
 
 // GetChallengeStatus fetches the user's progress status for a challenge
-func GetChallengeStatus(slug string) (*ChallengeStatusResponse, error) {
+func GetChallengeStatus(ctx context.Context, slug string) (*ChallengeStatusResponse, error) {
 	client, err := NewAuthenticatedClient()
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.GetChallengeStatusWithResponse(context.Background(), slug)
+	resp, err := client.GetChallengeStatusWithResponse(ctx, slug)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
@@ -140,13 +140,13 @@ func GetChallengeStatus(slug string) (*ChallengeStatusResponse, error) {
 }
 
 // StartChallengeWithResponse starts a challenge for the user and returns the full response
-func StartChallengeWithResponse(slug string) (*ChallengeStartResponse, error) {
+func StartChallengeWithResponse(ctx context.Context, slug string) (*ChallengeStartResponse, error) {
 	client, err := NewAuthenticatedClient()
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.StartChallengeWithResponse(context.Background(), slug)
+	resp, err := client.StartChallengeWithResponse(ctx, slug)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
@@ -168,13 +168,13 @@ func StartChallengeWithResponse(slug string) (*ChallengeStartResponse, error) {
 }
 
 // StartChallenge starts a challenge for the user (backward compatibility wrapper)
-func StartChallenge(slug string) error {
-	_, err := StartChallengeWithResponse(slug)
+func StartChallenge(ctx context.Context, slug string) error {
+	_, err := StartChallengeWithResponse(ctx, slug)
 	return err
 }
 
 // SubmitChallenge submits a challenge with validation results
-func SubmitChallenge(slug string, req ChallengeSubmitRequest) (*ChallengeSubmitResponse, error) {
+func SubmitChallenge(ctx context.Context, slug string, req ChallengeSubmitRequest) (*ChallengeSubmitResponse, error) {
 	client, err := NewAuthenticatedClient()
 	if err != nil {
 		return nil, err
@@ -192,7 +192,7 @@ func SubmitChallenge(slug string, req ChallengeSubmitRequest) (*ChallengeSubmitR
 		results[i].Message = r.Message
 	}
 
-	resp, err := client.SubmitChallengeWithResponse(context.Background(), slug, apigen.SubmitChallengeJSONRequestBody{
+	resp, err := client.SubmitChallengeWithResponse(ctx, slug, apigen.SubmitChallengeJSONRequestBody{
 		Results: results,
 	})
 	if err != nil {
@@ -220,22 +220,22 @@ func SubmitChallenge(slug string, req ChallengeSubmitRequest) (*ChallengeSubmitR
 }
 
 // GetChallenge is a wrapper for GetChallengeBySlug for backward compatibility
-func GetChallenge(slug string) (*ChallengeEntity, error) {
-	return GetChallengeBySlug(slug)
+func GetChallenge(ctx context.Context, slug string) (*ChallengeEntity, error) {
+	return GetChallengeBySlug(ctx, slug)
 }
 
 // GetChallengeProgress fetches the challenge status (backward compatibility)
-func GetChallengeProgress(slug string) (*ChallengeStatusResponse, error) {
-	return GetChallengeStatus(slug)
+func GetChallengeProgress(ctx context.Context, slug string) (*ChallengeStatusResponse, error) {
+	return GetChallengeStatus(ctx, slug)
 }
 
 // SendSubmit submits a challenge with raw validation results from CRDs
-func SendSubmit(challengeSlug string, results []ObjectiveResult) error {
+func SendSubmit(ctx context.Context, challengeSlug string, results []ObjectiveResult) error {
 	req := ChallengeSubmitRequest{
 		Results: results,
 	}
 
-	result, err := SubmitChallenge(challengeSlug, req)
+	result, err := SubmitChallenge(ctx, challengeSlug, req)
 	if err != nil {
 		return err
 	}
@@ -251,13 +251,13 @@ func SendSubmit(challengeSlug string, results []ObjectiveResult) error {
 }
 
 // ResetChallenge resets the user's progress for a challenge
-func ResetChallenge(slug string) (*ChallengeResetResponse, error) {
+func ResetChallenge(ctx context.Context, slug string) (*ChallengeResetResponse, error) {
 	client, err := NewAuthenticatedClient()
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.ResetChallengeWithResponse(context.Background(), slug)
+	resp, err := client.ResetChallengeWithResponse(ctx, slug)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
@@ -277,14 +277,14 @@ func ResetChallenge(slug string) (*ChallengeResetResponse, error) {
 }
 
 // TrackSetup sends a setup tracking event using the generated client.
-func TrackSetup() {
+func TrackSetup(ctx context.Context) {
 	client, err := NewAuthenticatedClient()
 	if err != nil {
 		logger.Debug("Failed to create client for tracking: %v", err)
 		return
 	}
 
-	_, err = client.TrackSetupWithResponse(context.Background(), apigen.TrackSetupJSONRequestBody{
+	_, err = client.TrackSetupWithResponse(ctx, apigen.TrackSetupJSONRequestBody{
 		CliVersion: constants.Version,
 		Os:         runtime.GOOS,
 		Arch:       runtime.GOARCH,
@@ -295,13 +295,13 @@ func TrackSetup() {
 }
 
 // GetTypes fetches challenge types from the public API.
-func GetTypes() ([]string, error) {
+func GetTypes(ctx context.Context) ([]string, error) {
 	client, err := NewPublicClient()
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.GetTypesWithResponse(context.Background())
+	resp, err := client.GetTypesWithResponse(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch challenge types: %w", err)
 	}
@@ -318,13 +318,13 @@ func GetTypes() ([]string, error) {
 }
 
 // GetThemes fetches challenge themes from the public API.
-func GetThemes() ([]string, error) {
+func GetThemes(ctx context.Context) ([]string, error) {
 	client, err := NewPublicClient()
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.GetThemesWithResponse(context.Background())
+	resp, err := client.GetThemesWithResponse(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch challenge themes: %w", err)
 	}
@@ -341,13 +341,13 @@ func GetThemes() ([]string, error) {
 }
 
 // GetDifficulties fetches challenge difficulties from the public API.
-func GetDifficulties() ([]string, error) {
+func GetDifficulties(ctx context.Context) ([]string, error) {
 	client, err := NewPublicClient()
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.GetDifficultiesWithResponse(context.Background())
+	resp, err := client.GetDifficultiesWithResponse(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch challenge difficulties: %w", err)
 	}
@@ -364,8 +364,8 @@ func GetDifficulties() ([]string, error) {
 }
 
 // ResetChallengeProgress is a wrapper for ResetChallenge for backward compatibility
-func ResetChallengeProgress(slugOrID string) error {
-	result, err := ResetChallenge(slugOrID)
+func ResetChallengeProgress(ctx context.Context, slugOrID string) error {
+	result, err := ResetChallenge(ctx, slugOrID)
 	if err != nil {
 		return err
 	}

@@ -1,9 +1,18 @@
 package constants
 
-import "strings"
+import (
+	"os"
+	"strings"
+)
 
 // WebsiteURL is the base URL for the Kubeasy website (used for CLI API routes)
 var WebsiteURL = "http://localhost:3000"
+
+func init() {
+	if v := os.Getenv("KUBEASY_API_URL"); v != "" {
+		WebsiteURL = v
+	}
+}
 
 var KeyringServiceName = "kubeasy-cli"
 

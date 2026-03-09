@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-03-PLAN.md (Hardcoded path removal and slug validation)
-last_updated: "2026-03-09T11:41:53.698Z"
+stopped_at: "Completed 02-01-PLAN.md (TDD: start.go RunE guard tests)"
+last_updated: "2026-03-09T14:25:27.576Z"
 last_activity: 2026-03-09 — Completed 01-01-PLAN.md (TDD Red Phase)
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 6
+  completed_plans: 4
   percent: 67
 ---
 
@@ -52,6 +52,7 @@ Progress: [███████░░░] 67%
 *Updated after each plan completion*
 | Phase 01-safety-hardening P02 | 3m | 1 tasks | 1 files |
 | Phase 01-safety-hardening P03 | 5m | 2 tasks | 4 files |
+| Phase 02-command-test-coverage P01 | 2m | 1 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,8 @@ Recent decisions affecting current work:
 - [Phase 01-safety-hardening]: Comma-ok on Spec assertions returns Result{Passed:false} with descriptive message — no recover() wrapper needed
 - [Phase 01-safety-hardening]: KUBEASY_LOCAL_CHALLENGES_DIR env var replaces hardcoded dev path — production binaries never check developer directories
 - [Phase 01-safety-hardening]: Slug validation as first RunE statement provides fail-fast behavior before any API or cluster call
+- [Phase 02-command-test-coverage]: Used ui.SetCIMode(true) in TestMain to suppress pterm spinner goroutine data races under -race
+- [Phase 02-command-test-coverage]: Function vars (apiGetChallenge, apiGetChallengeProgress, apiStartChallenge) front direct api.* calls to enable test injection in start.go
 
 ### Pending Todos
 
@@ -79,6 +82,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-09T11:38:56.846Z
-Stopped at: Completed 01-03-PLAN.md (Hardcoded path removal and slug validation)
+Last session: 2026-03-09T14:25:27.574Z
+Stopped at: Completed 02-01-PLAN.md (TDD: start.go RunE guard tests)
 Resume file: None

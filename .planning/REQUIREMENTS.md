@@ -7,7 +7,7 @@
 
 ### Testing
 
-- [ ] **TST-01**: Les tests unitaires couvrent le `RunE` de `cmd/start.go` (slug validation, progress state, API call sequence)
+- [x] **TST-01**: Les tests unitaires couvrent le `RunE` de `cmd/start.go` (slug validation, progress state, API call sequence)
 - [ ] **TST-02**: Les tests unitaires couvrent le `RunE` de `cmd/submit.go` (chargement validations, exécution, soumission résultats)
 - [ ] **TST-03**: Les tests unitaires couvrent le `RunE` de `cmd/reset.go` et `cmd/clean.go`
 - [x] **TST-04**: Les tests unitaires couvrent le chemin d'erreur de `getGVRForKind` pour les kinds non supportés
@@ -72,7 +72,7 @@
 | SAFE-03 | Phase 1 | Complete |
 | TST-04 | Phase 1 | Complete |
 | TST-05 | Phase 1 | Complete |
-| TST-01 | Phase 2 | Pending |
+| TST-01 | Phase 2 | Complete |
 | TST-02 | Phase 2 | Pending |
 | TST-03 | Phase 2 | Pending |
 | ERR-01 | Phase 3 | Pending |

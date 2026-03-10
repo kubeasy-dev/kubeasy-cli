@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-03-PLAN.md (ctx threading through api client)
-last_updated: "2026-03-09T16:10:41.963Z"
+stopped_at: Completed 04-01-PLAN.md (remove api alias functions)
+last_updated: "2026-03-10T18:11:04.892Z"
 last_activity: 2026-03-09 — Completed 01-01-PLAN.md (TDD Red Phase)
 progress:
   total_phases: 5
   completed_phases: 3
-  total_plans: 9
-  completed_plans: 9
+  total_plans: 12
+  completed_plans: 10
   percent: 100
 ---
 
@@ -58,6 +58,7 @@ Progress: [██████████] 100%
 | Phase 03-error-handling P01 | 4m | 2 tasks | 2 files |
 | Phase 03-error-handling P02 | 2m | 1 tasks | 2 files |
 | Phase 03-error-handling P03 | 8m | 2 tasks | 11 files |
+| Phase 04-code-quality P01 | 6m | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -84,6 +85,8 @@ Recent decisions affecting current work:
 - [Phase 03-error-handling]: KUBEASY_API_URL env var overrides WebsiteURL at process start via init() — env var priority beats GoReleaser ldflags to enable staging use without special builds
 - [Phase 03-error-handling]: context.Background() used in getChallenge() helper (common.go) since it lacks cobra cmd access — standard Go pattern for non-request-scoped helpers
 - [Phase 03-error-handling]: All public api.* functions must accept ctx context.Context as first parameter — new functions must follow this pattern
+- [Phase 04-code-quality]: Alias functions deleted entirely (no grace period) — all callers are in the same repo
+- [Phase 04-code-quality]: cmd/submit.go: inline SubmitChallenge replaces SendSubmit; allPassed branch now checks submitResult.Success
 
 ### Pending Todos
 
@@ -95,6 +98,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-09T16:07:15.362Z
-Stopped at: Completed 03-03-PLAN.md (ctx threading through api client)
+Last session: 2026-03-10T18:11:04.890Z
+Stopped at: Completed 04-01-PLAN.md (remove api alias functions)
 Resume file: None

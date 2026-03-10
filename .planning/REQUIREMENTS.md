@@ -29,7 +29,7 @@
 
 - [x] **QUAL-01**: Les 6 fonctions alias de rétrocompatibilité dans `internal/api/client.go` sont supprimées et tous les appelants utilisent les noms primaires
 - [ ] **QUAL-02**: La logique walk-and-apply est extraite en une fonction helper partagée dans `internal/deployer/`, supprimant la duplication entre `challenge.go` et `local.go`
-- [ ] **QUAL-03**: `WaitForDeploymentsReady` et `WaitForStatefulSetsReady` utilisent `wait.PollUntilContextTimeout` avec backoff au lieu du polling fixe à 2s
+- [x] **QUAL-03**: `WaitForDeploymentsReady` et `WaitForStatefulSetsReady` utilisent `wait.PollUntilContextTimeout` avec backoff au lieu du polling fixe à 2s
 
 ### Security
 
@@ -80,7 +80,7 @@
 | ERR-03 | Phase 3 | Complete |
 | QUAL-01 | Phase 4 | Complete |
 | QUAL-02 | Phase 4 | Pending |
-| QUAL-03 | Phase 4 | Pending |
+| QUAL-03 | Phase 4 | Complete |
 | SEC-01 | Phase 5 | Pending |
 | SEC-02 | Phase 5 | Pending |
 

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 04-01-PLAN.md (remove api alias functions)
-last_updated: "2026-03-10T18:11:04.892Z"
+stopped_at: Completed 04-02-PLAN.md (walk-and-apply deduplication)
+last_updated: "2026-03-10T18:12:20.693Z"
 last_activity: 2026-03-09 — Completed 01-01-PLAN.md (TDD Red Phase)
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 12
-  completed_plans: 10
+  completed_plans: 12
   percent: 100
 ---
 
@@ -59,6 +59,8 @@ Progress: [██████████] 100%
 | Phase 03-error-handling P02 | 2m | 1 tasks | 2 files |
 | Phase 03-error-handling P03 | 8m | 2 tasks | 11 files |
 | Phase 04-code-quality P01 | 6m | 2 tasks | 6 files |
+| Phase 04-code-quality P03 | 7m | 1 tasks | 4 files |
+| Phase 04-code-quality P02 | 8m | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -87,6 +89,10 @@ Recent decisions affecting current work:
 - [Phase 03-error-handling]: All public api.* functions must accept ctx context.Context as first parameter — new functions must follow this pattern
 - [Phase 04-code-quality]: Alias functions deleted entirely (no grace period) — all callers are in the same repo
 - [Phase 04-code-quality]: cmd/submit.go: inline SubmitChallenge replaces SendSubmit; allPassed branch now checks submitResult.Success
+- [Phase 04-code-quality]: wait.PollUntilContextTimeout replaces manual for{select{case <-time.After}} polling loops — idiomatic k8s-client-go pattern with native context cancellation and explicit timeout parameter
+- [Phase 04-code-quality]: applyManifestDirs is unexported — only used within the deployer package, no public API needed
+- [Phase 04-code-quality]: Generic skip log message used in walk.go replaces per-caller variant messages to avoid needing a label parameter
+- [Phase 04-code-quality]: Tasks 1 and 2 committed atomically because golangci-lint unused check rejects unexported functions with no callers
 
 ### Pending Todos
 
@@ -98,6 +104,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-10T18:11:04.890Z
-Stopped at: Completed 04-01-PLAN.md (remove api alias functions)
+Last session: 2026-03-10T18:12:20.691Z
+Stopped at: Completed 04-02-PLAN.md (walk-and-apply deduplication)
 Resume file: None

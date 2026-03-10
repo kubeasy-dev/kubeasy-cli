@@ -97,6 +97,15 @@ None - no external service configuration required.
 - All three new tests pass with -race, full suite green
 - Phase 02 command test coverage is complete for all major commands
 
+## Self-Check: PASSED
+
+- FOUND: cmd/reset_test.go
+- FOUND: cmd/clean_test.go
+- FOUND: cmd/reset.go (with validateChallengeSlug first, getChallengeFn var)
+- FOUND: .planning/phases/02-command-test-coverage/02-03-SUMMARY.md
+- FOUND: commit 0114590 (task commit)
+- FOUND: commit db04ea0 (metadata commit)
+
 ---
 *Phase: 02-command-test-coverage*
 *Completed: 2026-03-09*

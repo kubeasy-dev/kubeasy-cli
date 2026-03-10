@@ -1,11 +1,11 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.0
-milestone_name: milestone
-status: executing
-stopped_at: "Completed 05-02-PLAN.md (SEC-02: FetchManifest domain allowlist guard)"
-last_updated: "2026-03-10T23:42:36.023Z"
-last_activity: 2026-03-09 — Completed 01-01-PLAN.md (TDD Red Phase)
+milestone_name: "Réduction de la dette technique"
+status: complete
+stopped_at: "v1.0 milestone archived 2026-03-11"
+last_updated: "2026-03-11T00:00:00Z"
+last_activity: "2026-03-11 — v1.0 milestone complete"
 progress:
   total_phases: 5
   completed_phases: 5
@@ -18,16 +18,16 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-09)
+See: .planning/PROJECT.md (updated 2026-03-11 after v1.0 milestone)
 
-**Core value:** Le système de validation doit être robuste, extensible et couvert par des tests — pour qu'ajouter un nouveau type de validation soit simple et sans risque.
-**Current focus:** Phase 1 — Safety Hardening
+**Core value:** The validation system must be robust, extensible, and test-covered — so that adding a new validation type is simple and safe.
+**Current focus:** Planning next milestone (v1.1)
 
 ## Current Position
 
-Phase: 1 of 5 (Safety Hardening)
-Plan: 1 of ? in current phase
-Status: In progress
+Phase: — (milestone complete)
+Plan: —
+Status: Milestone complete — ready for /gsd:new-milestone
 Last activity: 2026-03-09 — Completed 01-01-PLAN.md (TDD Red Phase)
 
 Progress: [██████████] 100%

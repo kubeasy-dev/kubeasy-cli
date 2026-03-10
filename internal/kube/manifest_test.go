@@ -16,8 +16,8 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/dynamic/fake"
+	k8stesting "k8s.io/client-go/testing"
 )
 
 const (
@@ -499,6 +499,61 @@ spec:
 	ctx := context.Background()
 	err := ApplyManifest(ctx, []byte(podManifest), "default", mapper, dynamicClient)
 	assert.NoError(t, err, "IsNotFound on create should be skipped (return nil)")
+}
+
+// TestFetchManifest_Allowlist verifies that FetchManifest rejects URLs not from trusted domains
+// before making any HTTP call.
+func TestFetchManifest_Allowlist(t *testing.T) {
+	tests := []struct {
+		name         string
+		url          string
+		wantAllowErr bool // true if we expect the allowlist rejection error
+	}{
+		{
+			name:         "github.com prefix allowed",
+			url:          "https://github.com/owner/repo/releases/download/v1/install.yaml",
+			wantAllowErr: false,
+		},
+		{
+			name:         "raw.githubusercontent.com prefix allowed",
+			url:          "https://raw.githubusercontent.com/owner/repo/main/file.yaml",
+			wantAllowErr: false,
+		},
+		{
+			name:         "arbitrary domain blocked",
+			url:          "https://evil.example.com/manifest.yaml",
+			wantAllowErr: true,
+		},
+		{
+			name:         "http downgrade of github blocked",
+			url:          "http://github.com/owner/repo/file.yaml",
+			wantAllowErr: true,
+		},
+		{
+			name:         "empty string blocked",
+			url:          "",
+			wantAllowErr: true,
+		},
+		{
+			name:         "github subdomain blocked",
+			url:          "https://api.github.com/repos/owner/repo",
+			wantAllowErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := FetchManifest(tt.url)
+			if tt.wantAllowErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "not from a trusted domain")
+			} else if err != nil {
+				// Allowed URL: error may occur (network) but must NOT be an allowlist error
+				assert.NotContains(t, err.Error(), "not from a trusted domain",
+					"allowed URL should not trigger allowlist rejection")
+			}
+		})
+	}
 }
 
 // TestApplyManifest_RESTMapperScope verifies that namespace injection is driven by mapper scope,

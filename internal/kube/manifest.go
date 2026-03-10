@@ -17,9 +17,27 @@ import (
 	"k8s.io/client-go/dynamic"
 )
 
+// fetchManifestAllowedPrefixes lists the trusted domain prefixes for FetchManifest.
+// Any URL not matching one of these prefixes is rejected before making an HTTP call.
+var fetchManifestAllowedPrefixes = []string{
+	"https://github.com/",
+	"https://raw.githubusercontent.com/",
+}
+
 // FetchManifest downloads a manifest from the given URL
 func FetchManifest(url string) ([]byte, error) {
-	resp, err := http.Get(url) // #nosec G107 -- URL is controlled by trusted sources in this context
+	allowed := false
+	for _, prefix := range fetchManifestAllowedPrefixes {
+		if strings.HasPrefix(url, prefix) {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		return nil, fmt.Errorf("FetchManifest: URL %q is not from a trusted domain (allowed: %v)", url, fetchManifestAllowedPrefixes)
+	}
+
+	resp, err := http.Get(url) //nolint:gosec // URL validated against fetchManifestAllowedPrefixes
 	if err != nil {
 		return nil, fmt.Errorf("error downloading manifest from %s: %w", url, err)
 	}

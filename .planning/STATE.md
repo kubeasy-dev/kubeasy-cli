@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 5 context gathered
-last_updated: "2026-03-10T23:19:15.937Z"
+stopped_at: "Completed 05-01-PLAN.md (SEC-01: shell injection fix in executeConnectivity)"
+last_updated: "2026-03-10T23:36:11.272Z"
 last_activity: 2026-03-09 — Completed 01-01-PLAN.md (TDD Red Phase)
 progress:
   total_phases: 5
   completed_phases: 4
-  total_plans: 12
-  completed_plans: 12
+  total_plans: 14
+  completed_plans: 13
   percent: 100
 ---
 
@@ -61,6 +61,7 @@ Progress: [██████████] 100%
 | Phase 04-code-quality P01 | 6m | 2 tasks | 6 files |
 | Phase 04-code-quality P03 | 7m | 1 tasks | 4 files |
 | Phase 04-code-quality P02 | 8m | 2 tasks | 3 files |
+| Phase 05-security-hardening P01 | 3m | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -93,6 +94,9 @@ Recent decisions affecting current work:
 - [Phase 04-code-quality]: applyManifestDirs is unexported — only used within the deployer package, no public API needed
 - [Phase 04-code-quality]: Generic skip log message used in walk.go replaces per-caller variant messages to avoid needing a label parameter
 - [Phase 04-code-quality]: Tasks 1 and 2 committed atomically because golangci-lint unused check rejects unexported functions with no callers
+- [Phase 05-security-hardening]: buildCurlCommand returns a direct arg slice starting with 'curl' — no shell is ever invoked in the curl path
+- [Phase 05-security-hardening]: escapeShellArg deleted entirely; no callers remain after curl block rewrite
+- [Phase 05-security-hardening]: wget fallback left as sh -c with TODO(sec) comment — deferred to future security phase
 
 ### Pending Todos
 
@@ -104,6 +108,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-10T23:19:15.930Z
-Stopped at: Phase 5 context gathered
-Resume file: .planning/phases/05-security-hardening/05-CONTEXT.md
+Last session: 2026-03-10T23:36:11.270Z
+Stopped at: Completed 05-01-PLAN.md (SEC-01: shell injection fix in executeConnectivity)
+Resume file: None

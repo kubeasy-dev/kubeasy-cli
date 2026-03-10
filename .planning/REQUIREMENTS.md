@@ -33,8 +33,8 @@
 
 ### Security
 
-- [ ] **SEC-01**: `executeConnectivity` utilise `exec.Command` avec arguments individuels au lieu de `sh -c` pour éviter toute injection shell
-- [ ] **SEC-02**: `FetchManifest` est rendue non-exportée ou accepte une allowlist d'URLs de confiance pour prévenir les appels vers des URLs arbitraires
+- [x] **SEC-01**: `executeConnectivity` utilise `exec.Command` avec arguments individuels au lieu de `sh -c` pour éviter toute injection shell
+- [x] **SEC-02**: `FetchManifest` est rendue non-exportée ou accepte une allowlist d'URLs de confiance pour prévenir les appels vers des URLs arbitraires
 
 ## v2 Requirements
 
@@ -81,8 +81,8 @@
 | QUAL-01 | Phase 4 | Complete |
 | QUAL-02 | Phase 4 | Complete |
 | QUAL-03 | Phase 4 | Complete |
-| SEC-01 | Phase 5 | Pending |
-| SEC-02 | Phase 5 | Pending |
+| SEC-01 | Phase 5 | Complete |
+| SEC-02 | Phase 5 | Complete |
 
 **Coverage:**
 - v1 requirements: 16 total

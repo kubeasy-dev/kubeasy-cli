@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Completed 05-01-PLAN.md (SEC-01: shell injection fix in executeConnectivity)"
-last_updated: "2026-03-10T23:36:11.272Z"
+stopped_at: "Completed 05-02-PLAN.md (SEC-02: FetchManifest domain allowlist guard)"
+last_updated: "2026-03-10T23:39:53.387Z"
 last_activity: 2026-03-09 — Completed 01-01-PLAN.md (TDD Red Phase)
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 14
-  completed_plans: 13
+  completed_plans: 14
   percent: 100
 ---
 
@@ -62,6 +62,7 @@ Progress: [██████████] 100%
 | Phase 04-code-quality P03 | 7m | 1 tasks | 4 files |
 | Phase 04-code-quality P02 | 8m | 2 tasks | 3 files |
 | Phase 05-security-hardening P01 | 3m | 2 tasks | 2 files |
+| Phase 05-security-hardening P02 | 2m | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -97,6 +98,7 @@ Recent decisions affecting current work:
 - [Phase 05-security-hardening]: buildCurlCommand returns a direct arg slice starting with 'curl' — no shell is ever invoked in the curl path
 - [Phase 05-security-hardening]: escapeShellArg deleted entirely; no callers remain after curl block rewrite
 - [Phase 05-security-hardening]: wget fallback left as sh -c with TODO(sec) comment — deferred to future security phase
+- [Phase 05-security-hardening]: fetchManifestAllowedPrefixes package-level var validates URLs before http.Get — #nosec G107 replaced with truthful //nolint:gosec suppression
 
 ### Pending Todos
 
@@ -108,6 +110,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-10T23:36:11.270Z
-Stopped at: Completed 05-01-PLAN.md (SEC-01: shell injection fix in executeConnectivity)
+Last session: 2026-03-10T23:39:53.385Z
+Stopped at: Completed 05-02-PLAN.md (SEC-02: FetchManifest domain allowlist guard)
 Resume file: None

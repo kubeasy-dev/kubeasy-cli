@@ -10,7 +10,7 @@ Five phases that progressively harden the validation system: first eliminate cra
 - [ ] **Phase 2: Command Test Coverage** - Unit tests for the four core user-facing commands and their error paths
 - [x] **Phase 3: Error Handling** - Surface manifest errors, propagate Ctrl-C cancellation, and fix the localhost URL default (completed 2026-03-09)
 - [x] **Phase 4: Code Quality** - Remove alias proliferation, deduplicate walk-and-apply logic, replace fixed polling with backoff (completed 2026-03-10)
-- [ ] **Phase 5: Security Hardening** - Replace shell injection surface in connectivity validation and restrict FetchManifest URLs
+- [x] **Phase 5: Security Hardening** - Replace shell injection surface in connectivity validation and restrict FetchManifest URLs (completed 2026-03-10)
 
 ## Phase Details
 
@@ -101,4 +101,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. Command Test Coverage | 1/3 | In Progress|  |
 | 3. Error Handling | 3/3 | Complete   | 2026-03-09 |
 | 4. Code Quality | 3/3 | Complete   | 2026-03-10 |
-| 5. Security Hardening | 1/2 | In Progress|  |
+| 5. Security Hardening | 2/2 | Complete   | 2026-03-10 |

@@ -454,12 +454,15 @@ func (e *Executor) executeConnectivity(ctx context.Context, spec ConnectivitySpe
 	return false, strings.Join(messages, "; "), nil
 }
 
-// escapeShellArg escapes a string for safe use in shell single-quoted context
-// This prevents command injection by properly handling embedded single quotes
-func escapeShellArg(arg string) string {
-	// In single quotes, the only special char is single quote itself
-	// We close the single quote, add an escaped single quote, then reopen
-	return strings.ReplaceAll(arg, "'", "'\"'\"'")
+// buildCurlCommand constructs the curl argument slice for pod exec.
+// Arguments are passed directly to the container — no shell is invoked.
+func buildCurlCommand(url string, timeoutSeconds int) []string {
+	return []string{
+		"curl", "-s", "-o", "/dev/null",
+		"-w", "%{http_code}",
+		"--connect-timeout", strconv.Itoa(timeoutSeconds),
+		url,
+	}
 }
 
 // checkConnectivity performs a curl request from a pod
@@ -469,14 +472,8 @@ func (e *Executor) checkConnectivity(ctx context.Context, pod *corev1.Pod, targe
 		timeout = 5
 	}
 
-	// Escape URL to prevent command injection
-	escapedURL := escapeShellArg(target.URL)
-
-	// Build curl command
-	cmd := []string{
-		"sh", "-c",
-		fmt.Sprintf("curl -s -o /dev/null -w '%%{http_code}' --connect-timeout %d '%s'", timeout, escapedURL),
-	}
+	// Build curl command — direct args, no shell
+	cmd := buildCurlCommand(target.URL, timeout)
 
 	req := e.clientset.CoreV1().RESTClient().Post().
 		Resource("pods").
@@ -503,9 +500,10 @@ func (e *Executor) checkConnectivity(ctx context.Context, pod *corev1.Pod, targe
 	if err != nil {
 		// Try with wget as fallback
 		logger.Debug("curl failed for %s: %v, trying wget", target.URL, err)
+		// TODO(sec): wget fallback still uses sh -c — deferred to future phase
 		cmd = []string{
 			"sh", "-c",
-			fmt.Sprintf("wget -q -O /dev/null -T %d '%s' && echo 200 || echo 000", timeout, escapedURL),
+			fmt.Sprintf("wget -q -O /dev/null -T %d '%s' && echo 200 || echo 000", timeout, target.URL),
 		}
 		req = e.clientset.CoreV1().RESTClient().Post().
 			Resource("pods").

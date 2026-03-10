@@ -2018,32 +2018,6 @@ func TestExecuteStatus_AllOperators(t *testing.T) {
 }
 
 // =============================================================================
-// Shell Escape Tests
-// =============================================================================
-
-func TestEscapeShellArg(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{"simple string", "http://example.com", "http://example.com"},
-		{"string with single quote", "it's a test", "it'\"'\"'s a test"},
-		{"multiple single quotes", "don't won't can't", "don'\"'\"'t won'\"'\"'t can'\"'\"'t"},
-		{"empty string", "", ""},
-		{"string with special chars", "http://test?a=1&b=2", "http://test?a=1&b=2"},
-		{"string with spaces", "hello world", "hello world"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := escapeShellArg(tt.input)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-// =============================================================================
 // getPodConditionTypes Tests
 // =============================================================================
 
@@ -2658,5 +2632,67 @@ func TestGetGVRForKind_SupportedKinds(t *testing.T) {
 			assert.NotEmpty(t, gvr.Resource)
 			assert.Equal(t, tc.expectedResource, gvr.Resource)
 		})
+	}
+}
+
+// --- buildCurlCommand tests (SEC-01: no shell injection via direct arg slice) ---
+
+func TestCheckConnectivity_CurlArgs(t *testing.T) {
+	cmd := buildCurlCommand("http://svc:8080/health", 5)
+	if len(cmd) == 0 {
+		t.Fatal("buildCurlCommand returned empty slice")
+	}
+	if cmd[0] != "curl" {
+		t.Errorf("expected cmd[0] == \"curl\", got %q", cmd[0])
+	}
+}
+
+func TestCheckConnectivity_NoShellFlag(t *testing.T) {
+	cmd := buildCurlCommand("http://svc:8080/health", 5)
+	for _, elem := range cmd {
+		if elem == "-c" {
+			t.Errorf("cmd slice must not contain \"-c\" (shell flag); got %v", cmd)
+		}
+		if elem == "sh" {
+			t.Errorf("cmd slice must not contain \"sh\"; got %v", cmd)
+		}
+	}
+}
+
+func TestCheckConnectivity_URLPositional(t *testing.T) {
+	url := "http://svc:8080/health"
+	cmd := buildCurlCommand(url, 5)
+	last := cmd[len(cmd)-1]
+	if last != url {
+		t.Errorf("expected last element to be %q (verbatim URL), got %q", url, last)
+	}
+}
+
+func TestCheckConnectivity_SpecialCharsURL(t *testing.T) {
+	url := "http://svc:8080/path?a=1&b=2 'quote' `tick`"
+	cmd := buildCurlCommand(url, 5)
+	last := cmd[len(cmd)-1]
+	if last != url {
+		t.Errorf("expected last element to be the verbatim URL %q, got %q", url, last)
+	}
+}
+
+func TestCheckConnectivity_TimeoutArg(t *testing.T) {
+	cmd := buildCurlCommand("http://svc:8080/", 5)
+	foundTimeout := false
+	for i, elem := range cmd {
+		if elem == "--connect-timeout" {
+			foundTimeout = true
+			if i+1 >= len(cmd) {
+				t.Fatal("--connect-timeout has no following value")
+			}
+			if cmd[i+1] != "5" {
+				t.Errorf("expected timeout value \"5\", got %q", cmd[i+1])
+			}
+			break
+		}
+	}
+	if !foundTimeout {
+		t.Errorf("expected --connect-timeout in cmd; got %v", cmd)
 	}
 }

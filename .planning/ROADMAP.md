@@ -84,7 +84,11 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. `executeConnectivity` passes the target URL as a positional argument to `exec.Command("curl", ...)` — no `sh -c` string is constructed or executed
   2. `FetchManifest` either becomes unexported or rejects URLs not matching a trusted allowlist, preventing callers from fetching arbitrary remote content
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 05-01-PLAN.md — Fix shell injection in executeConnectivity: extract buildCurlCommand, delete escapeShellArg (SEC-01)
+- [ ] 05-02-PLAN.md — Add domain allowlist to FetchManifest; replace #nosec with truthful nolint (SEC-02)
 
 ## Progress
 
@@ -97,4 +101,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. Command Test Coverage | 1/3 | In Progress|  |
 | 3. Error Handling | 3/3 | Complete   | 2026-03-09 |
 | 4. Code Quality | 3/3 | Complete   | 2026-03-10 |
-| 5. Security Hardening | 0/? | Not started | - |
+| 5. Security Hardening | 0/2 | Not started | - |

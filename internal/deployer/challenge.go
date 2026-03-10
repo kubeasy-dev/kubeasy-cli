@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"oras.land/oras-go/v2"
 	"oras.land/oras-go/v2/content/file"
@@ -46,38 +44,8 @@ func DeployChallenge(ctx context.Context, clientset *kubernetes.Clientset, dynam
 	mapper := restmapper.NewDiscoveryRESTMapper(groups)
 
 	// Find and apply YAML files from manifests/ and policies/
-	dirs := []string{"manifests", "policies"}
-	for _, dir := range dirs {
-		dirPath := filepath.Join(tmpDir, dir)
-		if _, err := os.Stat(dirPath); os.IsNotExist(err) {
-			logger.Debug("Directory '%s' not found in challenge artifact, skipping", dir)
-			continue
-		}
-
-		var files []string
-		err := filepath.WalkDir(dirPath, func(path string, d os.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if !d.IsDir() && (strings.HasSuffix(path, ".yaml") || strings.HasSuffix(path, ".yml")) {
-				files = append(files, path)
-			}
-			return nil
-		})
-		if err != nil {
-			return fmt.Errorf("failed to walk %s: %w", dir, err)
-		}
-
-		for _, f := range files {
-			logger.Debug("Applying manifest: %s", f)
-			data, err := os.ReadFile(f)
-			if err != nil {
-				return fmt.Errorf("failed to read manifest %s: %w", f, err)
-			}
-			if err := kube.ApplyManifest(ctx, data, slug, mapper, dynamicClient); err != nil {
-				return fmt.Errorf("failed to apply manifest %s: %w", filepath.Base(f), err)
-			}
-		}
+	if err := applyManifestDirs(ctx, tmpDir, slug, mapper, dynamicClient); err != nil {
+		return err
 	}
 
 	// Wait for Deployments and StatefulSets to be ready

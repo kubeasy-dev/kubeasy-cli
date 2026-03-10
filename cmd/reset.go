@@ -40,7 +40,14 @@ var resetChallengeCmd = &cobra.Command{
 
 		// Reset progress on server
 		err = ui.WaitMessage("Resetting challenge progress on server", func() error {
-			return api.ResetChallengeProgress(cmd.Context(), challengeSlug)
+			result, err := api.ResetChallenge(cmd.Context(), challengeSlug)
+			if err != nil {
+				return err
+			}
+			if !result.Success {
+				return fmt.Errorf("reset failed: %s", result.Message)
+			}
+			return nil
 		})
 		if err != nil {
 			ui.Error("Failed to reset challenge progress")

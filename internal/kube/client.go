@@ -15,6 +15,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -260,72 +261,37 @@ func WaitForDeploymentsReady(ctx context.Context, clientset *kubernetes.Clientse
 	logger.Info("Waiting for Deployments in namespace '%s' to be ready: %s", namespace, strings.Join(deploymentNames, ", "))
 	for _, deploymentName := range deploymentNames {
 		logger.Debug("Waiting for Deployment %s/%s to become ready...", namespace, deploymentName)
-		// Wait for the deployment to have the desired number of ready replicas
-		for {
+		err := wait.PollUntilContextTimeout(ctx, 2*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
 			deployment, err := clientset.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
 			if err != nil {
 				if apierrors.IsNotFound(err) {
-					// This deployment might be optional or not created yet, log and continue checking
-					logger.Warning("Deployment %s/%s not found, continuing wait...", namespace, deploymentName)
-					// Add a small delay before retrying Get
-					select {
-					case <-ctx.Done():
-						errMsg := fmt.Sprintf("timeout waiting for Deployment %s/%s to appear", namespace, deploymentName)
-						logger.Error("%s", errMsg)
-						return fmt.Errorf("%s", errMsg)
-					case <-time.After(2 * time.Second):
-						continue // Retry Get
-					}
+					logger.Warning("Deployment %s/%s not found, retrying...", namespace, deploymentName)
+					return false, nil
 				}
-				errMsg := fmt.Sprintf("error getting Deployment %s/%s: %v", namespace, deploymentName, err)
-				logger.Error("%s", errMsg)
-				return fmt.Errorf("%s", errMsg)
+				return false, fmt.Errorf("error getting Deployment %s/%s: %w", namespace, deploymentName, err)
 			}
-
-			// Check if desired replicas is set (it might not be immediately)
 			if deployment.Spec.Replicas == nil {
-				logger.Debug("Deployment %s/%s spec.replicas not set yet, continuing wait...", namespace, deploymentName)
-			} else {
-				desiredReplicas := *deployment.Spec.Replicas
-				readyReplicas := deployment.Status.ReadyReplicas
-				updatedReplicas := deployment.Status.UpdatedReplicas
-				availableReplicas := deployment.Status.AvailableReplicas
-				logger.Debug("Deployment %s/%s status: Ready=%d/%d, Updated=%d, Available=%d",
-					namespace, deploymentName, readyReplicas, desiredReplicas, updatedReplicas, availableReplicas)
-
-				// Check if the deployment is stable and ready
-				if deployment.Generation <= deployment.Status.ObservedGeneration &&
-					updatedReplicas >= desiredReplicas &&
-					availableReplicas >= desiredReplicas &&
-					readyReplicas >= desiredReplicas {
-					logger.Info("Deployment %s/%s is ready.", namespace, deploymentName)
-					break // This specific deployment is ready, move to the next one
-				}
+				logger.Debug("Deployment %s/%s spec.replicas not set yet, retrying...", namespace, deploymentName)
+				return false, nil
 			}
-
-			// Wait before checking again
-			select {
-			case <-ctx.Done():
-				// Get final status on timeout
-				finalDep, getErr := clientset.AppsV1().Deployments(namespace).Get(context.Background(), deploymentName, metav1.GetOptions{})
-				finalStatus := "Unknown"
-				if getErr != nil {
-					finalStatus = fmt.Sprintf("Error getting status (%v)", getErr)
-				} else if finalDep.Spec.Replicas != nil {
-					finalStatus = fmt.Sprintf("Ready=%d/%d, Updated=%d, Available=%d, Generation=%d, ObservedGeneration=%d",
-						finalDep.Status.ReadyReplicas, *finalDep.Spec.Replicas, finalDep.Status.UpdatedReplicas,
-						finalDep.Status.AvailableReplicas, finalDep.Generation, finalDep.Status.ObservedGeneration)
-				}
-				errMsg := fmt.Sprintf("timeout waiting for Deployment %s/%s to be ready. Final status: %s", namespace, deploymentName, finalStatus)
-				logger.Error("%s", errMsg)
-				return fmt.Errorf("%s", errMsg)
-			case <-time.After(2 * time.Second):
-				logger.Debug("Retrying status check for Deployment %s/%s...", namespace, deploymentName)
-				// Continue loop
+			desired := *deployment.Spec.Replicas
+			logger.Debug("Deployment %s/%s: Ready=%d/%d, Updated=%d, Available=%d",
+				namespace, deploymentName,
+				deployment.Status.ReadyReplicas, desired,
+				deployment.Status.UpdatedReplicas, deployment.Status.AvailableReplicas)
+			if deployment.Generation <= deployment.Status.ObservedGeneration &&
+				deployment.Status.UpdatedReplicas >= desired &&
+				deployment.Status.AvailableReplicas >= desired &&
+				deployment.Status.ReadyReplicas >= desired {
+				logger.Info("Deployment %s/%s is ready.", namespace, deploymentName)
+				return true, nil
 			}
+			return false, nil
+		})
+		if err != nil {
+			return fmt.Errorf("timeout waiting for Deployment %s/%s to be ready: %w", namespace, deploymentName, err)
 		}
 	}
-
 	logger.Info("All specified Deployments in namespace %s are ready.", namespace)
 	return nil
 }
@@ -335,73 +301,38 @@ func WaitForStatefulSetsReady(ctx context.Context, clientset *kubernetes.Clients
 	logger.Info("Waiting for StatefulSets in namespace '%s' to be ready: %s", namespace, strings.Join(stsNames, ", "))
 	for _, stsName := range stsNames {
 		logger.Debug("Waiting for StatefulSet %s/%s to become ready...", namespace, stsName)
-		// Wait for the StatefulSet to have the correct number of ready replicas
-		for {
+		err := wait.PollUntilContextTimeout(ctx, 2*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
 			sts, err := clientset.AppsV1().StatefulSets(namespace).Get(ctx, stsName, metav1.GetOptions{})
 			if err != nil {
 				if apierrors.IsNotFound(err) {
-					// This STS might be optional or not created yet, log and continue checking
-					logger.Warning("StatefulSet %s/%s not found, continuing wait...", namespace, stsName)
-					// Add a small delay before retrying Get
-					select {
-					case <-ctx.Done():
-						errMsg := fmt.Sprintf("timeout waiting for StatefulSet %s/%s to appear", namespace, stsName)
-						logger.Error("%s", errMsg)
-						return fmt.Errorf("%s", errMsg)
-					case <-time.After(2 * time.Second):
-						continue // Retry Get
-					}
+					logger.Warning("StatefulSet %s/%s not found, retrying...", namespace, stsName)
+					return false, nil
 				}
-				errMsg := fmt.Sprintf("error getting StatefulSet %s/%s: %v", namespace, stsName, err)
-				logger.Error("%s", errMsg)
-				return fmt.Errorf("%s", errMsg)
+				return false, fmt.Errorf("error getting StatefulSet %s/%s: %w", namespace, stsName, err)
 			}
-
-			// Check if desired replicas is set (it might not be immediately)
 			if sts.Spec.Replicas == nil {
-				logger.Debug("StatefulSet %s/%s spec.replicas not set yet, continuing wait...", namespace, stsName)
-			} else {
-				desiredReplicas := *sts.Spec.Replicas
-				readyReplicas := sts.Status.ReadyReplicas
-				updatedReplicas := sts.Status.UpdatedReplicas // Use UpdatedReplicas for StatefulSets as well
-				currentRevision := sts.Status.CurrentRevision
-				updateRevision := sts.Status.UpdateRevision
-				logger.Debug("StatefulSet %s/%s status: ReadyReplicas=%d, DesiredReplicas=%d, UpdatedReplicas=%d, CurrentRevision=%s, UpdateRevision=%s",
-					namespace, stsName, readyReplicas, desiredReplicas, updatedReplicas, currentRevision, updateRevision)
-
-				// Check if the StatefulSet is stable and ready
-				if sts.Generation <= sts.Status.ObservedGeneration &&
-					readyReplicas >= desiredReplicas &&
-					updatedReplicas >= desiredReplicas && // Ensure pods are updated
-					currentRevision == updateRevision { // Ensure update rollout is complete
-					logger.Info("StatefulSet %s/%s is ready.", namespace, stsName)
-					break // This specific StatefulSet is ready, move to the next one
-				}
+				logger.Debug("StatefulSet %s/%s spec.replicas not set yet, retrying...", namespace, stsName)
+				return false, nil
 			}
-
-			// Wait before checking again
-			select {
-			case <-ctx.Done():
-				// Get final status on timeout
-				finalSts, getErr := clientset.AppsV1().StatefulSets(namespace).Get(context.Background(), stsName, metav1.GetOptions{})
-				finalStatus := "Unknown"
-				if getErr != nil {
-					finalStatus = fmt.Sprintf("Error getting status (%v)", getErr)
-				} else if finalSts.Spec.Replicas != nil {
-					finalStatus = fmt.Sprintf("Ready=%d/%d, Updated=%d, Generation=%d, ObservedGeneration=%d, CurrentRevision=%s, UpdateRevision=%s",
-						finalSts.Status.ReadyReplicas, *finalSts.Spec.Replicas, finalSts.Status.UpdatedReplicas,
-						finalSts.Generation, finalSts.Status.ObservedGeneration, finalSts.Status.CurrentRevision, finalSts.Status.UpdateRevision)
-				}
-				errMsg := fmt.Sprintf("timeout waiting for StatefulSet %s/%s to be ready. Final status: %s", namespace, stsName, finalStatus)
-				logger.Error("%s", errMsg)
-				return fmt.Errorf("%s", errMsg)
-			case <-time.After(2 * time.Second):
-				logger.Debug("Retrying status check for StatefulSet %s/%s...", namespace, stsName)
-				// Continue loop
+			desired := *sts.Spec.Replicas
+			logger.Debug("StatefulSet %s/%s: Ready=%d/%d, Updated=%d, CurrentRevision=%s, UpdateRevision=%s",
+				namespace, stsName,
+				sts.Status.ReadyReplicas, desired,
+				sts.Status.UpdatedReplicas,
+				sts.Status.CurrentRevision, sts.Status.UpdateRevision)
+			if sts.Generation <= sts.Status.ObservedGeneration &&
+				sts.Status.ReadyReplicas >= desired &&
+				sts.Status.UpdatedReplicas >= desired &&
+				sts.Status.CurrentRevision == sts.Status.UpdateRevision {
+				logger.Info("StatefulSet %s/%s is ready.", namespace, stsName)
+				return true, nil
 			}
+			return false, nil
+		})
+		if err != nil {
+			return fmt.Errorf("timeout waiting for StatefulSet %s/%s to be ready: %w", namespace, stsName, err)
 		}
 	}
-
 	logger.Info("All specified StatefulSets in namespace %s are ready.", namespace)
 	return nil
 }

@@ -31,7 +31,7 @@ func getChallenge(slug string) (*api.ChallengeEntity, error) {
 		return nil, err
 	}
 
-	challenge, err := api.GetChallenge(context.Background(), slug)
+	challenge, err := api.GetChallengeBySlug(context.Background(), slug)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch challenge: %w", err)
 	}

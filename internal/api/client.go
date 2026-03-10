@@ -73,11 +73,6 @@ func Login(ctx context.Context) (*LoginResponse, error) {
 	return result, nil
 }
 
-// GetUserProfile is an alias for GetProfile for consistency with type names
-func GetUserProfile(ctx context.Context) (*UserProfile, error) {
-	return GetProfile(ctx)
-}
-
 // GetChallengeBySlug fetches a challenge by its slug
 func GetChallengeBySlug(ctx context.Context, slug string) (*ChallengeEntity, error) {
 	client, err := NewAuthenticatedClient()
@@ -167,12 +162,6 @@ func StartChallengeWithResponse(ctx context.Context, slug string) (*ChallengeSta
 	return result, nil
 }
 
-// StartChallenge starts a challenge for the user (backward compatibility wrapper)
-func StartChallenge(ctx context.Context, slug string) error {
-	_, err := StartChallengeWithResponse(ctx, slug)
-	return err
-}
-
 // SubmitChallenge submits a challenge with validation results
 func SubmitChallenge(ctx context.Context, slug string, req ChallengeSubmitRequest) (*ChallengeSubmitResponse, error) {
 	client, err := NewAuthenticatedClient()
@@ -217,37 +206,6 @@ func SubmitChallenge(ctx context.Context, slug string, req ChallengeSubmitReques
 	}
 
 	return nil, parseErrorResponse(resp.HTTPResponse, resp.Body)
-}
-
-// GetChallenge is a wrapper for GetChallengeBySlug for backward compatibility
-func GetChallenge(ctx context.Context, slug string) (*ChallengeEntity, error) {
-	return GetChallengeBySlug(ctx, slug)
-}
-
-// GetChallengeProgress fetches the challenge status (backward compatibility)
-func GetChallengeProgress(ctx context.Context, slug string) (*ChallengeStatusResponse, error) {
-	return GetChallengeStatus(ctx, slug)
-}
-
-// SendSubmit submits a challenge with raw validation results from CRDs
-func SendSubmit(ctx context.Context, challengeSlug string, results []ObjectiveResult) error {
-	req := ChallengeSubmitRequest{
-		Results: results,
-	}
-
-	result, err := SubmitChallenge(ctx, challengeSlug, req)
-	if err != nil {
-		return err
-	}
-
-	if !result.Success {
-		if result.Message != nil {
-			return fmt.Errorf("submission failed: %s", *result.Message)
-		}
-		return fmt.Errorf("submission failed")
-	}
-
-	return nil
 }
 
 // ResetChallenge resets the user's progress for a challenge
@@ -361,18 +319,4 @@ func GetDifficulties(ctx context.Context) ([]string, error) {
 		difficulties[i] = string(d)
 	}
 	return difficulties, nil
-}
-
-// ResetChallengeProgress is a wrapper for ResetChallenge for backward compatibility
-func ResetChallengeProgress(ctx context.Context, slugOrID string) error {
-	result, err := ResetChallenge(ctx, slugOrID)
-	if err != nil {
-		return err
-	}
-
-	if !result.Success {
-		return fmt.Errorf("reset failed: %s", result.Message)
-	}
-
-	return nil
 }

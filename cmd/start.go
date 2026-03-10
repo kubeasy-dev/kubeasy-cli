@@ -13,9 +13,9 @@ import (
 )
 
 var (
-	apiGetChallenge         = api.GetChallenge
-	apiGetChallengeProgress = api.GetChallengeProgress
-	apiStartChallenge       = api.StartChallenge
+	apiGetChallenge         = api.GetChallengeBySlug
+	apiGetChallengeProgress = api.GetChallengeStatus
+	apiStartChallenge       = api.StartChallengeWithResponse
 )
 
 var startChallengeCmd = &cobra.Command{
@@ -109,7 +109,8 @@ var startChallengeCmd = &cobra.Command{
 
 		// Step 4: Register progress
 		err = ui.WaitMessage("Registering challenge progress", func() error {
-			return apiStartChallenge(cmd.Context(), challengeSlug)
+			_, err = apiStartChallenge(cmd.Context(), challengeSlug)
+			return err
 		})
 		if err != nil {
 			ui.Error("Failed to start challenge")

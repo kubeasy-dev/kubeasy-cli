@@ -110,7 +110,7 @@ func TestGetProfile_InvalidJSON(t *testing.T) {
 	assert.Nil(t, profile)
 }
 
-func TestGetUserProfile_Alias(t *testing.T) {
+func TestGetProfile_ReturnsFirstAndLastName(t *testing.T) {
 	setupKeyring(t, "test-token")
 	defer cleanupKeyring(t)
 
@@ -123,7 +123,7 @@ func TestGetUserProfile_Alias(t *testing.T) {
 	defer server.Close()
 	defer overrideServerURL(t, server.URL)()
 
-	profile, err := GetUserProfile(context.Background())
+	profile, err := GetProfile(context.Background())
 
 	require.NoError(t, err)
 	assert.Equal(t, "Test", profile.FirstName)
@@ -237,7 +237,7 @@ func TestStartChallengeWithResponse_Success(t *testing.T) {
 	assert.Equal(t, "Challenge started successfully", *response.Message)
 }
 
-func TestStartChallenge_BackwardCompatibility(t *testing.T) {
+func TestStartChallengeWithResponse_IgnoresResponseFields(t *testing.T) {
 	setupKeyring(t, "test-token")
 	defer cleanupKeyring(t)
 
@@ -253,7 +253,7 @@ func TestStartChallenge_BackwardCompatibility(t *testing.T) {
 	defer server.Close()
 	defer overrideServerURL(t, server.URL)()
 
-	err := StartChallenge(context.Background(), "pod-evicted")
+	_, err := StartChallengeWithResponse(context.Background(), "pod-evicted")
 
 	require.NoError(t, err)
 }
@@ -322,7 +322,7 @@ func TestSubmitChallenge_PartialSuccess(t *testing.T) {
 	assert.False(t, response.Success)
 }
 
-func TestSendSubmit_Success(t *testing.T) {
+func TestSubmitChallenge_ReturnsSuccessTrue(t *testing.T) {
 	setupKeyring(t, "test-token")
 	defer cleanupKeyring(t)
 
@@ -335,21 +335,24 @@ func TestSendSubmit_Success(t *testing.T) {
 	defer server.Close()
 	defer overrideServerURL(t, server.URL)()
 
-	results := []ObjectiveResult{
-		{ObjectiveKey: "obj-1", Passed: true, Message: strPtr("Passed")},
+	req := ChallengeSubmitRequest{
+		Results: []ObjectiveResult{
+			{ObjectiveKey: "obj-1", Passed: true, Message: strPtr("Passed")},
+		},
 	}
-	err := SendSubmit(context.Background(), "pod-evicted", results)
+	result, err := SubmitChallenge(context.Background(), "pod-evicted", req)
 
 	require.NoError(t, err)
+	assert.True(t, result.Success)
 }
 
-func TestSendSubmit_Failure(t *testing.T) {
+func TestSubmitChallenge_ReturnsSuccessFalse(t *testing.T) {
 	setupKeyring(t, "test-token")
 	defer cleanupKeyring(t)
 
 	server := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(http.StatusUnprocessableEntity)
 		response := ChallengeSubmitResponse{
 			Success: false,
 			Message: strPtr("Validation failed"),
@@ -359,13 +362,17 @@ func TestSendSubmit_Failure(t *testing.T) {
 	defer server.Close()
 	defer overrideServerURL(t, server.URL)()
 
-	results := []ObjectiveResult{
-		{ObjectiveKey: "obj-1", Passed: false, Message: strPtr("Failed")},
+	req := ChallengeSubmitRequest{
+		Results: []ObjectiveResult{
+			{ObjectiveKey: "obj-1", Passed: false, Message: strPtr("Failed")},
+		},
 	}
-	err := SendSubmit(context.Background(), "pod-evicted", results)
+	result, err := SubmitChallenge(context.Background(), "pod-evicted", req)
 
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "Validation failed")
+	require.NoError(t, err)
+	assert.False(t, result.Success)
+	require.NotNil(t, result.Message)
+	assert.Contains(t, *result.Message, "Validation failed")
 }
 
 func TestResetChallenge_Success(t *testing.T) {
@@ -394,7 +401,7 @@ func TestResetChallenge_Success(t *testing.T) {
 	assert.Equal(t, "Challenge reset successfully", response.Message)
 }
 
-func TestResetChallengeProgress_Success(t *testing.T) {
+func TestResetChallenge_ReturnsSuccessTrue(t *testing.T) {
 	setupKeyring(t, "test-token")
 	defer cleanupKeyring(t)
 
@@ -407,12 +414,13 @@ func TestResetChallengeProgress_Success(t *testing.T) {
 	defer server.Close()
 	defer overrideServerURL(t, server.URL)()
 
-	err := ResetChallengeProgress(context.Background(), "pod-evicted")
+	result, err := ResetChallenge(context.Background(), "pod-evicted")
 
 	require.NoError(t, err)
+	assert.True(t, result.Success)
 }
 
-func TestResetChallengeProgress_Failure(t *testing.T) {
+func TestResetChallenge_ReturnsSuccessFalse(t *testing.T) {
 	setupKeyring(t, "test-token")
 	defer cleanupKeyring(t)
 
@@ -428,13 +436,14 @@ func TestResetChallengeProgress_Failure(t *testing.T) {
 	defer server.Close()
 	defer overrideServerURL(t, server.URL)()
 
-	err := ResetChallengeProgress(context.Background(), "pod-evicted")
+	result, err := ResetChallenge(context.Background(), "pod-evicted")
 
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "Reset failed")
+	require.NoError(t, err)
+	assert.False(t, result.Success)
+	assert.Contains(t, result.Message, "Reset failed")
 }
 
-func TestGetChallenge_Alias(t *testing.T) {
+func TestGetChallengeBySlug_ReturnsExpectedID(t *testing.T) {
 	setupKeyring(t, "test-token")
 	defer cleanupKeyring(t)
 
@@ -456,13 +465,13 @@ func TestGetChallenge_Alias(t *testing.T) {
 	defer server.Close()
 	defer overrideServerURL(t, server.URL)()
 
-	challenge, err := GetChallenge(context.Background(), "test")
+	challenge, err := GetChallengeBySlug(context.Background(), "test")
 
 	require.NoError(t, err)
 	assert.Equal(t, 456, challenge.ID)
 }
 
-func TestGetChallengeProgress_Alias(t *testing.T) {
+func TestGetChallengeStatus_ReturnsCompletedStatus(t *testing.T) {
 	setupKeyring(t, "test-token")
 	defer cleanupKeyring(t)
 
@@ -475,7 +484,7 @@ func TestGetChallengeProgress_Alias(t *testing.T) {
 	defer server.Close()
 	defer overrideServerURL(t, server.URL)()
 
-	status, err := GetChallengeProgress(context.Background(), "test")
+	status, err := GetChallengeStatus(context.Background(), "test")
 
 	require.NoError(t, err)
 	assert.Equal(t, "completed", status.Status)

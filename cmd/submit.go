@@ -11,8 +11,8 @@ import (
 )
 
 var (
-	apiGetChallengeForSubmit = api.GetChallenge
-	apiGetProgressForSubmit  = api.GetChallengeProgress
+	apiGetChallengeForSubmit = api.GetChallengeBySlug
+	apiGetProgressForSubmit  = api.GetChallengeStatus
 )
 
 var submitCmd = &cobra.Command{
@@ -152,24 +152,26 @@ Make sure you have completed the challenge before submitting.`,
 		// Display overall result
 		ui.Section("Submission Result")
 
-		if allPassed {
-			ui.Success("All validations passed!")
-			ui.Info("Sending results to server...")
-			err = api.SendSubmit(cmd.Context(), challengeSlug, apiResults)
-			if err == nil {
-				ui.Println()
-				ui.Success(fmt.Sprintf("Congratulations! Challenge '%s' completed!", challengeSlug))
-				ui.Info("You can clean up with 'kubeasy challenge clean " + challengeSlug + "'")
-			}
-		} else {
-			ui.Error("Some validations failed")
-			ui.Info("Review the results above and try again")
-			err = api.SendSubmit(cmd.Context(), challengeSlug, apiResults)
-		}
-
+		submitReq := api.ChallengeSubmitRequest{Results: apiResults}
+		submitResult, err := api.SubmitChallenge(cmd.Context(), challengeSlug, submitReq)
 		if err != nil {
 			ui.Error("Failed to submit results")
 			return fmt.Errorf("failed to submit results: %w", err)
+		}
+
+		if allPassed && submitResult.Success {
+			ui.Success("All validations passed!")
+			ui.Println()
+			ui.Success(fmt.Sprintf("Congratulations! Challenge '%s' completed!", challengeSlug))
+			ui.Info("You can clean up with 'kubeasy challenge clean " + challengeSlug + "'")
+		} else if !allPassed {
+			ui.Error("Some validations failed")
+			ui.Info("Review the results above and try again")
+		} else if !submitResult.Success {
+			if submitResult.Message != nil {
+				return fmt.Errorf("submission failed: %s", *submitResult.Message)
+			}
+			return fmt.Errorf("submission failed")
 		}
 
 		return nil

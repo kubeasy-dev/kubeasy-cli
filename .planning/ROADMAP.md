@@ -88,10 +88,11 @@ Plans:
   1. An external check fails with a descriptive message when the server certificate is expired
   2. An external check fails with a descriptive message when the server hostname does not match the certificate SANs
   3. An external check with `insecureSkipVerify: true` succeeds against a self-signed cert issued by cert-manager in the Kind cluster
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 09-01: TBD
+- [ ] 09-01-PLAN.md — TLSConfig type + ConnectivityCheck.TLS field; loader YAML parsing tests (RED→GREEN)
+- [ ] 09-02-PLAN.md — Executor TLS logic: cert probe via tls.Dialer, expiry/SAN checks, insecureSkipVerify transport (RED→GREEN)
 
 ## Progress
 
@@ -105,4 +106,4 @@ Plans:
 | 6. Infrastructure Foundation | 4/4 | Complete   | 2026-03-11 | - |
 | 7. Probe Pod + Internal Connectivity | 2/2 | Complete   | 2026-03-11 | - |
 | 8. External HTTP | 2/2 | Complete   | 2026-03-11 | - |
-| 9. TLS Validation | v2.7.0 | 0/? | Not started | - |
+| 9. TLS Validation | v2.7.0 | 0/2 | Not started | - |

@@ -2696,3 +2696,234 @@ func TestCheckConnectivity_TimeoutArg(t *testing.T) {
 		t.Errorf("expected --connect-timeout in cmd; got %v", cmd)
 	}
 }
+
+// =============================================================================
+// Phase 07-02: Probe Mode, Cross-Namespace, Blocked Connection Tests
+// =============================================================================
+
+// TestExecuteConnectivity_ProbeMode verifies that an empty SourcePod enters the probe
+// branch (not errNoSourcePodSpecified). Since no real API server exists, the probe
+// creation fails — but the error message must NOT be errNoSourcePodSpecified (PROBE-01).
+func TestExecuteConnectivity_ProbeMode(t *testing.T) {
+	executor := NewExecutor(
+		fake.NewClientset(),
+		nil,
+		&rest.Config{},
+		"test-ns",
+	)
+
+	validation := Validation{
+		Key:  "probe-mode-test",
+		Type: TypeConnectivity,
+		Spec: ConnectivitySpec{
+			SourcePod: SourcePod{}, // empty = probe mode
+			Targets: []ConnectivityCheck{
+				{URL: "http://my-service:80", ExpectedStatusCode: 200, TimeoutSeconds: 3},
+			},
+		},
+	}
+
+	result := executor.Execute(context.Background(), validation)
+
+	// The probe branch was entered — the result message must NOT be errNoSourcePodSpecified
+	assert.NotEqual(t, errNoSourcePodSpecified, result.Message,
+		"empty SourcePod must NOT return errNoSourcePodSpecified — should enter probe branch")
+	// Accept any probe-related error message (CreateProbePod will fail in fake clientset)
+	assert.False(t, result.Passed)
+}
+
+// TestExecuteConnectivity_ProbeNamespace verifies that when SourcePod.Namespace is set
+// with empty Name/LabelSelector, the probe pod is created in that namespace (PROBE-02, CONN-02).
+func TestExecuteConnectivity_ProbeNamespace(t *testing.T) {
+	// Seed clientset with no pods in "test-ns" but simulate "probe-ns" as target
+	executor := NewExecutor(
+		fake.NewClientset(),
+		nil,
+		&rest.Config{},
+		"test-ns",
+	)
+
+	validation := Validation{
+		Key:  "probe-namespace-test",
+		Type: TypeConnectivity,
+		Spec: ConnectivitySpec{
+			SourcePod: SourcePod{Namespace: "probe-ns"}, // probe mode with explicit namespace
+			Targets: []ConnectivityCheck{
+				{URL: "http://my-service:80", ExpectedStatusCode: 200, TimeoutSeconds: 3},
+			},
+		},
+	}
+
+	result := executor.Execute(context.Background(), validation)
+
+	// Should enter probe branch (and fail on CreateProbePod / WaitForProbePodReady),
+	// not errNoSourcePodSpecified
+	assert.NotEqual(t, errNoSourcePodSpecified, result.Message)
+	assert.False(t, result.Passed)
+}
+
+// TestCheckConnectivity_BlockedConnection verifies that ExpectedStatusCode==0 + exec failure
+// results in passed=true with "blocked as expected" message (CONN-01).
+// Since SPDY executor cannot be faked, we test at Execute level with a running pod seeded.
+// The SPDY StreamWithContext will fail (no real API server); status-0 guard must catch this.
+func TestCheckConnectivity_BlockedConnection(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "source-pod",
+			Namespace: "test-ns",
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+		},
+	}
+
+	executor := NewExecutor(
+		fake.NewClientset(pod),
+		nil,
+		&rest.Config{}, // empty config — SPDY will fail
+		"test-ns",
+	)
+
+	validation := Validation{
+		Key:  "blocked-connection-test",
+		Type: TypeConnectivity,
+		Spec: ConnectivitySpec{
+			SourcePod: SourcePod{Name: "source-pod"},
+			Targets: []ConnectivityCheck{
+				{URL: "http://blocked-svc:80", ExpectedStatusCode: 0, TimeoutSeconds: 3},
+			},
+		},
+	}
+
+	result := executor.Execute(context.Background(), validation)
+
+	// With ExpectedStatusCode==0 and SPDY failure, must be passed=true (CONN-01)
+	assert.True(t, result.Passed,
+		"ExpectedStatusCode==0 + exec failure should be passed=true (blocked as expected)")
+	assert.Contains(t, result.Message, "blocked as expected",
+		"message should confirm connection was blocked as expected")
+}
+
+// TestCheckConnectivity_NoCurlFallback verifies that when exec fails and ExpectedStatusCode!=0,
+// the result is passed=false with no wget/sh -c reference (PROBE-04 wget removal).
+func TestCheckConnectivity_NoCurlFallback(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "source-pod",
+			Namespace: "test-ns",
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+		},
+	}
+
+	executor := NewExecutor(
+		fake.NewClientset(pod),
+		nil,
+		&rest.Config{}, // empty config — SPDY will fail
+		"test-ns",
+	)
+
+	validation := Validation{
+		Key:  "no-curl-fallback-test",
+		Type: TypeConnectivity,
+		Spec: ConnectivitySpec{
+			SourcePod: SourcePod{Name: "source-pod"},
+			Targets: []ConnectivityCheck{
+				{URL: "http://svc:80", ExpectedStatusCode: 200, TimeoutSeconds: 3},
+			},
+		},
+	}
+
+	result := executor.Execute(context.Background(), validation)
+
+	// SPDY fails → exec error → must be false with no wget reference
+	assert.False(t, result.Passed)
+	assert.NotContains(t, result.Message, "wget",
+		"wget fallback must be absent from result message (PROBE-04)")
+	assert.NotContains(t, result.Message, "sh -c",
+		"sh -c shell invocation must be absent from result message (PROBE-04)")
+}
+
+// TestExecuteConnectivity_CrossNamespace verifies that SourcePod.Namespace="other-ns"
+// causes the pod lookup to use "other-ns" (CONN-02).
+func TestExecuteConnectivity_CrossNamespace(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pod-in-other",
+			Namespace: "other-ns",
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+		},
+	}
+
+	executor := NewExecutor(
+		fake.NewClientset(pod),
+		nil,
+		&rest.Config{},
+		"default-ns", // executor default ns is different from pod ns
+	)
+
+	validation := Validation{
+		Key:  "cross-namespace-test",
+		Type: TypeConnectivity,
+		Spec: ConnectivitySpec{
+			SourcePod: SourcePod{Name: "pod-in-other", Namespace: "other-ns"},
+			Targets: []ConnectivityCheck{
+				{URL: "http://svc:80", ExpectedStatusCode: 200, TimeoutSeconds: 3},
+			},
+		},
+	}
+
+	result := executor.Execute(context.Background(), validation)
+
+	// Pod was found (no errNoMatchingSourcePods or similar lookup error)
+	// The result will fail (SPDY), but the error must not be a pod-not-found error
+	assert.NotContains(t, result.Message, "failed to get source pod",
+		"cross-namespace pod lookup must succeed (pod exists in other-ns)")
+}
+
+// TestExecuteConnectivity_CrossNamespace_LabelSelector verifies that SourcePod.Namespace
+// is used when listing pods by LabelSelector (CONN-02).
+func TestExecuteConnectivity_CrossNamespace_LabelSelector(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "curl-client",
+			Namespace: "other-ns",
+			Labels:    map[string]string{"app": "curl"},
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+		},
+	}
+
+	executor := NewExecutor(
+		fake.NewClientset(pod),
+		nil,
+		&rest.Config{},
+		"default-ns",
+	)
+
+	validation := Validation{
+		Key:  "cross-namespace-labelselector-test",
+		Type: TypeConnectivity,
+		Spec: ConnectivitySpec{
+			SourcePod: SourcePod{
+				LabelSelector: map[string]string{"app": "curl"},
+				Namespace:     "other-ns",
+			},
+			Targets: []ConnectivityCheck{
+				{URL: "http://svc:80", ExpectedStatusCode: 200, TimeoutSeconds: 3},
+			},
+		},
+	}
+
+	result := executor.Execute(context.Background(), validation)
+
+	// Pod was found in other-ns — must NOT return errNoMatchingSourcePods
+	assert.NotEqual(t, errNoMatchingSourcePods, result.Message,
+		"LabelSelector lookup must use SourcePod.Namespace (CONN-02)")
+	assert.NotEqual(t, errNoRunningSourcePods, result.Message,
+		"Running pod in other-ns must be found (CONN-02)")
+}

@@ -768,3 +768,34 @@ objectives:
 		require.Len(t, config.Validations, 1)
 	})
 }
+
+// TestParse_ConnectivityProbeMode verifies that a connectivity spec with empty sourcePod
+// (probe mode) is accepted by Parse without error (PROBE-01, PROBE-02).
+func TestParse_ConnectivityProbeMode(t *testing.T) {
+	yamlData := `
+objectives:
+  - key: network-blocked
+    title: Connection Blocked
+    description: Verify NetworkPolicy blocks traffic
+    order: 1
+    type: connectivity
+    spec:
+      sourcePod: {}
+      targets:
+        - url: http://my-service:80
+          expectedStatusCode: 0
+          timeoutSeconds: 3
+`
+
+	config, err := Parse([]byte(yamlData))
+	require.NoError(t, err, "probe mode (empty sourcePod) must not be rejected by Parse")
+	require.Len(t, config.Validations, 1)
+
+	spec, ok := config.Validations[0].Spec.(ConnectivitySpec)
+	require.True(t, ok, "spec should be ConnectivitySpec")
+	assert.Equal(t, "", spec.SourcePod.Name, "probe mode: Name must be empty")
+	assert.Empty(t, spec.SourcePod.LabelSelector, "probe mode: LabelSelector must be empty")
+	assert.Equal(t, "", spec.SourcePod.Namespace, "probe mode: Namespace must be empty")
+	require.Len(t, spec.Targets, 1)
+	assert.Equal(t, 0, spec.Targets[0].ExpectedStatusCode)
+}

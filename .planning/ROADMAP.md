@@ -74,11 +74,11 @@ Plans:
   2. External check with a `hostHeader` field routes correctly to the target Ingress/Gateway virtual host
   3. Challenge spec using a sslip.io hostname (e.g., `myapp.127-0-0-1.sslip.io:8080`) resolves correctly and routes to the Ingress/Gateway virtual host without any local DNS configuration
   4. External check works on macOS via sslip.io hostnames encoding localhost (127.0.0.1) — no Docker IP routing issues
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 08-01: TBD
-- [ ] 08-02: TBD
+- [ ] 08-01-PLAN.md — Types + loader validation: Mode/HostHeader fields, parse-time mode validation, loader tests (RED→GREEN)
+- [ ] 08-02-PLAN.md — Executor external mode: checkExternalConnectivity via net/http, executeConnectivity branch, executor tests (RED→GREEN)
 
 ### Phase 9: TLS Validation
 **Goal**: Users can validate TLS certificates as part of external connectivity checks — expiry, hostname SANs, and self-signed cert tolerance are all controllable per validation spec
@@ -104,5 +104,5 @@ Plans:
 | 5. Security Hardening | v1.0 | 2/2 | Complete | 2026-03-10 |
 | 6. Infrastructure Foundation | 4/4 | Complete   | 2026-03-11 | - |
 | 7. Probe Pod + Internal Connectivity | 2/2 | Complete   | 2026-03-11 | - |
-| 8. External HTTP | v2.7.0 | 0/? | Not started | - |
+| 8. External HTTP | v2.7.0 | 0/2 | Not started | - |
 | 9. TLS Validation | v2.7.0 | 0/? | Not started | - |

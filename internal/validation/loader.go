@@ -230,6 +230,15 @@ func parseSpec(v *Validation) error {
 		if err := yaml.Unmarshal(specYAML, &spec); err != nil {
 			return err
 		}
+		// EXT-01: fail fast if mode: external is combined with sourcePod (incoherent spec)
+		if spec.Mode == "external" {
+			sp := spec.SourcePod
+			if sp.Name != "" || len(sp.LabelSelector) > 0 || sp.Namespace != "" {
+				return fmt.Errorf("mode: external is incompatible with sourcePod (remove sourcePod or use mode: internal)")
+			}
+		} else if spec.Mode != "" && spec.Mode != "internal" {
+			return fmt.Errorf("invalid mode %q: must be \"internal\" or \"external\"", spec.Mode)
+		}
 		if err := validateSourcePod(spec.SourcePod); err != nil {
 			return err
 		}

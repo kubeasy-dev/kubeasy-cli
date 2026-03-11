@@ -753,6 +753,99 @@ objectives:
 	})
 }
 
+// TestParse_Connectivity_ExternalMode verifies that mode: external parses correctly (EXT-01)
+func TestParse_Connectivity_ExternalMode(t *testing.T) {
+	yaml := `
+objectives:
+  - key: ext-check
+    type: connectivity
+    spec:
+      mode: external
+      targets:
+        - url: http://myapp.127-0-0-1.sslip.io:8080/
+          expectedStatusCode: 200
+`
+	cfg, err := Parse([]byte(yaml))
+	require.NoError(t, err)
+	spec := cfg.Validations[0].Spec.(ConnectivitySpec)
+	assert.Equal(t, "external", spec.Mode)
+	assert.Equal(t, "http://myapp.127-0-0-1.sslip.io:8080/", spec.Targets[0].URL)
+}
+
+// TestParse_Connectivity_ExternalModeWithSourcePod verifies that mode: external + sourcePod is rejected (EXT-02)
+func TestParse_Connectivity_ExternalModeWithSourcePod(t *testing.T) {
+	yaml := `
+objectives:
+  - key: ext-check
+    type: connectivity
+    spec:
+      mode: external
+      sourcePod:
+        name: my-pod
+      targets:
+        - url: http://example.com/
+          expectedStatusCode: 200
+`
+	_, err := Parse([]byte(yaml))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "incompatible with sourcePod")
+}
+
+// TestParse_Connectivity_SslipIO verifies that sslip.io URLs parse without modification (EXT-03)
+func TestParse_Connectivity_SslipIO(t *testing.T) {
+	yaml := `
+objectives:
+  - key: sslip-check
+    type: connectivity
+    spec:
+      mode: external
+      targets:
+        - url: http://myapp.127-0-0-1.sslip.io:8080/health
+          expectedStatusCode: 200
+          timeoutSeconds: 10
+`
+	cfg, err := Parse([]byte(yaml))
+	require.NoError(t, err)
+	spec := cfg.Validations[0].Spec.(ConnectivitySpec)
+	assert.Equal(t, "http://myapp.127-0-0-1.sslip.io:8080/health", spec.Targets[0].URL)
+}
+
+// TestParse_Connectivity_InvalidMode verifies that unknown mode values are rejected (EXT-01)
+func TestParse_Connectivity_InvalidMode(t *testing.T) {
+	yaml := `
+objectives:
+  - key: bad-check
+    type: connectivity
+    spec:
+      mode: banana
+      targets:
+        - url: http://example.com/
+          expectedStatusCode: 200
+`
+	_, err := Parse([]byte(yaml))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid mode")
+}
+
+// TestParse_Connectivity_NoMode verifies that existing specs without mode field parse unchanged (backwards compat)
+func TestParse_Connectivity_NoMode(t *testing.T) {
+	yaml := `
+objectives:
+  - key: internal-check
+    type: connectivity
+    spec:
+      sourcePod:
+        name: my-pod
+      targets:
+        - url: http://service:80/
+          expectedStatusCode: 200
+`
+	cfg, err := Parse([]byte(yaml))
+	require.NoError(t, err)
+	spec := cfg.Validations[0].Spec.(ConnectivitySpec)
+	assert.Equal(t, "", spec.Mode)
+}
+
 // TestParse_ConnectivityProbeMode verifies that a connectivity spec with empty sourcePod
 // (probe mode) is accepted by Parse without error (PROBE-01, PROBE-02).
 func TestParse_ConnectivityProbeMode(t *testing.T) {

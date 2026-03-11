@@ -5,6 +5,7 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -303,6 +304,130 @@ func TestIsCertManagerReady(t *testing.T) {
 			assert.Equal(t, tt.wantReady, ready)
 		})
 	}
+}
+
+// --- waitForCertManagerWebhookEndpoints tests ---
+
+func TestWaitForCertManagerWebhookEndpoints_AlreadyReady(t *testing.T) {
+	// Endpoint has addresses already present — should return nil immediately.
+	// corev1.Endpoints is deprecated in K8s v1.33+ in favour of EndpointSlice,
+	// but waitForCertManagerWebhookEndpoints uses the legacy Endpoints API so tests
+	// must use the same type to populate the fake clientset.
+	ep := &corev1.Endpoints{ //nolint:staticcheck // matches production API
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cert-manager-webhook",
+			Namespace: certManagerNamespace,
+		},
+		Subsets: []corev1.EndpointSubset{ //nolint:staticcheck
+			{
+				Addresses: []corev1.EndpointAddress{
+					{IP: "10.0.0.1"},
+				},
+			},
+		},
+	}
+	clientset := fake.NewClientset(ep)
+	ctx := context.Background()
+	err := waitForCertManagerWebhookEndpoints(ctx, clientset)
+	assert.NoError(t, err, "should return nil when endpoint addresses are already present")
+}
+
+func TestWaitForCertManagerWebhookEndpoints_Timeout(t *testing.T) {
+	// Endpoint exists but has no addresses — should return error after deadline.
+	ep := &corev1.Endpoints{ //nolint:staticcheck // matches production API
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cert-manager-webhook",
+			Namespace: certManagerNamespace,
+		},
+		Subsets: []corev1.EndpointSubset{}, //nolint:staticcheck
+	}
+	clientset := fake.NewClientset(ep)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	err := waitForCertManagerWebhookEndpoints(ctx, clientset)
+	assert.Error(t, err, "should return error when context deadline exceeds before addresses appear")
+}
+
+// --- nginx-ingress URL and readiness tests ---
+
+func TestNginxIngressURL(t *testing.T) {
+	t.Run("URL contains version", func(t *testing.T) {
+		url := nginxIngressKindManifestURL()
+		assert.Contains(t, url, NginxIngressVersion)
+	})
+	t.Run("URL contains correct host", func(t *testing.T) {
+		url := nginxIngressKindManifestURL()
+		assert.Contains(t, url, "raw.githubusercontent.com/kubernetes/ingress-nginx")
+	})
+	t.Run("URL is HTTPS", func(t *testing.T) {
+		url := nginxIngressKindManifestURL()
+		assert.Contains(t, url, "https://")
+	})
+}
+
+func TestGatewayAPIURL(t *testing.T) {
+	t.Run("URL contains version", func(t *testing.T) {
+		url := gatewayAPICRDsURL()
+		assert.Contains(t, url, GatewayAPICRDsVersion)
+	})
+	t.Run("URL contains correct host", func(t *testing.T) {
+		url := gatewayAPICRDsURL()
+		assert.Contains(t, url, "github.com/kubernetes-sigs/gateway-api")
+	})
+	t.Run("URL is HTTPS", func(t *testing.T) {
+		url := gatewayAPICRDsURL()
+		assert.Contains(t, url, "https://")
+	})
+}
+
+func TestIsNginxIngressReady(t *testing.T) {
+	const ns = "ingress-nginx"
+	const depName = "ingress-nginx-controller"
+
+	t.Run("namespace missing returns false", func(t *testing.T) {
+		clientset := fake.NewClientset()
+		ready, err := isNginxIngressReadyWithClient(context.Background(), clientset)
+		require.NoError(t, err)
+		assert.False(t, ready)
+	})
+
+	t.Run("deployment not found returns false", func(t *testing.T) {
+		clientset := fake.NewClientset(makeNamespace(ns))
+		ready, err := isNginxIngressReadyWithClient(context.Background(), clientset)
+		require.NoError(t, err)
+		assert.False(t, ready)
+	})
+
+	t.Run("deployment not ready returns false", func(t *testing.T) {
+		clientset := fake.NewClientset(
+			makeNamespace(ns),
+			makeDeployment(ns, depName, 1, false),
+		)
+		ready, err := isNginxIngressReadyWithClient(context.Background(), clientset)
+		require.NoError(t, err)
+		assert.False(t, ready)
+	})
+
+	t.Run("deployment ready returns true", func(t *testing.T) {
+		clientset := fake.NewClientset(
+			makeNamespace(ns),
+			makeDeployment(ns, depName, 1, true),
+		)
+		ready, err := isNginxIngressReadyWithClient(context.Background(), clientset)
+		require.NoError(t, err)
+		assert.True(t, ready)
+	})
+}
+
+func TestIsGatewayAPICRDsInstalled(t *testing.T) {
+	t.Run("fake clientset returns false (not installed)", func(t *testing.T) {
+		// fake.NewClientset() Discovery().ServerResourcesForGroupVersion returns not-found
+		// which means Gateway API CRDs are not installed — this is the expected behavior.
+		clientset := fake.NewClientset()
+		installed, err := isGatewayAPICRDsInstalled(context.Background(), clientset)
+		require.NoError(t, err)
+		assert.False(t, installed)
+	})
 }
 
 // --- hasExtraPortMappingsAt tests ---

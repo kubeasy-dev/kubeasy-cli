@@ -11,7 +11,10 @@ import (
 	"github.com/kubeasy-dev/kubeasy-cli/internal/kube"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/restmapper"
 	kindv1alpha4 "sigs.k8s.io/kind/pkg/apis/config/v1alpha4"
@@ -329,4 +332,237 @@ func isCertManagerReadyWithClient(ctx context.Context, clientset kubernetes.Inte
 
 	logger.Info("cert-manager is already installed and ready")
 	return true, nil
+}
+
+// waitForCertManagerWebhookEndpoints polls the cert-manager-webhook Endpoints object
+// until at least one address is present in any subset. It polls every 5 seconds up to
+// the deadline of ctx (max 60 seconds recommended at call site).
+func waitForCertManagerWebhookEndpoints(ctx context.Context, clientset kubernetes.Interface) error {
+	return wait.PollUntilContextTimeout(ctx, 5*time.Second, 60*time.Second, true, func(ctx context.Context) (bool, error) {
+		ep, err := clientset.CoreV1().Endpoints(certManagerNamespace).Get(ctx, "cert-manager-webhook", metav1.GetOptions{})
+		if err != nil {
+			return false, nil
+		}
+		for _, subset := range ep.Subsets {
+			if len(subset.Addresses) > 0 {
+				return true, nil
+			}
+		}
+		return false, nil
+	})
+}
+
+// installCertManager installs cert-manager using a two-pass apply: CRDs first, then the
+// controller manifest. After the deployments are ready it polls the webhook Endpoints
+// until at least one address is present. Returns a ComponentResult — never an error.
+// Called by setup.go (plan 04) when setting up the infrastructure.
+func installCertManager(ctx context.Context, clientset *kubernetes.Clientset, dynamicClient dynamic.Interface, mapper meta.RESTMapper) ComponentResult { //nolint:unused // used by setup.go in plan 04
+	// Idempotency check
+	ready, _ := isCertManagerReadyWithClient(ctx, clientset)
+	if ready {
+		return ComponentResult{Name: "cert-manager", Status: StatusReady, Message: "already installed"}
+	}
+
+	// Pass 1: CRDs
+	logger.Info("Installing cert-manager %s (pass 1: CRDs)...", CertManagerVersion)
+	crdsManifest, err := kube.FetchManifest(certManagerCRDsURL())
+	if err != nil {
+		return notReady("cert-manager", err)
+	}
+	if err := kube.CreateNamespace(ctx, clientset, certManagerNamespace); err != nil {
+		return notReady("cert-manager", err)
+	}
+	if err := kube.ApplyManifest(ctx, crdsManifest, certManagerNamespace, mapper, dynamicClient); err != nil {
+		return notReady("cert-manager", err)
+	}
+
+	// Pass 2: controller (cert-manager.yaml includes CRDs too — apply is idempotent)
+	logger.Info("Installing cert-manager %s (pass 2: controller)...", CertManagerVersion)
+	ctrlManifest, err := kube.FetchManifest(certManagerInstallURL())
+	if err != nil {
+		return notReady("cert-manager", err)
+	}
+	if err := kube.ApplyManifest(ctx, ctrlManifest, certManagerNamespace, mapper, dynamicClient); err != nil {
+		return notReady("cert-manager", err)
+	}
+
+	// Wait for all three deployments to be ready
+	certManagerDeployments := []string{"cert-manager", "cert-manager-cainjector", "cert-manager-webhook"}
+	if err := kube.WaitForDeploymentsReady(ctx, clientset, certManagerNamespace, certManagerDeployments); err != nil {
+		return notReady("cert-manager", err)
+	}
+
+	// Extra webhook endpoint polling — cert-manager webhook needs time after pods are ready
+	if err := waitForCertManagerWebhookEndpoints(ctx, clientset); err != nil {
+		return notReady("cert-manager", err)
+	}
+
+	logger.Info("cert-manager installed and webhook ready.")
+	return ComponentResult{Name: "cert-manager", Status: StatusReady}
+}
+
+// nginxIngressKindManifestURL returns the URL for the nginx-ingress Kind-specific deploy manifest.
+func nginxIngressKindManifestURL() string {
+	return fmt.Sprintf(
+		"https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-%s/deploy/static/provider/kind/deploy.yaml",
+		NginxIngressVersion,
+	)
+}
+
+// gatewayAPICRDsURL returns the URL for the Gateway API CRDs manifest.
+func gatewayAPICRDsURL() string {
+	return fmt.Sprintf(
+		"https://github.com/kubernetes-sigs/gateway-api/releases/download/%s/standard-install.yaml",
+		GatewayAPICRDsVersion,
+	)
+}
+
+const nginxIngressNamespace = "ingress-nginx"
+
+// gatewayClassManifest is the GatewayClass resource for cloud-provider-kind.
+// Applied after the Gateway API CRDs so the GatewayClass API is available.
+// Used by installGatewayAPI (called by setup.go in plan 04).
+var gatewayClassManifest = "apiVersion: gateway.networking.k8s.io/v1\nkind: GatewayClass\nmetadata:\n  name: cloud-provider-kind\nspec:\n  controllerName: sigs.k8s.io/cloud-provider-kind\n" //nolint:unused // used by installGatewayAPI in plan 04
+
+// isNginxIngressReadyWithClient checks nginx-ingress readiness using the provided client.
+// It returns true when the ingress-nginx namespace exists and the ingress-nginx-controller
+// deployment has all replicas ready.
+func isNginxIngressReadyWithClient(ctx context.Context, clientset kubernetes.Interface) (bool, error) {
+	// Check ingress-nginx namespace exists
+	_, err := clientset.CoreV1().Namespaces().Get(ctx, nginxIngressNamespace, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.Debug("ingress-nginx namespace does not exist")
+			return false, nil
+		}
+		return false, fmt.Errorf("error checking ingress-nginx namespace: %w", err)
+	}
+
+	// Check ingress-nginx-controller deployment
+	dep, err := clientset.AppsV1().Deployments(nginxIngressNamespace).Get(ctx, "ingress-nginx-controller", metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.Debug("ingress-nginx-controller deployment not found")
+			return false, nil
+		}
+		return false, fmt.Errorf("error checking ingress-nginx-controller deployment: %w", err)
+	}
+	if dep.Status.ReadyReplicas == 0 || dep.Status.ReadyReplicas != dep.Status.Replicas {
+		logger.Debug("ingress-nginx-controller not ready (Ready: %d/%d)", dep.Status.ReadyReplicas, dep.Status.Replicas)
+		return false, nil
+	}
+
+	logger.Info("nginx-ingress is already installed and ready")
+	return true, nil
+}
+
+// isGatewayAPICRDsInstalled checks if Gateway API CRDs are installed by querying the
+// discovery API for the gateway.networking.k8s.io/v1 group.
+// Returns true if the API group is registered, false otherwise.
+func isGatewayAPICRDsInstalled(_ context.Context, clientset kubernetes.Interface) (bool, error) {
+	_, err := clientset.Discovery().ServerResourcesForGroupVersion("gateway.networking.k8s.io/v1")
+	if err != nil {
+		logger.Debug("Gateway API CRDs not installed: %v", err)
+		return false, nil
+	}
+	return true, nil
+}
+
+// installNginxIngress installs the nginx-ingress controller for Kind clusters.
+// It returns ComponentResult{Status: StatusReady} if already installed or on success,
+// and ComponentResult{Status: StatusNotReady} on any installation error.
+// Called by setup.go (plan 04) when setting up the infrastructure.
+func installNginxIngress(ctx context.Context, clientset kubernetes.Interface, dynamicClient dynamic.Interface, mapper meta.RESTMapper) ComponentResult { //nolint:unused // used by setup.go in plan 04
+	const name = "nginx-ingress"
+
+	ready, err := isNginxIngressReadyWithClient(ctx, clientset)
+	if err != nil {
+		return notReady(name, err)
+	}
+	if ready {
+		logger.Info("nginx-ingress is already installed and ready, skipping installation")
+		return ComponentResult{Name: name, Status: StatusReady, Message: "already installed"}
+	}
+
+	logger.Info("Installing nginx-ingress %s...", NginxIngressVersion)
+
+	if err := kube.CreateNamespace(ctx, clientset, nginxIngressNamespace); err != nil {
+		return notReady(name, fmt.Errorf("failed to create ingress-nginx namespace: %w", err))
+	}
+
+	manifestURL := nginxIngressKindManifestURL()
+	logger.Debug("Fetching nginx-ingress manifest from %s", manifestURL)
+	manifest, err := kube.FetchManifest(manifestURL)
+	if err != nil {
+		return notReady(name, fmt.Errorf("failed to download nginx-ingress manifest: %w", err))
+	}
+
+	if err := kube.ApplyManifest(ctx, manifest, nginxIngressNamespace, mapper, dynamicClient); err != nil {
+		return notReady(name, fmt.Errorf("failed to apply nginx-ingress manifest: %w", err))
+	}
+
+	// kube.WaitForDeploymentsReady requires *kubernetes.Clientset.
+	cs, ok := clientset.(*kubernetes.Clientset)
+	if !ok {
+		return notReady(name, fmt.Errorf("internal error: clientset is not *kubernetes.Clientset"))
+	}
+	if err := kube.WaitForDeploymentsReady(ctx, cs, nginxIngressNamespace, []string{"ingress-nginx-controller"}); err != nil {
+		return notReady(name, fmt.Errorf("nginx-ingress deployment failed to become ready: %w", err))
+	}
+
+	logger.Info("nginx-ingress installed and ready.")
+	return ComponentResult{Name: name, Status: StatusReady, Message: "installed successfully"}
+}
+
+// installGatewayAPI installs Gateway API CRDs and creates the cloud-provider-kind GatewayClass.
+// It performs a two-pass apply: first the CRDs, then rebuilds the REST mapper, then the GatewayClass.
+// Returns ComponentResult{Status: StatusReady} if already installed or on success,
+// and ComponentResult{Status: StatusNotReady} on any installation error.
+func installGatewayAPI(ctx context.Context, clientset kubernetes.Interface, dynamicClient dynamic.Interface) ComponentResult { //nolint:unused // used by setup.go in plan 04
+	const name = "gateway-api"
+
+	installed, err := isGatewayAPICRDsInstalled(ctx, clientset)
+	if err != nil {
+		return notReady(name, err)
+	}
+	if installed {
+		logger.Info("Gateway API CRDs are already installed, skipping installation")
+		return ComponentResult{Name: name, Status: StatusReady, Message: "already installed"}
+	}
+
+	logger.Info("Installing Gateway API CRDs %s...", GatewayAPICRDsVersion)
+
+	// Pass 1: Apply CRDs manifest (cluster-scoped, empty namespace)
+	crdsURL := gatewayAPICRDsURL()
+	logger.Debug("Fetching Gateway API CRDs manifest from %s", crdsURL)
+	crdsManifest, err := kube.FetchManifest(crdsURL)
+	if err != nil {
+		return notReady(name, fmt.Errorf("failed to download Gateway API CRDs manifest: %w", err))
+	}
+
+	// Build REST mapper for initial apply
+	groups, err := restmapper.GetAPIGroupResources(clientset.Discovery())
+	if err != nil {
+		return notReady(name, fmt.Errorf("failed to discover API resources: %w", err))
+	}
+	mapper := restmapper.NewDiscoveryRESTMapper(groups)
+
+	if err := kube.ApplyManifest(ctx, crdsManifest, "", mapper, dynamicClient); err != nil {
+		return notReady(name, fmt.Errorf("failed to apply Gateway API CRDs: %w", err))
+	}
+	logger.Info("Gateway API CRDs applied.")
+
+	// Pass 2: Rebuild REST mapper so GatewayClass type is resolvable, then apply GatewayClass
+	freshGroups, err := restmapper.GetAPIGroupResources(clientset.Discovery())
+	if err != nil {
+		return notReady(name, fmt.Errorf("failed to refresh API resources after CRD install: %w", err))
+	}
+	freshMapper := restmapper.NewDiscoveryRESTMapper(freshGroups)
+
+	if err := kube.ApplyManifest(ctx, []byte(gatewayClassManifest), "", freshMapper, dynamicClient); err != nil {
+		return notReady(name, fmt.Errorf("failed to apply GatewayClass manifest: %w", err))
+	}
+	logger.Info("GatewayClass cloud-provider-kind created.")
+
+	return ComponentResult{Name: name, Status: StatusReady, Message: "installed successfully"}
 }

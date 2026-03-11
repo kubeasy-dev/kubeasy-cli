@@ -208,6 +208,28 @@ type ConnectivityCheck struct {
 	// Only used when Mode is "external". Absent: Host is derived from URL automatically.
 	// Use when URL is a direct IP but Ingress routes by hostname.
 	HostHeader string `yaml:"hostHeader,omitempty" json:"hostHeader,omitempty"`
+	// TLS configures TLS validation behaviour for this external connectivity check.
+	// Optional — nil means no explicit TLS checks (Go default TLS verification applies).
+	// Only meaningful when Mode is "external" and URL scheme is https://.
+	TLS *TLSConfig `yaml:"tls,omitempty" json:"tls,omitempty"`
+}
+
+// TLSConfig controls TLS validation behaviour for a single external connectivity check.
+// Optional — omitting it leaves Go's default TLS verification in place.
+// InsecureSkipVerify takes priority over ValidateExpiry and ValidateSANs when true.
+type TLSConfig struct {
+	// InsecureSkipVerify skips ALL certificate checks (CA trust, expiry, SANs).
+	// Primary use: cert-manager self-signed certs in Kind clusters.
+	InsecureSkipVerify bool `yaml:"insecureSkipVerify,omitempty" json:"insecureSkipVerify,omitempty"`
+
+	// ValidateExpiry explicitly checks cert NotAfter > now with a friendly error message.
+	// Only active when InsecureSkipVerify is false.
+	ValidateExpiry bool `yaml:"validateExpiry,omitempty" json:"validateExpiry,omitempty"`
+
+	// ValidateSANs explicitly checks that the request hostname appears in cert DNSNames.
+	// Uses HostHeader for SAN matching when set (virtual-host routing pattern).
+	// Only active when InsecureSkipVerify is false.
+	ValidateSANs bool `yaml:"validateSANs,omitempty" json:"validateSANs,omitempty"`
 }
 
 // Result represents the outcome of a single validation execution

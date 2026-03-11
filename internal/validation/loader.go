@@ -248,6 +248,7 @@ func parseSpec(v *Validation) error {
 				spec.Targets[i].TimeoutSeconds = DefaultConnectivityTimeoutSeconds
 			}
 		}
+		// TLS field on each target is populated by yaml.Unmarshal — no explicit default needed.
 		v.Spec = spec
 
 	default:

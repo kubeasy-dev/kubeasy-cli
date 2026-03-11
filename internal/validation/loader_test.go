@@ -846,6 +846,138 @@ objectives:
 	assert.Equal(t, "", spec.Mode)
 }
 
+// TestParseConnectivityTLSBlock verifies that the tls: block in a connectivity target
+// is correctly parsed into TLSConfig (TLS-01, TLS-02, TLS-03).
+func TestParseConnectivityTLSBlock(t *testing.T) {
+	t.Run("tls block absent - TLS field is nil (no regression)", func(t *testing.T) {
+		yamlData := `
+objectives:
+  - key: no-tls
+    type: connectivity
+    spec:
+      mode: external
+      targets:
+        - url: https://myapp.example.com/
+          expectedStatusCode: 200
+`
+		cfg, err := Parse([]byte(yamlData))
+		require.NoError(t, err)
+		spec := cfg.Validations[0].Spec.(ConnectivitySpec)
+		assert.Nil(t, spec.Targets[0].TLS, "TLS field must be nil when tls: block is absent")
+	})
+
+	t.Run("insecureSkipVerify: true parses correctly", func(t *testing.T) {
+		yamlData := `
+objectives:
+  - key: skip-verify
+    type: connectivity
+    spec:
+      mode: external
+      targets:
+        - url: https://myapp.example.com/
+          expectedStatusCode: 200
+          tls:
+            insecureSkipVerify: true
+`
+		cfg, err := Parse([]byte(yamlData))
+		require.NoError(t, err)
+		spec := cfg.Validations[0].Spec.(ConnectivitySpec)
+		require.NotNil(t, spec.Targets[0].TLS, "TLS field must be non-nil when tls: block is present")
+		assert.True(t, spec.Targets[0].TLS.InsecureSkipVerify, "InsecureSkipVerify must be true")
+		assert.False(t, spec.Targets[0].TLS.ValidateExpiry, "ValidateExpiry must be false")
+		assert.False(t, spec.Targets[0].TLS.ValidateSANs, "ValidateSANs must be false")
+	})
+
+	t.Run("validateExpiry: true parses correctly", func(t *testing.T) {
+		yamlData := `
+objectives:
+  - key: validate-expiry
+    type: connectivity
+    spec:
+      mode: external
+      targets:
+        - url: https://myapp.example.com/
+          expectedStatusCode: 200
+          tls:
+            validateExpiry: true
+`
+		cfg, err := Parse([]byte(yamlData))
+		require.NoError(t, err)
+		spec := cfg.Validations[0].Spec.(ConnectivitySpec)
+		require.NotNil(t, spec.Targets[0].TLS)
+		assert.False(t, spec.Targets[0].TLS.InsecureSkipVerify)
+		assert.True(t, spec.Targets[0].TLS.ValidateExpiry, "ValidateExpiry must be true")
+		assert.False(t, spec.Targets[0].TLS.ValidateSANs)
+	})
+
+	t.Run("validateSANs: true parses correctly", func(t *testing.T) {
+		yamlData := `
+objectives:
+  - key: validate-sans
+    type: connectivity
+    spec:
+      mode: external
+      targets:
+        - url: https://myapp.example.com/
+          expectedStatusCode: 200
+          tls:
+            validateSANs: true
+`
+		cfg, err := Parse([]byte(yamlData))
+		require.NoError(t, err)
+		spec := cfg.Validations[0].Spec.(ConnectivitySpec)
+		require.NotNil(t, spec.Targets[0].TLS)
+		assert.False(t, spec.Targets[0].TLS.InsecureSkipVerify)
+		assert.False(t, spec.Targets[0].TLS.ValidateExpiry)
+		assert.True(t, spec.Targets[0].TLS.ValidateSANs, "ValidateSANs must be true")
+	})
+
+	t.Run("all three fields true simultaneously", func(t *testing.T) {
+		yamlData := `
+objectives:
+  - key: all-tls
+    type: connectivity
+    spec:
+      mode: external
+      targets:
+        - url: https://myapp.example.com/
+          expectedStatusCode: 200
+          tls:
+            insecureSkipVerify: true
+            validateExpiry: true
+            validateSANs: true
+`
+		cfg, err := Parse([]byte(yamlData))
+		require.NoError(t, err)
+		spec := cfg.Validations[0].Spec.(ConnectivitySpec)
+		require.NotNil(t, spec.Targets[0].TLS)
+		assert.True(t, spec.Targets[0].TLS.InsecureSkipVerify, "InsecureSkipVerify must be true")
+		assert.True(t, spec.Targets[0].TLS.ValidateExpiry, "ValidateExpiry must be true")
+		assert.True(t, spec.Targets[0].TLS.ValidateSANs, "ValidateSANs must be true")
+	})
+
+	t.Run("empty tls block - non-nil pointer, all bools false", func(t *testing.T) {
+		yamlData := `
+objectives:
+  - key: empty-tls
+    type: connectivity
+    spec:
+      mode: external
+      targets:
+        - url: https://myapp.example.com/
+          expectedStatusCode: 200
+          tls: {}
+`
+		cfg, err := Parse([]byte(yamlData))
+		require.NoError(t, err)
+		spec := cfg.Validations[0].Spec.(ConnectivitySpec)
+		require.NotNil(t, spec.Targets[0].TLS, "TLS pointer must be non-nil for empty tls: {} block")
+		assert.False(t, spec.Targets[0].TLS.InsecureSkipVerify, "InsecureSkipVerify must be false")
+		assert.False(t, spec.Targets[0].TLS.ValidateExpiry, "ValidateExpiry must be false")
+		assert.False(t, spec.Targets[0].TLS.ValidateSANs, "ValidateSANs must be false")
+	})
+}
+
 // TestParse_ConnectivityProbeMode verifies that a connectivity spec with empty sourcePod
 // (probe mode) is accepted by Parse without error (PROBE-01, PROBE-02).
 func TestParse_ConnectivityProbeMode(t *testing.T) {

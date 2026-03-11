@@ -33,7 +33,7 @@ Requirements for the Connectivity Extension milestone. Each maps to roadmap phas
 
 - [ ] **EXT-01**: User peut valider une connectivité HTTP externe en ajoutant `mode: external` à ConnectivityCheck — le CLI fait la requête via net/http (pas pod exec)
 - [ ] **EXT-02**: External check supporte un champ `hostHeader` pour le routing Ingress/Gateway par hostname
-- [ ] **EXT-03**: External check résout automatiquement l'IP/port depuis `Ingress.status.loadBalancer` ou `Gateway.status.addresses` ; sur macOS où l'IP Docker n'est pas routable, fallback sur NodePort avec message d'avertissement
+- [ ] **EXT-03**: Challenge spec peut utiliser des URLs sslip.io (ex: `myapp.127-0-0-1.sslip.io:8080`) pour router vers des endpoints Ingress/Gateway sans configuration DNS locale — le CLI résout naturellement ces hostnames via net/http
 - [ ] **EXT-04**: External check valide le status HTTP attendu (existant, étendu au mode external)
 
 ### Validation TLS (TLS)
@@ -75,32 +75,32 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFRA-01 | — | Pending |
-| INFRA-02 | — | Pending |
-| INFRA-03 | — | Pending |
-| INFRA-04 | — | Pending |
-| INFRA-05 | — | Pending |
-| INFRA-06 | — | Pending |
-| INFRA-07 | — | Pending |
-| PROBE-01 | — | Pending |
-| PROBE-02 | — | Pending |
-| PROBE-03 | — | Pending |
-| PROBE-04 | — | Pending |
-| CONN-01 | — | Pending |
-| CONN-02 | — | Pending |
-| EXT-01 | — | Pending |
-| EXT-02 | — | Pending |
-| EXT-03 | — | Pending |
-| EXT-04 | — | Pending |
-| TLS-01 | — | Pending |
-| TLS-02 | — | Pending |
-| TLS-03 | — | Pending |
+| INFRA-01 | Phase 6 | Pending |
+| INFRA-02 | Phase 6 | Pending |
+| INFRA-03 | Phase 6 | Pending |
+| INFRA-04 | Phase 6 | Pending |
+| INFRA-05 | Phase 6 | Pending |
+| INFRA-06 | Phase 6 | Pending |
+| INFRA-07 | Phase 6 | Pending |
+| PROBE-01 | Phase 7 | Pending |
+| PROBE-02 | Phase 7 | Pending |
+| PROBE-03 | Phase 7 | Pending |
+| PROBE-04 | Phase 7 | Pending |
+| CONN-01 | Phase 7 | Pending |
+| CONN-02 | Phase 7 | Pending |
+| EXT-01 | Phase 8 | Pending |
+| EXT-02 | Phase 8 | Pending |
+| EXT-03 | Phase 8 | Pending |
+| EXT-04 | Phase 8 | Pending |
+| TLS-01 | Phase 9 | Pending |
+| TLS-02 | Phase 9 | Pending |
+| TLS-03 | Phase 9 | Pending |
 
 **Coverage:**
 - v2.7.0 requirements: 20 total
-- Mapped to phases: 0
-- Unmapped: 20 ⚠️
+- Mapped to phases: 20
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-11*
-*Last updated: 2026-03-11 after initial definition*
+*Last updated: 2026-03-11 — traceability updated after roadmap creation*

@@ -106,4 +106,4 @@ Plans:
 | 6. Infrastructure Foundation | 4/4 | Complete   | 2026-03-11 | - |
 | 7. Probe Pod + Internal Connectivity | 2/2 | Complete   | 2026-03-11 | - |
 | 8. External HTTP | 2/2 | Complete   | 2026-03-11 | - |
-| 9. TLS Validation | v2.7.0 | 0/2 | Not started | - |
+| 9. TLS Validation | 1/2 | In Progress|  | - |

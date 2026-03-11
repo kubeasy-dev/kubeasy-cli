@@ -38,9 +38,9 @@ Requirements for the Connectivity Extension milestone. Each maps to roadmap phas
 
 ### Validation TLS (TLS)
 
-- [ ] **TLS-01**: External check valide que le certificat TLS n'est pas expiré (`NotAfter > now`)
-- [ ] **TLS-02**: External check valide que le hostname correspond aux SANs du certificat (`DNSNames`)
-- [ ] **TLS-03**: ConnectivityCheck supporte `insecureSkipVerify: true` pour les certs self-signed en environnement Kind
+- [x] **TLS-01**: External check valide que le certificat TLS n'est pas expiré (`NotAfter > now`)
+- [x] **TLS-02**: External check valide que le hostname correspond aux SANs du certificat (`DNSNames`)
+- [x] **TLS-03**: ConnectivityCheck supporte `insecureSkipVerify: true` pour les certs self-signed en environnement Kind
 
 ## Future Requirements
 
@@ -92,9 +92,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EXT-02 | Phase 8 | Complete |
 | EXT-03 | Phase 8 | Complete |
 | EXT-04 | Phase 8 | Complete |
-| TLS-01 | Phase 9 | Pending |
-| TLS-02 | Phase 9 | Pending |
-| TLS-03 | Phase 9 | Pending |
+| TLS-01 | Phase 9 | Complete |
+| TLS-02 | Phase 9 | Complete |
+| TLS-03 | Phase 9 | Complete |
 
 **Coverage:**
 - v2.7.0 requirements: 20 total

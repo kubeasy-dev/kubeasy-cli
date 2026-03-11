@@ -2,8 +2,8 @@
 phase: 7
 slug: probe-pod-internal-connectivity
 status: draft
-nyquist_compliant: false
-wave_0_complete: false
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-11
 ---
 
@@ -52,8 +52,11 @@ created: 2026-03-11
 
 ## Wave 0 Requirements
 
-- [ ] `internal/validation/probe_test.go` — stubs for PROBE-01, PROBE-02, PROBE-03, PROBE-04
-- [ ] `internal/validation/executor_connectivity_test.go` — stubs for CONN-01, CONN-02
+Wave 0 test files are created as part of the TDD RED phase in each plan's Task 1. The test stubs are written before implementation, so they exist by the time the GREEN phase runs.
+
+- [ ] `internal/deployer/probe_test.go` — stubs for PROBE-01, PROBE-02, PROBE-03 (created in plan 01 Task 1)
+- [ ] `internal/validation/executor_test.go` additions — stubs for PROBE-03, PROBE-04, CONN-01, CONN-02 (created in plan 02 Task 1)
+- [ ] `internal/validation/loader_test.go` additions — stub for probe-mode Parse acceptance (created in plan 02 Task 1)
 
 *If none: "Existing infrastructure covers all phase requirements."*
 
@@ -69,11 +72,11 @@ created: 2026-03-11
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
 - [ ] No watch-mode flags
-- [ ] Feedback latency < 30s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] Feedback latency < 30s
+- [x] `nyquist_compliant: true` set in frontmatter
 
 **Approval:** pending

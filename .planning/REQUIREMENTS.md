@@ -19,9 +19,9 @@ Requirements for the Connectivity Extension milestone. Each maps to roadmap phas
 
 ### Probe Pod — Connectivité interne (PROBE)
 
-- [ ] **PROBE-01**: User peut définir une validation connectivity sans `sourcePod` — le CLI auto-déploie un pod probe (`kubeasy-probe`) avec curl dans le namespace spécifié
-- [ ] **PROBE-02**: Challenge spec peut spécifier le namespace du pod probe (champ `probeNamespace`, défaut : namespace du challenge)
-- [ ] **PROBE-03**: Pod probe est supprimé après la validation via un contexte de cleanup indépendant (pas le contexte de validation annulé)
+- [x] **PROBE-01**: User peut définir une validation connectivity sans `sourcePod` — le CLI auto-déploie un pod probe (`kubeasy-probe`) avec curl dans le namespace spécifié
+- [x] **PROBE-02**: Challenge spec peut spécifier le namespace du pod probe (champ `probeNamespace`, défaut : namespace du challenge)
+- [x] **PROBE-03**: Pod probe est supprimé après la validation via un contexte de cleanup indépendant (pas le contexte de validation annulé)
 - [ ] **PROBE-04**: Fallback wget `sh -c` supprimé de `checkConnectivity` — curl uniquement, fix TODO(sec)
 
 ### Connectivité interne — améliorations (CONN)
@@ -82,9 +82,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INFRA-05 | Phase 6 | Complete |
 | INFRA-06 | Phase 6 | Complete |
 | INFRA-07 | Phase 6 | Complete |
-| PROBE-01 | Phase 7 | Pending |
-| PROBE-02 | Phase 7 | Pending |
-| PROBE-03 | Phase 7 | Pending |
+| PROBE-01 | Phase 7 | Complete |
+| PROBE-02 | Phase 7 | Complete |
+| PROBE-03 | Phase 7 | Complete |
 | PROBE-04 | Phase 7 | Pending |
 | CONN-01 | Phase 7 | Pending |
 | CONN-02 | Phase 7 | Pending |

@@ -103,6 +103,6 @@ Plans:
 | 4. Code Quality | v1.0 | 3/3 | Complete | 2026-03-10 |
 | 5. Security Hardening | v1.0 | 2/2 | Complete | 2026-03-10 |
 | 6. Infrastructure Foundation | 4/4 | Complete   | 2026-03-11 | - |
-| 7. Probe Pod + Internal Connectivity | v2.7.0 | 0/2 | Not started | - |
+| 7. Probe Pod + Internal Connectivity | 1/2 | In Progress|  | - |
 | 8. External HTTP | v2.7.0 | 0/? | Not started | - |
 | 9. TLS Validation | v2.7.0 | 0/? | Not started | - |

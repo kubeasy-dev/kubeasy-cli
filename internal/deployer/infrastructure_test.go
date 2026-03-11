@@ -485,6 +485,78 @@ func TestHasExtraPortMappings_WithDifferentPorts(t *testing.T) {
 	assert.False(t, hasExtraPortMappingsAt(path), "should return false when ports are different from 8080/8443")
 }
 
+// --- installKyverno idempotency tests ---
+
+func TestInstallKyverno_AlreadyReady(t *testing.T) {
+	// When all Kyverno deployments are already ready, installKyverno should
+	// return StatusReady without calling FetchManifest (idempotency path).
+	clientset := fake.NewClientset(
+		makeNamespace(kyvernoNamespace),
+		makeDeployment(kyvernoNamespace, "kyverno-admission-controller", 1, true),
+		makeDeployment(kyvernoNamespace, "kyverno-background-controller", 1, true),
+		makeDeployment(kyvernoNamespace, "kyverno-cleanup-controller", 1, true),
+		makeDeployment(kyvernoNamespace, "kyverno-reports-controller", 1, true),
+	)
+
+	result := installKyverno(context.Background(), clientset, nil, nil)
+	assert.Equal(t, StatusReady, result.Status, "installKyverno should return StatusReady when already ready")
+	assert.Equal(t, "kyverno", result.Name)
+}
+
+func TestInstallLocalPathProvisioner_AlreadyReady(t *testing.T) {
+	// When local-path-provisioner deployment is already ready, installLocalPathProvisioner
+	// should return StatusReady without calling FetchManifest (idempotency path).
+	clientset := fake.NewClientset(
+		makeNamespace(localPathStorageNamespace),
+		makeDeployment(localPathStorageNamespace, "local-path-provisioner", 1, true),
+	)
+
+	result := installLocalPathProvisioner(context.Background(), clientset, nil, nil)
+	assert.Equal(t, StatusReady, result.Status, "installLocalPathProvisioner should return StatusReady when already ready")
+	assert.Equal(t, "local-path-provisioner", result.Name)
+}
+
+func TestIsKyvernoReady_AllDeploymentsReady(t *testing.T) {
+	clientset := fake.NewClientset(
+		makeNamespace(kyvernoNamespace),
+		makeDeployment(kyvernoNamespace, "kyverno-admission-controller", 1, true),
+		makeDeployment(kyvernoNamespace, "kyverno-background-controller", 1, true),
+		makeDeployment(kyvernoNamespace, "kyverno-cleanup-controller", 1, true),
+		makeDeployment(kyvernoNamespace, "kyverno-reports-controller", 1, true),
+	)
+
+	ready, err := isKyvernoReadyWithClient(context.Background(), clientset)
+	require.NoError(t, err)
+	assert.True(t, ready)
+}
+
+func TestIsKyvernoReady_NamespaceMissing(t *testing.T) {
+	clientset := fake.NewClientset()
+
+	ready, err := isKyvernoReadyWithClient(context.Background(), clientset)
+	require.NoError(t, err)
+	assert.False(t, ready)
+}
+
+func TestIsLocalPathProvisionerReady_Ready(t *testing.T) {
+	clientset := fake.NewClientset(
+		makeNamespace(localPathStorageNamespace),
+		makeDeployment(localPathStorageNamespace, "local-path-provisioner", 1, true),
+	)
+
+	ready, err := isLocalPathProvisionerReadyWithClient(context.Background(), clientset)
+	require.NoError(t, err)
+	assert.True(t, ready)
+}
+
+func TestIsLocalPathProvisionerReady_NamespaceMissing(t *testing.T) {
+	clientset := fake.NewClientset()
+
+	ready, err := isLocalPathProvisionerReadyWithClient(context.Background(), clientset)
+	require.NoError(t, err)
+	assert.False(t, ready)
+}
+
 // --- writeKindConfig round-trip test ---
 
 func TestWriteKindConfig_RoundTrip(t *testing.T) {

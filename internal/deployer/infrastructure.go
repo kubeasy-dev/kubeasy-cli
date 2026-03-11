@@ -49,8 +49,8 @@ func notReady(name string, err error) ComponentResult {
 
 // writeKindConfig marshals the Kind cluster config to YAML and writes it to GetKindConfigPath().
 // Creates the ~/.kubeasy directory if it does not exist.
-// Called by setup.go (plan 04) when creating the Kind cluster with port mappings.
-func writeKindConfig(cfg *kindv1alpha4.Cluster) error { //nolint:unused // used by setup.go in plan 04
+// Use WriteKindConfig (exported) from setup.go as the canonical call site.
+func writeKindConfig(cfg *kindv1alpha4.Cluster) error { //nolint:unused // internal; WriteKindConfig is the exported canonical path
 	return writeKindConfigToPath(cfg, constants.GetKindConfigPath())
 }
 
@@ -73,8 +73,8 @@ func writeKindConfigToPath(cfg *kindv1alpha4.Cluster, path string) error {
 // hasExtraPortMappings reports whether the kind-config.yaml at GetKindConfigPath() contains
 // ExtraPortMappings for both HostPort 8080 and 8443 on the first node.
 // Returns false if the file is missing or ports are absent — absence is not an error.
-// Called by setup.go (plan 04) to detect whether cluster recreation is needed.
-func hasExtraPortMappings() bool { //nolint:unused // used by setup.go in plan 04
+// Use HasExtraPortMappings (exported) from setup.go as the canonical call site.
+func hasExtraPortMappings() bool { //nolint:unused // internal; HasExtraPortMappings is the exported canonical path
 	return hasExtraPortMappingsAt(constants.GetKindConfigPath())
 }
 
@@ -121,7 +121,206 @@ func localPathProvisionerInstallURL() string {
 	return fmt.Sprintf("https://raw.githubusercontent.com/rancher/local-path-provisioner/%s/deploy/local-path-storage.yaml", LocalPathProvisionerVersion)
 }
 
+// isKyvernoReadyWithClient checks whether Kyverno is installed and all four deployments are ready.
+// Extracted from IsInfrastructureReadyWithClient for per-component use.
+func isKyvernoReadyWithClient(ctx context.Context, clientset kubernetes.Interface) (bool, error) {
+	_, err := clientset.CoreV1().Namespaces().Get(ctx, kyvernoNamespace, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.Debug("Kyverno namespace does not exist")
+			return false, nil
+		}
+		return false, fmt.Errorf("error checking kyverno namespace: %w", err)
+	}
+
+	kyvernoDeployments := []string{
+		"kyverno-admission-controller",
+		"kyverno-background-controller",
+		"kyverno-cleanup-controller",
+		"kyverno-reports-controller",
+	}
+	for _, name := range kyvernoDeployments {
+		dep, err := clientset.AppsV1().Deployments(kyvernoNamespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				logger.Debug("Kyverno deployment '%s' not found", name)
+				return false, nil
+			}
+			return false, fmt.Errorf("error checking kyverno deployment '%s': %w", name, err)
+		}
+		if dep.Status.ReadyReplicas == 0 || dep.Status.ReadyReplicas != dep.Status.Replicas {
+			logger.Debug("Kyverno deployment '%s' not ready (Ready: %d/%d)", name, dep.Status.ReadyReplicas, dep.Status.Replicas)
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+// isLocalPathProvisionerReadyWithClient checks whether local-path-provisioner is installed and ready.
+// Extracted from IsInfrastructureReadyWithClient for per-component use.
+func isLocalPathProvisionerReadyWithClient(ctx context.Context, clientset kubernetes.Interface) (bool, error) {
+	_, err := clientset.CoreV1().Namespaces().Get(ctx, localPathStorageNamespace, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.Debug("local-path-storage namespace does not exist")
+			return false, nil
+		}
+		return false, fmt.Errorf("error checking local-path-storage namespace: %w", err)
+	}
+
+	dep, err := clientset.AppsV1().Deployments(localPathStorageNamespace).Get(ctx, "local-path-provisioner", metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.Debug("local-path-provisioner deployment not found")
+			return false, nil
+		}
+		return false, fmt.Errorf("error checking local-path-provisioner deployment: %w", err)
+	}
+	if dep.Status.ReadyReplicas == 0 || dep.Status.ReadyReplicas != dep.Status.Replicas {
+		logger.Debug("local-path-provisioner not ready (Ready: %d/%d)", dep.Status.ReadyReplicas, dep.Status.Replicas)
+		return false, nil
+	}
+	return true, nil
+}
+
+// installKyverno installs Kyverno into the cluster. If already ready, returns StatusReady immediately.
+// Returns ComponentResult — never an error. Called by SetupAllComponents.
+func installKyverno(ctx context.Context, clientset kubernetes.Interface, dynamicClient dynamic.Interface, mapper meta.RESTMapper) ComponentResult {
+	const name = "kyverno"
+
+	ready, err := isKyvernoReadyWithClient(ctx, clientset)
+	if err != nil {
+		return notReady(name, err)
+	}
+	if ready {
+		logger.Info("Kyverno is already installed and ready, skipping installation")
+		return ComponentResult{Name: name, Status: StatusReady, Message: "already installed"}
+	}
+
+	logger.Info("Installing Kyverno %s...", KyvernoVersion)
+	if err := kube.CreateNamespace(ctx, clientset, kyvernoNamespace); err != nil {
+		return notReady(name, fmt.Errorf("failed to create kyverno namespace: %w", err))
+	}
+
+	kyvernoURL := kyvernoInstallURL()
+	logger.Debug("Fetching Kyverno manifest from %s", kyvernoURL)
+	kyvernoManifest, err := kube.FetchManifest(kyvernoURL)
+	if err != nil {
+		return notReady(name, fmt.Errorf("failed to download Kyverno manifest: %w", err))
+	}
+	logger.Debug("Kyverno manifest fetched (%d bytes)", len(kyvernoManifest))
+
+	if err := kube.ApplyManifest(ctx, kyvernoManifest, kyvernoNamespace, mapper, dynamicClient); err != nil {
+		return notReady(name, fmt.Errorf("failed to apply Kyverno manifest: %w", err))
+	}
+	logger.Info("Kyverno manifest applied.")
+
+	kyvernoDeployments := []string{
+		"kyverno-admission-controller",
+		"kyverno-background-controller",
+		"kyverno-cleanup-controller",
+		"kyverno-reports-controller",
+	}
+
+	// kube.WaitForDeploymentsReady requires *kubernetes.Clientset.
+	cs, ok := clientset.(*kubernetes.Clientset)
+	if !ok {
+		return notReady(name, fmt.Errorf("internal error: clientset is not *kubernetes.Clientset"))
+	}
+	if err := kube.WaitForDeploymentsReady(ctx, cs, kyvernoNamespace, kyvernoDeployments); err != nil {
+		return notReady(name, fmt.Errorf("kyverno deployments failed to become ready: %w", err))
+	}
+
+	logger.Info("Kyverno installed and ready.")
+	return ComponentResult{Name: name, Status: StatusReady, Message: "installed successfully"}
+}
+
+// installLocalPathProvisioner installs local-path-provisioner into the cluster. If already ready,
+// returns StatusReady immediately. Returns ComponentResult — never an error. Called by SetupAllComponents.
+func installLocalPathProvisioner(ctx context.Context, clientset kubernetes.Interface, dynamicClient dynamic.Interface, mapper meta.RESTMapper) ComponentResult {
+	const name = "local-path-provisioner"
+
+	ready, err := isLocalPathProvisionerReadyWithClient(ctx, clientset)
+	if err != nil {
+		return notReady(name, err)
+	}
+	if ready {
+		logger.Info("local-path-provisioner is already installed and ready, skipping installation")
+		return ComponentResult{Name: name, Status: StatusReady, Message: "already installed"}
+	}
+
+	logger.Info("Installing local-path-provisioner %s...", LocalPathProvisionerVersion)
+	if err := kube.CreateNamespace(ctx, clientset, localPathStorageNamespace); err != nil {
+		return notReady(name, fmt.Errorf("failed to create local-path-storage namespace: %w", err))
+	}
+
+	localPathURL := localPathProvisionerInstallURL()
+	logger.Debug("Fetching local-path-provisioner manifest from %s", localPathURL)
+	localPathManifest, err := kube.FetchManifest(localPathURL)
+	if err != nil {
+		return notReady(name, fmt.Errorf("failed to download local-path-provisioner manifest: %w", err))
+	}
+	logger.Debug("local-path-provisioner manifest fetched (%d bytes)", len(localPathManifest))
+
+	if err := kube.ApplyManifest(ctx, localPathManifest, localPathStorageNamespace, mapper, dynamicClient); err != nil {
+		return notReady(name, fmt.Errorf("failed to apply local-path-provisioner manifest: %w", err))
+	}
+	logger.Info("local-path-provisioner manifest applied.")
+
+	// kube.WaitForDeploymentsReady requires *kubernetes.Clientset.
+	cs, ok := clientset.(*kubernetes.Clientset)
+	if !ok {
+		return notReady(name, fmt.Errorf("internal error: clientset is not *kubernetes.Clientset"))
+	}
+	if err := kube.WaitForDeploymentsReady(ctx, cs, localPathStorageNamespace, []string{"local-path-provisioner"}); err != nil {
+		return notReady(name, fmt.Errorf("local-path-provisioner deployment failed to become ready: %w", err))
+	}
+
+	logger.Info("local-path-provisioner installed and ready.")
+	return ComponentResult{Name: name, Status: StatusReady, Message: "installed successfully"}
+}
+
+// WriteKindConfig is an exported wrapper around writeKindConfig for use by setup.go.
+// It writes the Kind cluster config to ~/.kubeasy/kind-config.yaml.
+func WriteKindConfig(cfg *kindv1alpha4.Cluster) error {
+	return writeKindConfigToPath(cfg, constants.GetKindConfigPath())
+}
+
+// HasExtraPortMappings is an exported wrapper around hasExtraPortMappings for use by setup.go.
+// Returns true when the kind-config.yaml contains ExtraPortMappings for 8080 and 8443.
+func HasExtraPortMappings() bool {
+	return hasExtraPortMappingsAt(constants.GetKindConfigPath())
+}
+
+// SetupAllComponents installs all infrastructure components and returns a ComponentResult for each.
+// The order is: kyverno, local-path-provisioner, nginx-ingress, gateway-api, cert-manager, cloud-provider-kind.
+// Execution continues regardless of individual component failures — all six results are always returned.
+func SetupAllComponents(ctx context.Context, clientset *kubernetes.Clientset, dynamicClient dynamic.Interface) []ComponentResult {
+	// Build REST mapper from API discovery — used for components that don't rebuild their own mapper.
+	// Gateway API rebuilds its mapper internally after CRD install (two-pass apply).
+	groups, err := restmapper.GetAPIGroupResources(clientset.Discovery())
+	var mapper meta.RESTMapper
+	if err != nil {
+		logger.Debug("Failed to discover API resources for REST mapper: %v — component installs may fail", err)
+		mapper = nil
+	} else {
+		mapper = restmapper.NewDiscoveryRESTMapper(groups)
+	}
+
+	results := make([]ComponentResult, 0, 6)
+
+	results = append(results, installKyverno(ctx, clientset, dynamicClient, mapper))
+	results = append(results, installLocalPathProvisioner(ctx, clientset, dynamicClient, mapper))
+	results = append(results, installNginxIngress(ctx, clientset, dynamicClient, mapper))
+	results = append(results, installGatewayAPI(ctx, clientset, dynamicClient))
+	results = append(results, installCertManager(ctx, clientset, dynamicClient, mapper))
+	results = append(results, ensureCloudProviderKind(ctx))
+
+	return results
+}
+
 // SetupInfrastructure installs Kyverno and local-path-provisioner directly into the cluster.
+// Use SetupAllComponents for per-component status across all 6 infrastructure components.
 func SetupInfrastructure() error {
 	logger.Info("Starting infrastructure setup (Kyverno + local-path-provisioner)...")
 
@@ -356,7 +555,7 @@ func waitForCertManagerWebhookEndpoints(ctx context.Context, clientset kubernete
 // controller manifest. After the deployments are ready it polls the webhook Endpoints
 // until at least one address is present. Returns a ComponentResult — never an error.
 // Called by setup.go (plan 04) when setting up the infrastructure.
-func installCertManager(ctx context.Context, clientset *kubernetes.Clientset, dynamicClient dynamic.Interface, mapper meta.RESTMapper) ComponentResult { //nolint:unused // used by setup.go in plan 04
+func installCertManager(ctx context.Context, clientset *kubernetes.Clientset, dynamicClient dynamic.Interface, mapper meta.RESTMapper) ComponentResult {
 	// Idempotency check
 	ready, _ := isCertManagerReadyWithClient(ctx, clientset)
 	if ready {
@@ -422,7 +621,7 @@ const nginxIngressNamespace = "ingress-nginx"
 // gatewayClassManifest is the GatewayClass resource for cloud-provider-kind.
 // Applied after the Gateway API CRDs so the GatewayClass API is available.
 // Used by installGatewayAPI (called by setup.go in plan 04).
-var gatewayClassManifest = "apiVersion: gateway.networking.k8s.io/v1\nkind: GatewayClass\nmetadata:\n  name: cloud-provider-kind\nspec:\n  controllerName: sigs.k8s.io/cloud-provider-kind\n" //nolint:unused // used by installGatewayAPI in plan 04
+var gatewayClassManifest = "apiVersion: gateway.networking.k8s.io/v1\nkind: GatewayClass\nmetadata:\n  name: cloud-provider-kind\nspec:\n  controllerName: sigs.k8s.io/cloud-provider-kind\n"
 
 // isNginxIngressReadyWithClient checks nginx-ingress readiness using the provided client.
 // It returns true when the ingress-nginx namespace exists and the ingress-nginx-controller
@@ -472,7 +671,7 @@ func isGatewayAPICRDsInstalled(_ context.Context, clientset kubernetes.Interface
 // It returns ComponentResult{Status: StatusReady} if already installed or on success,
 // and ComponentResult{Status: StatusNotReady} on any installation error.
 // Called by setup.go (plan 04) when setting up the infrastructure.
-func installNginxIngress(ctx context.Context, clientset kubernetes.Interface, dynamicClient dynamic.Interface, mapper meta.RESTMapper) ComponentResult { //nolint:unused // used by setup.go in plan 04
+func installNginxIngress(ctx context.Context, clientset kubernetes.Interface, dynamicClient dynamic.Interface, mapper meta.RESTMapper) ComponentResult {
 	const name = "nginx-ingress"
 
 	ready, err := isNginxIngressReadyWithClient(ctx, clientset)
@@ -518,7 +717,7 @@ func installNginxIngress(ctx context.Context, clientset kubernetes.Interface, dy
 // It performs a two-pass apply: first the CRDs, then rebuilds the REST mapper, then the GatewayClass.
 // Returns ComponentResult{Status: StatusReady} if already installed or on success,
 // and ComponentResult{Status: StatusNotReady} on any installation error.
-func installGatewayAPI(ctx context.Context, clientset kubernetes.Interface, dynamicClient dynamic.Interface) ComponentResult { //nolint:unused // used by setup.go in plan 04
+func installGatewayAPI(ctx context.Context, clientset kubernetes.Interface, dynamicClient dynamic.Interface) ComponentResult {
 	const name = "gateway-api"
 
 	installed, err := isGatewayAPICRDsInstalled(ctx, clientset)

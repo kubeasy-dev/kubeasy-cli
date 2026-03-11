@@ -32,13 +32,13 @@ func cloudProviderKindBinaryURLForPlatform(goos, goarch string) string {
 
 // cloudProviderKindBinaryURL returns the download URL for the cloud-provider-kind binary
 // for the current platform (runtime.GOOS and runtime.GOARCH).
-func cloudProviderKindBinaryURL() string { //nolint:unused // used by ensureCloudProviderKind in plan 04
+func cloudProviderKindBinaryURL() string {
 	return cloudProviderKindBinaryURLForPlatform(runtime.GOOS, runtime.GOARCH)
 }
 
 // isCloudProviderKindRunning checks whether a cloud-provider-kind process is running
 // by querying pgrep. Returns true if pgrep exits with code 0 (process found).
-func isCloudProviderKindRunning() bool { //nolint:unused // used by ensureCloudProviderKind in plan 04
+func isCloudProviderKindRunning() bool {
 	cmd := exec.Command("pgrep", "-f", "cloud-provider-kind")
 	return cmd.Run() == nil
 }
@@ -47,7 +47,7 @@ func isCloudProviderKindRunning() bool { //nolint:unused // used by ensureCloudP
 // extracts the binary, writes it to destPath, and sets permissions to 0755.
 // This function uses net/http directly (not kube.FetchManifest) because FetchManifest
 // validates URLs against a Kubernetes manifest allowlist that excludes binary downloads.
-func downloadCloudProviderKind(url, destPath string) error { //nolint:unused // used by ensureCloudProviderKind in plan 04
+func downloadCloudProviderKind(url, destPath string) error {
 	logger.Info("Downloading cloud-provider-kind from %s", url)
 
 	// Create destination directory if it does not exist
@@ -119,7 +119,7 @@ func downloadCloudProviderKind(url, destPath string) error { //nolint:unused // 
 // startCloudProviderKindDetached starts cloud-provider-kind as a detached background process.
 // It uses Setsid=true to create a new session so the process survives terminal closure.
 // cmd.Start() is called but never cmd.Wait(), leaving the process running independently.
-func startCloudProviderKindDetached(binPath string) error { //nolint:unused // used by ensureCloudProviderKind in plan 04
+func startCloudProviderKindDetached(binPath string) error {
 	cmd := exec.Command(binPath)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	cmd.Stdout = nil
@@ -139,7 +139,7 @@ func startCloudProviderKindDetached(binPath string) error { //nolint:unused // u
 // If the binary is not present, downloads it first.
 // Then starts it as a detached process and returns StatusReady.
 // Returns StatusNotReady on any error.
-func ensureCloudProviderKind(_ context.Context) ComponentResult { //nolint:unused // used by setup.go in plan 04
+func ensureCloudProviderKind(_ context.Context) ComponentResult {
 	const name = "cloud-provider-kind"
 
 	// Already running — nothing to do

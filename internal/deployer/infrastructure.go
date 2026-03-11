@@ -1,6 +1,7 @@
 package deployer
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -70,38 +71,19 @@ func writeKindConfigToPath(cfg *kindv1alpha4.Cluster, path string) error {
 	return nil
 }
 
-// hasExtraPortMappings reports whether the kind-config.yaml at GetKindConfigPath() contains
-// ExtraPortMappings for both HostPort 8080 and 8443 on the first node.
-// Returns false if the file is missing or ports are absent — absence is not an error.
-// Use HasExtraPortMappings (exported) from setup.go as the canonical call site.
-func hasExtraPortMappings() bool { //nolint:unused // internal; HasExtraPortMappings is the exported canonical path
-	return hasExtraPortMappingsAt(constants.GetKindConfigPath())
-}
-
-// hasExtraPortMappingsAt is the testable variant of hasExtraPortMappings that reads from the given path.
-func hasExtraPortMappingsAt(path string) bool {
-	data, err := os.ReadFile(path)
+// kindConfigMatchesAt reports whether the installed kind-config.yaml at path has identical
+// content to the YAML serialisation of ref. Returns false when the file is missing,
+// unreadable, or its content differs — all are treated as "config has drifted".
+func kindConfigMatchesAt(ref *kindv1alpha4.Cluster, path string) bool {
+	installed, err := os.ReadFile(path)
 	if err != nil {
-		// File absent means cluster was created without this config — not an error.
 		return false
 	}
-	var cfg kindv1alpha4.Cluster
-	if err := sigsyaml.Unmarshal(data, &cfg); err != nil {
+	want, err := sigsyaml.Marshal(ref)
+	if err != nil {
 		return false
 	}
-	if len(cfg.Nodes) == 0 {
-		return false
-	}
-	has8080, has8443 := false, false
-	for _, pm := range cfg.Nodes[0].ExtraPortMappings {
-		if pm.HostPort == 8080 {
-			has8080 = true
-		}
-		if pm.HostPort == 8443 {
-			has8443 = true
-		}
-	}
-	return has8080 && has8443
+	return bytes.Equal(installed, want)
 }
 
 const (
@@ -286,10 +268,11 @@ func WriteKindConfig(cfg *kindv1alpha4.Cluster) error {
 	return writeKindConfigToPath(cfg, constants.GetKindConfigPath())
 }
 
-// HasExtraPortMappings is an exported wrapper around hasExtraPortMappings for use by setup.go.
-// Returns true when the kind-config.yaml contains ExtraPortMappings for 8080 and 8443.
-func HasExtraPortMappings() bool {
-	return hasExtraPortMappingsAt(constants.GetKindConfigPath())
+// KindConfigMatches reports whether the installed kind-config.yaml at GetKindConfigPath()
+// matches ref. Returns false when the file is missing or its content differs from ref —
+// both signal that the cluster should be recreated.
+func KindConfigMatches(ref *kindv1alpha4.Cluster) bool {
+	return kindConfigMatchesAt(ref, constants.GetKindConfigPath())
 }
 
 // SetupAllComponents installs all infrastructure components and returns a ComponentResult for each.

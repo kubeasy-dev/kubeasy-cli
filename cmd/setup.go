@@ -102,6 +102,8 @@ var setupCmd = &cobra.Command{
 			return err
 		}
 
+		ref := kindClusterConfig()
+
 		if !exists {
 			// Cluster does not exist — create with port mappings.
 			err := ui.TimedSpinner(
@@ -115,11 +117,11 @@ var setupCmd = &cobra.Command{
 				return fmt.Errorf("failed to create kind cluster with image %s: %w", constants.KindNodeImage, err)
 			}
 		} else {
-			// Cluster already exists — check for port mappings.
-			if !deployer.HasExtraPortMappings() {
-				ui.Warning("Kind cluster 'kubeasy' exists but lacks extraPortMappings for nginx-ingress (ports 8080/8443)")
-				ui.Info("nginx-ingress requires host port mappings to receive external traffic")
-				confirmed := ui.Confirmation("Recreate cluster with correct port mappings? (This will DELETE the existing cluster)")
+			// Cluster already exists — compare installed config against reference.
+			if !deployer.KindConfigMatches(ref) {
+				ui.Warning("Kind cluster 'kubeasy' configuration has drifted from the current reference")
+				ui.Info("The installed cluster was created with a different configuration (e.g. missing port mappings or updated settings)")
+				confirmed := ui.Confirmation("Recreate cluster with the updated configuration? (This will DELETE the existing cluster)")
 				if confirmed {
 					err := ui.TimedSpinner("Deleting existing cluster...", func() error {
 						return cluster.NewProvider().Delete("kubeasy", "")
@@ -139,7 +141,7 @@ var setupCmd = &cobra.Command{
 						return fmt.Errorf("failed to recreate kind cluster with image %s: %w", constants.KindNodeImage, err)
 					}
 				} else {
-					ui.Warning("Skipping cluster recreation — nginx-ingress may not be accessible on host ports")
+					ui.Warning("Skipping cluster recreation — some features may not work correctly")
 				}
 			} else {
 				// Detect actual cluster version and compare with expected

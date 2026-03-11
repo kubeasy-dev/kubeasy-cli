@@ -430,59 +430,56 @@ func TestIsGatewayAPICRDsInstalled(t *testing.T) {
 	})
 }
 
-// --- hasExtraPortMappingsAt tests ---
+// --- kindConfigMatchesAt tests ---
 
-func TestHasExtraPortMappings_FileNotExist(t *testing.T) {
+func refCluster() *kindv1alpha4.Cluster {
+	return &kindv1alpha4.Cluster{
+		TypeMeta: kindv1alpha4.TypeMeta{
+			Kind:       "Cluster",
+			APIVersion: "kind.x-k8s.io/v1alpha4",
+		},
+		Nodes: []kindv1alpha4.Node{
+			{
+				Role: kindv1alpha4.ControlPlaneRole,
+				ExtraPortMappings: []kindv1alpha4.PortMapping{
+					{ContainerPort: 80, HostPort: 8080, Protocol: kindv1alpha4.PortMappingProtocolTCP},
+					{ContainerPort: 443, HostPort: 8443, Protocol: kindv1alpha4.PortMappingProtocolTCP},
+				},
+			},
+		},
+	}
+}
+
+func TestKindConfigMatches_FileNotExist(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "nonexistent.yaml")
-	result := hasExtraPortMappingsAt(path)
-	assert.False(t, result, "should return false when config file does not exist")
+	assert.False(t, kindConfigMatchesAt(refCluster(), path), "should return false when config file does not exist")
 }
 
-func TestHasExtraPortMappings_WithCorrectPorts(t *testing.T) {
+func TestKindConfigMatches_IdenticalConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "kind-config.yaml")
+	ref := refCluster()
+	require.NoError(t, writeKindConfigToPath(ref, path))
+	assert.True(t, kindConfigMatchesAt(ref, path), "should return true when installed config matches reference")
+}
+
+func TestKindConfigMatches_DifferentConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "kind-config.yaml")
 
-	cfg := &kindv1alpha4.Cluster{
+	// Write a config with different port mappings (simulates old/outdated cluster).
+	old := &kindv1alpha4.Cluster{
 		TypeMeta: kindv1alpha4.TypeMeta{
 			Kind:       "Cluster",
 			APIVersion: "kind.x-k8s.io/v1alpha4",
 		},
 		Nodes: []kindv1alpha4.Node{
-			{
-				Role: kindv1alpha4.ControlPlaneRole,
-				ExtraPortMappings: []kindv1alpha4.PortMapping{
-					{ContainerPort: 80, HostPort: 8080},
-					{ContainerPort: 443, HostPort: 8443},
-				},
-			},
+			{Role: kindv1alpha4.ControlPlaneRole},
 		},
 	}
-	require.NoError(t, writeKindConfigToPath(cfg, path))
-	assert.True(t, hasExtraPortMappingsAt(path), "should return true when 8080 and 8443 are mapped")
-}
-
-func TestHasExtraPortMappings_WithDifferentPorts(t *testing.T) {
-	tmpDir := t.TempDir()
-	path := filepath.Join(tmpDir, "kind-config.yaml")
-
-	cfg := &kindv1alpha4.Cluster{
-		TypeMeta: kindv1alpha4.TypeMeta{
-			Kind:       "Cluster",
-			APIVersion: "kind.x-k8s.io/v1alpha4",
-		},
-		Nodes: []kindv1alpha4.Node{
-			{
-				Role: kindv1alpha4.ControlPlaneRole,
-				ExtraPortMappings: []kindv1alpha4.PortMapping{
-					{ContainerPort: 80, HostPort: 9080},
-					{ContainerPort: 443, HostPort: 9443},
-				},
-			},
-		},
-	}
-	require.NoError(t, writeKindConfigToPath(cfg, path))
-	assert.False(t, hasExtraPortMappingsAt(path), "should return false when ports are different from 8080/8443")
+	require.NoError(t, writeKindConfigToPath(old, path))
+	assert.False(t, kindConfigMatchesAt(refCluster(), path), "should return false when installed config differs from reference")
 }
 
 // --- installKyverno idempotency tests ---
@@ -580,5 +577,5 @@ func TestWriteKindConfig_RoundTrip(t *testing.T) {
 	}
 
 	require.NoError(t, writeKindConfigToPath(cfg, path))
-	assert.True(t, hasExtraPortMappingsAt(path), "round-trip: write then read should return true")
+	assert.True(t, kindConfigMatchesAt(cfg, path), "round-trip: write then read should match reference")
 }

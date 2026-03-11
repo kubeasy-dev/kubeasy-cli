@@ -41,11 +41,13 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
   3. User runs `kubeasy setup` and cert-manager is deployed and its webhook is ready to accept certificate resources
   4. User sees a named status line per new component (ready / not-ready / missing) in `kubeasy setup` output
   5. User sees a clear advisory message with install instructions if cloud-provider-kind is not detected; setup does not fail
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 06-01: TBD
-- [ ] 06-02: TBD
+- [ ] 06-01-PLAN.md — Foundation: ComponentResult type, version/path constants, Kind config I/O
+- [ ] 06-02-PLAN.md — nginx-ingress + Gateway API + cloud-provider-kind installers
+- [ ] 06-03-PLAN.md — cert-manager installer (two-pass apply + webhook polling)
+- [ ] 06-04-PLAN.md — setup.go wiring: retrofit existing components + per-component status output
 
 ### Phase 7: Probe Pod + Internal Connectivity
 **Goal**: Users can write connectivity validations without a `sourcePod` — the CLI auto-deploys and cleans up a curl probe pod — and can assert that a connection is blocked (expected status 0) across namespaces

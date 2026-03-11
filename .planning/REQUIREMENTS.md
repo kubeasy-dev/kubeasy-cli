@@ -31,9 +31,9 @@ Requirements for the Connectivity Extension milestone. Each maps to roadmap phas
 
 ### Connectivité externe (EXT)
 
-- [ ] **EXT-01**: User peut valider une connectivité HTTP externe en ajoutant `mode: external` à ConnectivityCheck — le CLI fait la requête via net/http (pas pod exec)
-- [ ] **EXT-02**: External check supporte un champ `hostHeader` pour le routing Ingress/Gateway par hostname
-- [ ] **EXT-03**: Challenge spec peut utiliser des URLs sslip.io (ex: `myapp.127-0-0-1.sslip.io:8080`) pour router vers des endpoints Ingress/Gateway sans configuration DNS locale — le CLI résout naturellement ces hostnames via net/http
+- [x] **EXT-01**: User peut valider une connectivité HTTP externe en ajoutant `mode: external` à ConnectivityCheck — le CLI fait la requête via net/http (pas pod exec)
+- [x] **EXT-02**: External check supporte un champ `hostHeader` pour le routing Ingress/Gateway par hostname
+- [x] **EXT-03**: Challenge spec peut utiliser des URLs sslip.io (ex: `myapp.127-0-0-1.sslip.io:8080`) pour router vers des endpoints Ingress/Gateway sans configuration DNS locale — le CLI résout naturellement ces hostnames via net/http
 - [ ] **EXT-04**: External check valide le status HTTP attendu (existant, étendu au mode external)
 
 ### Validation TLS (TLS)
@@ -88,9 +88,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PROBE-04 | Phase 7 | Complete |
 | CONN-01 | Phase 7 | Complete |
 | CONN-02 | Phase 7 | Complete |
-| EXT-01 | Phase 8 | Pending |
-| EXT-02 | Phase 8 | Pending |
-| EXT-03 | Phase 8 | Pending |
+| EXT-01 | Phase 8 | Complete |
+| EXT-02 | Phase 8 | Complete |
+| EXT-03 | Phase 8 | Complete |
 | EXT-04 | Phase 8 | Pending |
 | TLS-01 | Phase 9 | Pending |
 | TLS-02 | Phase 9 | Pending |

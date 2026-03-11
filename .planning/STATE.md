@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Phase 8 context gathered
-last_updated: "2026-03-11T11:57:34.221Z"
+stopped_at: Completed 08-external-http/08-01-PLAN.md
+last_updated: "2026-03-11T12:59:13.206Z"
 last_activity: 2026-03-11 — Phase 7 Plan 02 complete; probe wiring + connectivity fixes; 297 tests pass
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 8
+  completed_plans: 7
   percent: 0
 ---
 
@@ -50,6 +50,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 06-infrastructure-foundation P04 | 25 | 3 tasks | 5 files |
 | Phase 07-probe-pod-internal-connectivity P01 | 201s | 3 tasks | 4 files |
 | Phase 07-probe-pod-internal-connectivity P02 | 24min | 3 tasks | 4 files |
+| Phase 08-external-http P01 | 8min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -80,6 +81,9 @@ Recent decisions affecting current work:
 - [Phase 07-02]: restConfig.Host emptiness used as test-environment guard for fake clientset (non-nil RESTClient with nil internal client panics on Post())
 - [Phase 07-02]: blocked-as-expected per-target message not propagated to overall result (only failures are added to messages); tests assert result.Passed==true without message check
 - [Phase 07-02]: validateSourcePod is a no-op (probe mode relaxation) — empty sourcePod is valid
+- [Phase 08-01]: Mode field is empty string (not 'internal') by default — no migration needed for existing challenges
+- [Phase 08-01]: HostHeader field lives on ConnectivityCheck (per-target), not ConnectivitySpec — per-target Host header override
+- [Phase 08-01]: mode:external + sourcePod rejected at parse time (fail fast) — executor never sees incoherent specs
 
 ### Pending Todos
 
@@ -95,6 +99,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-11T11:57:34.218Z
-Stopped at: Phase 8 context gathered
-Resume file: .planning/phases/08-external-http/08-CONTEXT.md
+Last session: 2026-03-11T12:59:13.203Z
+Stopped at: Completed 08-external-http/08-01-PLAN.md
+Resume file: None

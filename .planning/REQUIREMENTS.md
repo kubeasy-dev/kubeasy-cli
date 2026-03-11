@@ -13,7 +13,7 @@ Requirements for the Connectivity Extension milestone. Each maps to roadmap phas
 - [x] **INFRA-02**: User can run `kubeasy setup` avec les CRDs Gateway API v1.2.1 Standard channel installées
 - [x] **INFRA-03**: User can run `kubeasy setup` avec le contrôleur Gateway API de cloud-provider-kind activé (bundlé, pas d'installation séparée)
 - [x] **INFRA-04**: User can run `kubeasy setup` avec cert-manager v1.19.4 installé (deux passes : CRDs puis contrôleur)
-- [x] **INFRA-05**: User voit un message clair si cloud-provider-kind n'est pas en cours d'exécution — avec instructions d'installation (détection seulement, pas auto-install)
+- [x] **INFRA-05**: `kubeasy setup` télécharge et démarre automatiquement cloud-provider-kind en arrière-plan si non détecté — statut affiché comme composant individuel (ready/not-ready)
 - [x] **INFRA-06**: Kind cluster est créé avec extraPortMappings sur ports 8080/8443 (non-privilégiés) pour nginx-ingress
 - [x] **INFRA-07**: `kubeasy setup` rapporte le statut de chaque nouveau composant (ready/not-ready/missing) dans la sortie
 

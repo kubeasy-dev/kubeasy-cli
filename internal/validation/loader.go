@@ -256,11 +256,9 @@ func validateTarget(target Target) error {
 	return nil
 }
 
-// validateSourcePod checks if a source pod has at least name or labelSelector
-func validateSourcePod(sourcePod SourcePod) error {
-	if sourcePod.Name == "" && len(sourcePod.LabelSelector) == 0 {
-		return fmt.Errorf("sourcePod must specify either name or labelSelector")
-	}
+// validateSourcePod validates the source pod config.
+// Empty name + empty labelSelector is valid (probe mode: CLI auto-deploys kubeasy-probe).
+func validateSourcePod(_ SourcePod) error {
 	return nil
 }
 

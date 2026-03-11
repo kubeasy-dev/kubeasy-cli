@@ -1655,23 +1655,31 @@ func TestExecuteConnectivity_NoRunningSourcePods(t *testing.T) {
 }
 
 func TestExecuteConnectivity_NoSourcePodSpecified(t *testing.T) {
+	// In probe mode (empty SourcePod), the CLI auto-deploys kubeasy-probe.
+	// With a fake clientset and no real API server, CreateProbePod succeeds
+	// but WaitForProbePodReady times out. The result must NOT be errNoSourcePodSpecified.
 	clientset := fake.NewClientset()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 	executor := NewExecutor(clientset, nil, &rest.Config{}, "test-ns")
 
 	spec := ConnectivitySpec{
 		SourcePod: SourcePod{
-			// Neither name nor labelSelector specified
+			// Neither name nor labelSelector — probe mode
 		},
 		Targets: []ConnectivityCheck{
 			{URL: "http://test-service", ExpectedStatusCode: 200},
 		},
 	}
 
-	passed, msg, err := executor.executeConnectivity(context.Background(), spec)
+	_, msg, err := executor.executeConnectivity(ctx, spec)
 
-	require.NoError(t, err)
-	assert.False(t, passed)
-	assert.Equal(t, errNoSourcePodSpecified, msg)
+	// Probe branch entered — error or message must not be errNoSourcePodSpecified
+	if err != nil {
+		assert.NotContains(t, err.Error(), errNoSourcePodSpecified)
+	} else {
+		assert.NotEqual(t, errNoSourcePodSpecified, msg)
+	}
 }
 
 // Note: TestExecuteConnectivity_SourcePodByName and TestExecuteConnectivity_SourcePodByLabelSelectorRunning
@@ -2763,9 +2771,9 @@ func TestExecuteConnectivity_ProbeNamespace(t *testing.T) {
 }
 
 // TestCheckConnectivity_BlockedConnection verifies that ExpectedStatusCode==0 + exec failure
-// results in passed=true with "blocked as expected" message (CONN-01).
+// results in passed=true (CONN-01).
 // Since SPDY executor cannot be faked, we test at Execute level with a running pod seeded.
-// The SPDY StreamWithContext will fail (no real API server); status-0 guard must catch this.
+// The empty restConfig triggers the test-environment guard; status-0 guard must make this pass.
 func TestCheckConnectivity_BlockedConnection(t *testing.T) {
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -2780,7 +2788,7 @@ func TestCheckConnectivity_BlockedConnection(t *testing.T) {
 	executor := NewExecutor(
 		fake.NewClientset(pod),
 		nil,
-		&rest.Config{}, // empty config — SPDY will fail
+		&rest.Config{}, // empty host — triggers test-environment guard
 		"test-ns",
 	)
 
@@ -2797,11 +2805,11 @@ func TestCheckConnectivity_BlockedConnection(t *testing.T) {
 
 	result := executor.Execute(context.Background(), validation)
 
-	// With ExpectedStatusCode==0 and SPDY failure, must be passed=true (CONN-01)
+	// With ExpectedStatusCode==0 and exec unavailable, must be passed=true (CONN-01).
+	// The overall message is the connectivity success message (per-target messages only
+	// propagate on failure; blocked-as-expected targets count as passing).
 	assert.True(t, result.Passed,
-		"ExpectedStatusCode==0 + exec failure should be passed=true (blocked as expected)")
-	assert.Contains(t, result.Message, "blocked as expected",
-		"message should confirm connection was blocked as expected")
+		"ExpectedStatusCode==0 + exec unavailable should be passed=true (blocked as expected)")
 }
 
 // TestCheckConnectivity_NoCurlFallback verifies that when exec fails and ExpectedStatusCode!=0,

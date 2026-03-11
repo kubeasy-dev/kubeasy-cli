@@ -385,21 +385,8 @@ objectives:
 `,
 			errorContains: "target must specify either name or labelSelector",
 		},
-		{
-			name: "sourcePod without name or labelSelector",
-			yaml: `
-objectives:
-  - key: test
-    type: connectivity
-    spec:
-      sourcePod:
-        container: main
-      targets:
-        - url: http://test
-          expectedStatusCode: 200
-`,
-			errorContains: "sourcePod must specify either name or labelSelector",
-		},
+		// Note: empty sourcePod (probe mode) is now valid — no test case needed here.
+		// See TestParse_ConnectivityProbeMode for probe mode acceptance test.
 	}
 
 	for _, tt := range tests {
@@ -457,38 +444,35 @@ func TestValidateTarget(t *testing.T) {
 	}
 }
 
-// TestValidateSourcePod tests the validateSourcePod function
+// TestValidateSourcePod tests the validateSourcePod function.
+// Since probe mode (empty sourcePod) is now valid, validateSourcePod always returns nil.
 func TestValidateSourcePod(t *testing.T) {
 	tests := []struct {
-		name        string
-		sourcePod   SourcePod
-		expectError bool
+		name      string
+		sourcePod SourcePod
 	}{
 		{
-			name:        "valid - with name",
-			sourcePod:   SourcePod{Name: "client-pod"},
-			expectError: false,
+			name:      "valid - with name",
+			sourcePod: SourcePod{Name: "client-pod"},
 		},
 		{
-			name:        "valid - with labelSelector",
-			sourcePod:   SourcePod{LabelSelector: map[string]string{"role": "client"}},
-			expectError: false,
+			name:      "valid - with labelSelector",
+			sourcePod: SourcePod{LabelSelector: map[string]string{"role": "client"}},
 		},
 		{
-			name:        "invalid - empty",
-			sourcePod:   SourcePod{},
-			expectError: true,
+			name:      "valid - empty (probe mode)",
+			sourcePod: SourcePod{},
+		},
+		{
+			name:      "valid - with namespace only (probe mode in explicit ns)",
+			sourcePod: SourcePod{Namespace: "other-ns"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateSourcePod(tt.sourcePod)
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
+			assert.NoError(t, err, "validateSourcePod should accept all configs (probe mode relaxation)")
 		})
 	}
 }

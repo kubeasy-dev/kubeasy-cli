@@ -2,7 +2,14 @@ package validation
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -3069,4 +3076,183 @@ func TestExecuteConnectivity_ExternalMode(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, passed)
 	assert.Equal(t, msgAllConnectivityPassed, msg)
+}
+
+// generateExpiredCert creates a self-signed TLS certificate that is already expired.
+// Used for TLS-01 tests to validate expiry checking behaviour.
+func generateExpiredCert(t *testing.T) tls.Certificate {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "expired.example.com"},
+		NotBefore:    time.Now().Add(-48 * time.Hour),
+		NotAfter:     time.Now().Add(-24 * time.Hour), // already expired
+		DNSNames:     []string{"expired.example.com"},
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	require.NoError(t, err)
+
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	keyPEM, err := x509.MarshalPKCS8PrivateKey(key)
+	require.NoError(t, err)
+	keyPEMBlock := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyPEM})
+
+	cert, err := tls.X509KeyPair(certPEM, keyPEMBlock)
+	require.NoError(t, err)
+	return cert
+}
+
+// TestCheckExternalConnectivityTLS tests TLS-specific behaviour in checkExternalConnectivity.
+// Covers TLS-01 (expiry), TLS-02 (SANs), TLS-03 (insecureSkipVerify).
+func TestCheckExternalConnectivityTLS(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	e := NewExecutor(nil, nil, nil, "test-ns")
+
+	// Test A (TLS-03): insecureSkipVerify=true + httptest TLS server → passed=true
+	t.Run("TLS-03 insecureSkipVerify passes self-signed cert", func(t *testing.T) {
+		srv := httptest.NewTLSServer(handler)
+		defer srv.Close()
+
+		target := ConnectivityCheck{
+			URL:                srv.URL + "/",
+			ExpectedStatusCode: 200,
+			TimeoutSeconds:     5,
+			TLS:                &TLSConfig{InsecureSkipVerify: true},
+		}
+		passed, msg := e.checkExternalConnectivity(context.Background(), target)
+		assert.True(t, passed, "expected passed=true with insecureSkipVerify, got msg: %s", msg)
+	})
+
+	// Test C (TLS-01): expired cert + validateExpiry=true → passed=false, message contains "Certificate expired on"
+	t.Run("TLS-01 expired cert fails with friendly message", func(t *testing.T) {
+		srv := httptest.NewUnstartedServer(handler)
+		srv.TLS = &tls.Config{
+			Certificates: []tls.Certificate{generateExpiredCert(t)},
+		}
+		srv.StartTLS()
+		defer srv.Close()
+
+		target := ConnectivityCheck{
+			URL:                srv.URL + "/",
+			ExpectedStatusCode: 200,
+			TimeoutSeconds:     5,
+			TLS:                &TLSConfig{ValidateExpiry: true},
+		}
+		passed, msg := e.checkExternalConnectivity(context.Background(), target)
+		assert.False(t, passed, "expected passed=false for expired cert")
+		assert.Contains(t, msg, "Certificate expired on", "expected friendly expiry message, got: %s", msg)
+		assert.Contains(t, msg, "days ago", "expected days-ago in message, got: %s", msg)
+	})
+
+	// Test D (TLS-01): valid cert + validateExpiry=true → passed=true
+	t.Run("TLS-01 valid cert passes expiry check", func(t *testing.T) {
+		srv := httptest.NewTLSServer(handler)
+		defer srv.Close()
+
+		target := ConnectivityCheck{
+			URL:                srv.URL + "/",
+			ExpectedStatusCode: 200,
+			TimeoutSeconds:     5,
+			TLS: &TLSConfig{
+				InsecureSkipVerify: false,
+				ValidateExpiry:     true,
+			},
+		}
+		// httptest cert is not in OS trust store; the tls probe fetches raw cert.
+		// Since validateExpiry=true (no insecureSkipVerify), the TLS probe runs but the
+		// HTTP request itself will fail with untrusted CA.
+		// We only assert the expiry check passes (not the HTTP status check).
+		// A non-expired cert should not produce an expiry failure message.
+		passed, msg := e.checkExternalConnectivity(context.Background(), target)
+		// The cert is valid (not expired) so the expiry check should pass.
+		// The HTTP request may fail due to untrusted CA (not our concern here).
+		assert.NotContains(t, msg, "Certificate expired on", "should not report expiry failure for valid cert")
+		_ = passed // pass/fail depends on OS trust — only assert no expiry error
+	})
+
+	// Test E (TLS-02): SAN mismatch + validateSANs=true + HostHeader mismatch → passed=false
+	t.Run("TLS-02 SAN mismatch fails with friendly message", func(t *testing.T) {
+		srv := httptest.NewTLSServer(handler)
+		defer srv.Close()
+
+		target := ConnectivityCheck{
+			URL:                srv.URL + "/",
+			ExpectedStatusCode: 200,
+			TimeoutSeconds:     5,
+			HostHeader:         "myapp.example.com", // not in httptest cert SANs (127.0.0.1 only)
+			TLS:                &TLSConfig{ValidateSANs: true},
+		}
+		passed, msg := e.checkExternalConnectivity(context.Background(), target)
+		assert.False(t, passed, "expected passed=false for SAN mismatch")
+		assert.Contains(t, msg, "myapp.example.com", "expected hostname in error message, got: %s", msg)
+		assert.Contains(t, msg, "not in SANs", "expected 'not in SANs' in message, got: %s", msg)
+	})
+
+	// Test F (TLS-02): httptest cert SAN + validateSANs=true + URL host matches SAN → passed=true
+	t.Run("TLS-02 matching SAN passes check", func(t *testing.T) {
+		srv := httptest.NewTLSServer(handler)
+		defer srv.Close()
+
+		// httptest cert has 127.0.0.1 as SAN; URL host is 127.0.0.1, no HostHeader set
+		target := ConnectivityCheck{
+			URL:                srv.URL + "/",
+			ExpectedStatusCode: 200,
+			TimeoutSeconds:     5,
+			// No HostHeader — SAN check uses URL hostname (127.0.0.1)
+			TLS: &TLSConfig{ValidateSANs: true},
+		}
+		// SAN check should pass (127.0.0.1 is in httptest cert SANs).
+		// HTTP request may fail due to untrusted CA — we only assert no SAN error.
+		_, msg := e.checkExternalConnectivity(context.Background(), target)
+		assert.NotContains(t, msg, "not in SANs", "should not report SAN failure when hostname matches, got: %s", msg)
+	})
+
+	// Test G: short-circuit — expired cert + validateExpiry → message does NOT contain "got status"
+	t.Run("TLS failure short-circuits HTTP status check", func(t *testing.T) {
+		srv := httptest.NewUnstartedServer(handler)
+		srv.TLS = &tls.Config{
+			Certificates: []tls.Certificate{generateExpiredCert(t)},
+		}
+		srv.StartTLS()
+		defer srv.Close()
+
+		target := ConnectivityCheck{
+			URL:                srv.URL + "/",
+			ExpectedStatusCode: 200,
+			TimeoutSeconds:     5,
+			TLS:                &TLSConfig{ValidateExpiry: true},
+		}
+		passed, msg := e.checkExternalConnectivity(context.Background(), target)
+		assert.False(t, passed)
+		assert.NotContains(t, msg, "got status", "TLS failure must short-circuit — no HTTP status message, got: %s", msg)
+	})
+
+	// Test H: insecureSkipVerify priority — insecureSkipVerify=true + validateExpiry=true → passed=true
+	t.Run("insecureSkipVerify takes priority over validateExpiry", func(t *testing.T) {
+		srv := httptest.NewUnstartedServer(handler)
+		srv.TLS = &tls.Config{
+			Certificates: []tls.Certificate{generateExpiredCert(t)},
+		}
+		srv.StartTLS()
+		defer srv.Close()
+
+		target := ConnectivityCheck{
+			URL:                srv.URL + "/",
+			ExpectedStatusCode: 200,
+			TimeoutSeconds:     5,
+			TLS: &TLSConfig{
+				InsecureSkipVerify: true,
+				ValidateExpiry:     true, // should be ignored when insecureSkipVerify=true
+			},
+		}
+		passed, msg := e.checkExternalConnectivity(context.Background(), target)
+		assert.True(t, passed, "expected passed=true — insecureSkipVerify must take priority, got msg: %s", msg)
+		assert.NotContains(t, msg, "Certificate expired on", "should not inspect cert when insecureSkipVerify=true, got: %s", msg)
+	})
 }

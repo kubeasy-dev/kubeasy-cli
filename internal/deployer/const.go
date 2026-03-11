@@ -1,7 +1,23 @@
 package deployer
 
+import "fmt"
+
 // ChallengesOCIRegistry is the base OCI registry for challenge artifacts.
 var ChallengesOCIRegistry = "ghcr.io/kubeasy-dev/challenges"
+
+// ProbePodName is the fixed name of the CLI-managed curl probe pod.
+// Fixed (not random) so labels are stable and challenge authors can target it in NetworkPolicy.
+const ProbePodName = "kubeasy-probe"
+
+// ProbePodImageVersion is the curlimages/curl image tag for the probe pod.
+// IMPORTANT: The comment format below is required for Renovate. Do not modify.
+// renovate: datasource=docker depName=curlimages/curl
+var ProbePodImageVersion = "8.13.0"
+
+// probePodImage returns the full curlimages/curl image reference with version.
+func probePodImage() string {
+	return fmt.Sprintf("curlimages/curl:%s", ProbePodImageVersion)
+}
 
 // KyvernoVersion is the Kyverno release version used for infrastructure setup.
 // IMPORTANT: The comment format below is required for Renovate. Do not modify.

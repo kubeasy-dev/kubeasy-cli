@@ -170,13 +170,18 @@ type ConnectivitySpec struct {
 }
 
 // SourcePod identifies the pod from which connectivity checks are executed
-// Use either Name or LabelSelector to identify the pod
+// Use either Name or LabelSelector to identify the pod, or leave both empty to
+// use a CLI-managed probe pod deployed into the challenge namespace.
 type SourcePod struct {
 	// Name matches a specific pod by exact name (mutually exclusive with LabelSelector)
 	Name string `yaml:"name,omitempty" json:"name,omitempty"`
 	// LabelSelector matches pods by labels, uses first matching pod
 	// Example: {"app": "curl-client"} or {"role": "tester"}
 	LabelSelector map[string]string `yaml:"labelSelector,omitempty" json:"labelSelector,omitempty"`
+	// Namespace is the namespace for the source pod.
+	// For probe mode (no Name/LabelSelector): probe pod is created here (defaults to challenge namespace).
+	// For existing pod lookup (Name or LabelSelector set): executor queries this namespace instead of e.namespace.
+	Namespace string `yaml:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // ConnectivityCheck represents a single HTTP connectivity test

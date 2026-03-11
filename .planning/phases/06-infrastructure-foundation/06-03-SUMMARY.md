@@ -3,6 +3,7 @@ phase: 06-infrastructure-foundation
 plan: "03"
 subsystem: deployer
 tags: [cert-manager, infrastructure, tdd, two-pass-apply, webhook]
+requirements-completed: [INFRA-04]
 dependency_graph:
   requires:
     - 06-01  # ComponentResult, notReady helper, version constants

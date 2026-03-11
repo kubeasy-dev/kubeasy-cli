@@ -3,6 +3,7 @@ phase: 06-infrastructure-foundation
 plan: 02
 subsystem: internal/deployer
 tags: [nginx-ingress, gateway-api, cloud-provider-kind, component-installer, tdd]
+requirements-completed: [INFRA-01, INFRA-02, INFRA-03]
 dependency_graph:
   requires: [06-01]
   provides: [installNginxIngress, installGatewayAPI, ensureCloudProviderKind]

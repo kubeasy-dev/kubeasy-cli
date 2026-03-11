@@ -1,36 +1,35 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: completed
-stopped_at: Completed 09-tls-validation 09-02-PLAN.md
-last_updated: "2026-03-11T14:30:24.742Z"
-last_activity: 2026-03-11 — Phase 7 Plan 02 complete; probe wiring + connectivity fixes; 297 tests pass
+milestone: v2.7.0
+milestone_name: Connectivity Extension
+status: milestone_complete
+stopped_at: v2.7.0 milestone archived
+last_updated: "2026-03-11"
+last_activity: 2026-03-11 — v2.7.0 milestone complete; 20/20 requirements; 341 tests pass
 progress:
   total_phases: 4
   completed_phases: 4
   total_plans: 10
   completed_plans: 10
-  percent: 0
+  percent: 100
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-11 after v2.7.0 milestone start)
+See: .planning/PROJECT.md (updated 2026-03-11 after v2.7.0 milestone)
 
 **Core value:** The validation system must be robust, extensible, and test-covered — so that adding a new validation type is simple and safe.
-**Current focus:** Phase 7 — Probe Pod Internal Connectivity (complete)
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 7 of 9 (Probe Pod Internal Connectivity)
-Plan: 02 of 02 (complete)
-Status: Phase complete — ready to begin Phase 8
-Last activity: 2026-03-11 — Phase 7 Plan 02 complete; probe wiring + connectivity fixes; 297 tests pass
+Milestone v2.7.0 complete and archived.
+Status: Ready for next milestone planning.
+Last activity: 2026-03-11 — v2.7.0 archived; 20/20 requirements; 341 tests pass
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -103,11 +102,7 @@ None yet.
 
 ### Blockers/Concerns
 
-- [Phase 6]: Kind cluster extraPortMappings (INFRA-06) cannot be patched on existing clusters — audit setup.go for `--reset` flag; may require cluster recreation for existing users
-- [Phase 6]: cert-manager webhook needs 15–30 s post-Ready polling on Endpoints object, not just ReadyReplicas
-- [Phase 6]: INFRA-02/03 require two-pass REST mapper refresh: apply CRDs, rebuild mapper, then apply GatewayClass resources
-- [Phase 7]: Probe pod concurrency model unresolved — single shared pod vs per-key pods; decide before writing plan
-- [Phase 8]: macOS Docker IP reachability with cloud-provider-kind v0.10.0 is MEDIUM confidence — verify locally before finalizing EXT-03 NodePort fallback
+- [v2.7.0 carried]: EXT-03 macOS Docker IP routing — sslip.io 127.x.x.x.sslip.io may not route to Kind node IP on macOS Docker Desktop; document in challenge authoring guide; consider CLI warning
 
 ## Session Continuity
 

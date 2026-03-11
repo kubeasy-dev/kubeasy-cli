@@ -57,13 +57,70 @@
 
 ---
 
+---
+
+## Milestone: v2.7.0 — Connectivity Extension
+
+**Shipped:** 2026-03-11
+**Phases:** 4 | **Plans:** 10
+
+### What Was Built
+
+- `SetupAllComponents` with 6 idempotent component installers and per-component status output
+- Kind cluster extraPortMappings 8080/8443 with full config-diff detection and recreation prompt
+- CLI-managed probe pod lifecycle (`curlimages/curl`) — auto-deploy/cleanup for NetworkPolicy testing
+- Blocked-connection assertion (`expectedStatus: 0`) + `sourceNamespace` cross-namespace field
+- External HTTP mode (`mode: external`) via `net/http` with Host header override and sslip.io support
+- TLS certificate validation (expiry, SAN, insecureSkipVerify) via `tls.Dialer` — pure stdlib
+
+### What Worked
+
+- **TDD RED→GREEN throughout**: All 4 phases wrote failing tests first. The RED phase was non-negotiable — it caught spec ambiguities before implementation started.
+- **Parallel plan execution (phases 06-02 and 06-03)**: Two plans ran concurrently in separate worktrees. Delivered two installers in the time it would have taken one.
+- **Probe pod independent-context cleanup**: Using `context.Background()` with a 10s timeout for cleanup (not the caller's context) was the right call — PROBE-03 works correctly with Ctrl-C.
+- **mode discriminant over new ValidationType**: Avoiding a new type prevented breaking changes across three repos. Parse-time validation in loader.go made the constraint enforceable.
+- **sslip.io for external routing**: Zero DNS configuration required — the URL encodes the IP. Worked immediately for localhost (127.x.x.x) with no special handling.
+
+### What Was Inefficient
+
+- **Nyquist sign-off deferred again**: All 4 phases executed with `nyquist_compliant: false`. Pattern from v1.0 repeated. The `/gsd:validate-phase` step needs to be part of the execute-phase checklist, not a post-milestone cleanup.
+- **SUMMARY.md `requirements-completed` frontmatter missed in 06-02 and 06-03**: The parallel execution caused attribution confusion. Both plans wrote code but only one got the SUMMARY frontmatter. Needs a checklist item in execute-phase.
+- **`errNoSourcePodSpecified` constant left as dead code**: Phase 07 plan noted to remove it but didn't — orphaned constant survived to audit. Small but recurring pattern of "clean up noted, not done."
+- **Phase 08 `IP auto-resolution from Ingress/Gateway resources`**: This was never actually implemented (the feature uses sslip.io hostnames instead). The roadmap goal mentioned it but the implementation took the simpler sslip.io path. ROADMAP goals should be updated when approach changes mid-phase.
+
+### Patterns Established
+
+- **ComponentResult pattern**: `func install*(ctx, clientset, ...) ComponentResult` — check readiness first, install if needed, always return a result. Reusable for future components.
+- **Two-pass apply for CRD-dependent resources**: Apply CRDs → rebuild REST mapper → apply dependent resources. Required for Gateway API (and cert-manager). Pattern documented in 06-02 SUMMARY.
+- **httptest.NewServer for external connectivity tests**: No real HTTP server needed in tests — `httptest.NewServer` handles TLS, status codes, and headers cleanly.
+- **tls.Dialer for cert probing**: Separating TLS handshake (cert inspection) from HTTP request allows validating cert properties independently of response status.
+- **Adapter pattern for testability**: `writeKindConfig()` → `writeKindConfigToPath(path)`. Public adapter calls the testable path-parameterized variant. Used for Kind config I/O.
+
+### Key Lessons
+
+1. **Make `/gsd:validate-phase` part of execute-phase, not post-milestone cleanup** — two milestones in a row with deferred Nyquist sign-off is the pattern failing.
+2. **Update ROADMAP phase goals when implementation approach changes** — "IP auto-resolution from Ingress/Gateway" was never built; sslip.io was the actual approach. The goal should have been updated when the decision was made.
+3. **Parallel plan execution requires coordination on SUMMARY frontmatter** — when two plans touch the same file in the same commit, both need their `requirements-completed` fields populated before commit.
+4. **sslip.io 127.x.x.x on macOS Docker Desktop needs a warning** — EXT-03 runtime risk is real; a CLI warning when `mode: external` targets are used would surface this to challenge authors early.
+
+### Cost Observations
+
+- Sessions: 1 milestone, 4 phases, 10 plans
+- Execution time: ~1 day (includes research, planning, execution, verification, audit)
+- Model mix: balanced profile (sonnet throughout)
+- Notable: Phase 06 was the heaviest (4 plans, parallel execution) but delivered the most infrastructure surface area
+
+---
+
 ## Cross-Milestone Trends
 
-| Metric | v1.0 |
-|--------|------|
-| Phases | 5 |
-| Plans | 14 |
-| Requirements | 16/16 |
-| Test coverage | ~45.8% |
-| Audit status | tech_debt (no blockers) |
-| Timeline | 2 days |
+| Metric | v1.0 | v2.7.0 |
+|--------|------|--------|
+| Phases | 5 | 4 |
+| Plans | 14 | 10 |
+| Requirements | 16/16 | 20/20 |
+| Test coverage | ~45.8% | ~37.3% (unit) |
+| Audit status | tech_debt (no blockers) | tech_debt (no blockers) |
+| Timeline | 2 days | 1 day |
+| Nyquist at ship | 0/5 compliant | 1/4 compliant (Phase 07 only) |
+| Tech debt pattern | deferred Nyquist | deferred Nyquist + stale test |

@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"sigs.k8s.io/kind/pkg/cluster"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/api"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
@@ -78,52 +77,34 @@ func runDemoStart(cmd *cobra.Command, args []string) error {
 	}
 
 	if !exists {
-		// Create the cluster
-		err := ui.TimedSpinner(fmt.Sprintf("Creating kind cluster 'kubeasy' (Kubernetes %s)", constants.GetKubernetesVersion()), func() error {
-			return cluster.NewProvider().Create(
-				"kubeasy",
-				cluster.CreateWithNodeImage(constants.KindNodeImage),
-			)
-		})
+		// Create the cluster with port mappings
+		err := ui.TimedSpinner(fmt.Sprintf("Creating kind cluster 'kubeasy' (Kubernetes %s)", constants.GetKubernetesVersion()), createClusterWithConfig)
 		if err != nil {
 			ui.Error(fmt.Sprintf("Failed to create Kind cluster with image %s", constants.KindNodeImage))
 			ui.Info("Verify that the Kind node image is available")
 			ui.Info("You can manually pull: docker pull " + constants.KindNodeImage)
 			return fmt.Errorf("failed to create kind cluster with image %s: %w", constants.KindNodeImage, err)
 		}
-
-		// Install infrastructure
-		err = ui.TimedSpinner("Installing infrastructure (Kyverno + local-path-provisioner)", deployer.SetupInfrastructure)
-		if err != nil {
-			ui.Error("Error installing infrastructure")
-			return fmt.Errorf("failed to install infrastructure: %w", err)
-		}
 	} else {
 		ui.Success("Cluster is ready!")
-
-		// Ensure infrastructure is installed
-		isReady, err := deployer.IsInfrastructureReady()
-		if err != nil {
-			ui.Error("Error checking infrastructure status")
-			return fmt.Errorf("failed to check infrastructure status: %w", err)
-		}
-
-		if !isReady {
-			err = ui.TimedSpinner("Installing infrastructure (Kyverno + local-path-provisioner)", deployer.SetupInfrastructure)
-			if err != nil {
-				ui.Error("Error installing infrastructure")
-				return fmt.Errorf("failed to install infrastructure: %w", err)
-			}
-		}
 	}
 
-	// 4. Create demo namespace
-	ui.Info("Creating demo namespace...")
-
+	// Install all infrastructure components
 	clientset, err := kube.GetKubernetesClient()
 	if err != nil {
 		return fmt.Errorf("failed to get kubernetes client: %w", err)
 	}
+	dynamicClient, err := kube.GetDynamicClient()
+	if err != nil {
+		return fmt.Errorf("failed to get kubernetes dynamic client: %w", err)
+	}
+	results := deployer.SetupAllComponents(ctx, clientset, dynamicClient)
+	for _, r := range results {
+		printComponentResult(r)
+	}
+
+	// 4. Create demo namespace
+	ui.Info("Creating demo namespace...")
 
 	if err := kube.CreateNamespace(ctx, clientset, demo.DemoNamespace); err != nil {
 		// Namespace might already exist, that's OK

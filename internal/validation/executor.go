@@ -3,8 +3,12 @@ package validation
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -500,6 +504,7 @@ func (e *Executor) checkExternalConnectivityAll(ctx context.Context, spec Connec
 
 // checkExternalConnectivity sends a single HTTP request from the CLI host via net/http.
 // No pod exec — used for mode: external (EXT-01).
+// When target.TLS is set, performs explicit TLS certificate checks before the HTTP request.
 func (e *Executor) checkExternalConnectivity(ctx context.Context, target ConnectivityCheck) (bool, string) {
 	timeout := target.TimeoutSeconds
 	if timeout == 0 {
@@ -509,6 +514,50 @@ func (e *Executor) checkExternalConnectivity(ctx context.Context, target Connect
 	reqCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 	defer cancel()
 
+	// Step 1 — Build tlsCfg for the HTTP transport.
+	tlsCfg := &tls.Config{}
+	if target.TLS != nil && target.TLS.InsecureSkipVerify {
+		tlsCfg.InsecureSkipVerify = true
+	}
+
+	// Step 2 — If explicit TLS checks requested (validateExpiry or validateSANs) AND NOT insecureSkipVerify:
+	// probe the raw cert first and apply manual validation before making the HTTP request.
+	if target.TLS != nil && !target.TLS.InsecureSkipVerify && (target.TLS.ValidateExpiry || target.TLS.ValidateSANs) {
+		cert, dialErr := probeTLSCert(reqCtx, target.URL)
+		if dialErr != nil {
+			return false, fmt.Sprintf("TLS dial failed: %v", dialErr)
+		}
+
+		if target.TLS.ValidateExpiry {
+			if time.Now().After(cert.NotAfter) {
+				delta := time.Since(cert.NotAfter)
+				days := int(delta.Hours() / 24)
+				return false, fmt.Sprintf("Certificate expired on %s (%d days ago)", cert.NotAfter.Format("2006-01-02"), days)
+			}
+		}
+
+		if target.TLS.ValidateSANs {
+			hostname := hostnameForSAN(target)
+			if err := cert.VerifyHostname(hostname); err != nil {
+				return false, fmt.Sprintf("Hostname %q not in SANs: %v", hostname, cert.DNSNames)
+			}
+		}
+	}
+
+	// Step 3 — Build HTTP client with TLS transport.
+	client := &http.Client{
+		Timeout: time.Duration(timeout) * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: tlsCfg,
+		},
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			// Return redirects as-is — do not follow automatically.
+			// Allows challenge specs to assert on 3xx status codes.
+			return http.ErrUseLastResponse
+		},
+	}
+
+	// Step 4 — Make HTTP request (existing logic, unchanged).
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, target.URL, nil)
 	if err != nil {
 		return false, fmt.Sprintf("Invalid URL %s: %v", target.URL, err)
@@ -519,15 +568,6 @@ func (e *Executor) checkExternalConnectivity(ctx context.Context, target Connect
 	// req.Header.Set("Host", h) does NOT work for the Host header in Go.
 	if target.HostHeader != "" {
 		req.Host = target.HostHeader
-	}
-
-	client := &http.Client{
-		Timeout: time.Duration(timeout) * time.Second,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-			// Return redirects as-is — do not follow automatically.
-			// Allows challenge specs to assert on 3xx status codes.
-			return http.ErrUseLastResponse
-		},
 	}
 
 	resp, err := client.Do(req)
@@ -545,6 +585,54 @@ func (e *Executor) checkExternalConnectivity(ctx context.Context, target Connect
 	}
 	return false, fmt.Sprintf("Connection to %s: got status %d, expected %d",
 		target.URL, resp.StatusCode, target.ExpectedStatusCode)
+}
+
+// probeTLSCert dials the TLS endpoint and returns the first peer certificate.
+// Always uses InsecureSkipVerify:true so metadata is fetched even for expired or self-signed certs.
+// Manual validation (expiry, SANs) is applied by the caller after this returns.
+func probeTLSCert(ctx context.Context, rawURL string) (*x509.Certificate, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid URL: %w", err)
+	}
+	host := u.Hostname()
+	port := u.Port()
+	if port == "" {
+		port = "443"
+	}
+
+	dialer := &tls.Dialer{
+		Config: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // cert probe — always fetches raw cert; manual validation applied below
+	}
+	conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(host, port))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	tlsConn, ok := conn.(*tls.Conn)
+	if !ok {
+		return nil, fmt.Errorf("unexpected connection type")
+	}
+
+	certs := tlsConn.ConnectionState().PeerCertificates
+	if len(certs) == 0 {
+		return nil, fmt.Errorf("no peer certificates returned")
+	}
+	return certs[0], nil
+}
+
+// hostnameForSAN returns the hostname to use for SAN validation.
+// Uses HostHeader when set (virtual-host routing pattern), falling back to the URL hostname.
+func hostnameForSAN(target ConnectivityCheck) string {
+	if target.HostHeader != "" {
+		return target.HostHeader
+	}
+	u, err := url.Parse(target.URL)
+	if err != nil {
+		return target.URL
+	}
+	return u.Hostname()
 }
 
 // buildCurlCommand constructs the curl argument slice for pod exec.

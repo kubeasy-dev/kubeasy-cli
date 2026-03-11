@@ -3177,6 +3177,8 @@ func TestCheckExternalConnectivityTLS(t *testing.T) {
 	})
 
 	// Test E (TLS-02): SAN mismatch + validateSANs=true + HostHeader mismatch → passed=false
+	// httptest cert has SANs: [example.com *.example.com 127.0.0.1 ::1]
+	// Use a hostname outside *.example.com to trigger a genuine mismatch.
 	t.Run("TLS-02 SAN mismatch fails with friendly message", func(t *testing.T) {
 		srv := httptest.NewTLSServer(handler)
 		defer srv.Close()
@@ -3185,12 +3187,12 @@ func TestCheckExternalConnectivityTLS(t *testing.T) {
 			URL:                srv.URL + "/",
 			ExpectedStatusCode: 200,
 			TimeoutSeconds:     5,
-			HostHeader:         "myapp.example.com", // not in httptest cert SANs (127.0.0.1 only)
+			HostHeader:         "myapp.other-domain.io", // not in httptest cert SANs
 			TLS:                &TLSConfig{ValidateSANs: true},
 		}
 		passed, msg := e.checkExternalConnectivity(context.Background(), target)
 		assert.False(t, passed, "expected passed=false for SAN mismatch")
-		assert.Contains(t, msg, "myapp.example.com", "expected hostname in error message, got: %s", msg)
+		assert.Contains(t, msg, "myapp.other-domain.io", "expected hostname in error message, got: %s", msg)
 		assert.Contains(t, msg, "not in SANs", "expected 'not in SANs' in message, got: %s", msg)
 	})
 

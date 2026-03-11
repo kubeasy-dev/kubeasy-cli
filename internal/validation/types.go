@@ -161,6 +161,11 @@ type EventSpec struct {
 // ConnectivitySpec tests HTTP connectivity between pods in the cluster
 // Use when: verifying Services work, NetworkPolicies allow traffic, or inter-pod communication
 type ConnectivitySpec struct {
+	// Mode controls how connectivity checks are executed.
+	// "internal" (default, empty string): existing pod exec via curl (SPDY)
+	// "external": CLI host sends HTTP request via net/http — no pod exec
+	// When absent, defaults to internal behavior for full backwards compatibility.
+	Mode string `yaml:"mode,omitempty" json:"mode,omitempty"`
 	// SourcePod specifies which pod to execute curl/wget commands from
 	// The pod must have curl or wget installed
 	// Security note: ensure source pods are trusted as they execute HTTP requests
@@ -199,6 +204,10 @@ type ConnectivityCheck struct {
 	// TimeoutSeconds is the maximum time to wait for a response (optional)
 	// Default is typically 10 seconds, increase for slow services
 	TimeoutSeconds int `yaml:"timeoutSeconds,omitempty" json:"timeoutSeconds,omitempty"`
+	// HostHeader overrides the HTTP Host header sent with the request.
+	// Only used when Mode is "external". Absent: Host is derived from URL automatically.
+	// Use when URL is a direct IP but Ingress routes by hostname.
+	HostHeader string `yaml:"hostHeader,omitempty" json:"hostHeader,omitempty"`
 }
 
 // Result represents the outcome of a single validation execution

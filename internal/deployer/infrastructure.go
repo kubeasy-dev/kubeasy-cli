@@ -3,15 +3,103 @@ package deployer
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
+	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/kube"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/restmapper"
+	kindv1alpha4 "sigs.k8s.io/kind/pkg/apis/config/v1alpha4"
+	sigsyaml "sigs.k8s.io/yaml"
 )
+
+// ComponentStatus represents the readiness status of a single infrastructure component.
+type ComponentStatus string
+
+const (
+	// StatusReady indicates the component is installed and ready.
+	StatusReady ComponentStatus = "ready"
+	// StatusNotReady indicates the component exists but is not yet ready.
+	StatusNotReady ComponentStatus = "not-ready"
+	// StatusMissing indicates the component is not installed.
+	StatusMissing ComponentStatus = "missing"
+)
+
+// ComponentResult holds the name, status, and optional message for an infrastructure component check.
+type ComponentResult struct {
+	Name    string
+	Status  ComponentStatus
+	Message string
+}
+
+// notReady returns a ComponentResult with StatusNotReady. Used by all installers
+// to reduce repetition when returning errors. Defined here (Wave 1) so it is
+// available to both Wave 2 plans (02 and 03) without conflict.
+func notReady(name string, err error) ComponentResult {
+	return ComponentResult{Name: name, Status: StatusNotReady, Message: err.Error()}
+}
+
+// writeKindConfig marshals the Kind cluster config to YAML and writes it to GetKindConfigPath().
+// Creates the ~/.kubeasy directory if it does not exist.
+// Called by setup.go (plan 04) when creating the Kind cluster with port mappings.
+func writeKindConfig(cfg *kindv1alpha4.Cluster) error { //nolint:unused // used by setup.go in plan 04
+	return writeKindConfigToPath(cfg, constants.GetKindConfigPath())
+}
+
+// writeKindConfigToPath marshals the Kind cluster config to YAML and writes it to the given path.
+// Creates the parent directory if it does not exist. This testable variant accepts an explicit path.
+func writeKindConfigToPath(cfg *kindv1alpha4.Cluster, path string) error {
+	data, err := sigsyaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal kind config: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return fmt.Errorf("failed to create kubeasy config dir: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return fmt.Errorf("failed to write kind config: %w", err)
+	}
+	return nil
+}
+
+// hasExtraPortMappings reports whether the kind-config.yaml at GetKindConfigPath() contains
+// ExtraPortMappings for both HostPort 8080 and 8443 on the first node.
+// Returns false if the file is missing or ports are absent — absence is not an error.
+// Called by setup.go (plan 04) to detect whether cluster recreation is needed.
+func hasExtraPortMappings() bool { //nolint:unused // used by setup.go in plan 04
+	return hasExtraPortMappingsAt(constants.GetKindConfigPath())
+}
+
+// hasExtraPortMappingsAt is the testable variant of hasExtraPortMappings that reads from the given path.
+func hasExtraPortMappingsAt(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		// File absent means cluster was created without this config — not an error.
+		return false
+	}
+	var cfg kindv1alpha4.Cluster
+	if err := sigsyaml.Unmarshal(data, &cfg); err != nil {
+		return false
+	}
+	if len(cfg.Nodes) == 0 {
+		return false
+	}
+	has8080, has8443 := false, false
+	for _, pm := range cfg.Nodes[0].ExtraPortMappings {
+		if pm.HostPort == 8080 {
+			has8080 = true
+		}
+		if pm.HostPort == 8443 {
+			has8443 = true
+		}
+	}
+	return has8080 && has8443
+}
 
 const (
 	kyvernoNamespace             = "kyverno"

@@ -2,6 +2,8 @@ package deployer
 
 import (
 	"context"
+	"errors"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,6 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
+	kindv1alpha4 "sigs.k8s.io/kind/pkg/apis/config/v1alpha4"
 )
 
 func makeDeployment(namespace, name string, replicas int32, ready bool) *appsv1.Deployment {
@@ -183,4 +186,112 @@ func TestInfrastructureURLs(t *testing.T) {
 		assert.Contains(t, url, LocalPathProvisionerVersion,
 			"local-path-provisioner install URL should contain the configured version")
 	})
+}
+
+// --- ComponentResult tests ---
+
+func TestComponentResult_StatusReady(t *testing.T) {
+	r := ComponentResult{Name: "test", Status: StatusReady, Message: "ok"}
+	assert.Equal(t, ComponentStatus("ready"), r.Status)
+}
+
+func TestComponentResult_StatusNotReady(t *testing.T) {
+	r := ComponentResult{Name: "test", Status: StatusNotReady, Message: "not ready"}
+	assert.Equal(t, ComponentStatus("not-ready"), r.Status)
+}
+
+func TestComponentResult_StatusMissing(t *testing.T) {
+	r := ComponentResult{Name: "test", Status: StatusMissing, Message: "missing"}
+	assert.Equal(t, ComponentStatus("missing"), r.Status)
+}
+
+// --- notReady helper tests ---
+
+func TestNotReady(t *testing.T) {
+	err := errors.New("boom")
+	r := notReady("foo", err)
+	assert.Equal(t, "foo", r.Name)
+	assert.Equal(t, StatusNotReady, r.Status)
+	assert.Equal(t, "boom", r.Message)
+}
+
+// --- hasExtraPortMappingsAt tests ---
+
+func TestHasExtraPortMappings_FileNotExist(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "nonexistent.yaml")
+	result := hasExtraPortMappingsAt(path)
+	assert.False(t, result, "should return false when config file does not exist")
+}
+
+func TestHasExtraPortMappings_WithCorrectPorts(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "kind-config.yaml")
+
+	cfg := &kindv1alpha4.Cluster{
+		TypeMeta: kindv1alpha4.TypeMeta{
+			Kind:       "Cluster",
+			APIVersion: "kind.x-k8s.io/v1alpha4",
+		},
+		Nodes: []kindv1alpha4.Node{
+			{
+				Role: kindv1alpha4.ControlPlaneRole,
+				ExtraPortMappings: []kindv1alpha4.PortMapping{
+					{ContainerPort: 80, HostPort: 8080},
+					{ContainerPort: 443, HostPort: 8443},
+				},
+			},
+		},
+	}
+	require.NoError(t, writeKindConfigToPath(cfg, path))
+	assert.True(t, hasExtraPortMappingsAt(path), "should return true when 8080 and 8443 are mapped")
+}
+
+func TestHasExtraPortMappings_WithDifferentPorts(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "kind-config.yaml")
+
+	cfg := &kindv1alpha4.Cluster{
+		TypeMeta: kindv1alpha4.TypeMeta{
+			Kind:       "Cluster",
+			APIVersion: "kind.x-k8s.io/v1alpha4",
+		},
+		Nodes: []kindv1alpha4.Node{
+			{
+				Role: kindv1alpha4.ControlPlaneRole,
+				ExtraPortMappings: []kindv1alpha4.PortMapping{
+					{ContainerPort: 80, HostPort: 9080},
+					{ContainerPort: 443, HostPort: 9443},
+				},
+			},
+		},
+	}
+	require.NoError(t, writeKindConfigToPath(cfg, path))
+	assert.False(t, hasExtraPortMappingsAt(path), "should return false when ports are different from 8080/8443")
+}
+
+// --- writeKindConfig round-trip test ---
+
+func TestWriteKindConfig_RoundTrip(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "kind-config.yaml")
+
+	cfg := &kindv1alpha4.Cluster{
+		TypeMeta: kindv1alpha4.TypeMeta{
+			Kind:       "Cluster",
+			APIVersion: "kind.x-k8s.io/v1alpha4",
+		},
+		Nodes: []kindv1alpha4.Node{
+			{
+				Role: kindv1alpha4.ControlPlaneRole,
+				ExtraPortMappings: []kindv1alpha4.PortMapping{
+					{ContainerPort: 80, HostPort: 8080},
+					{ContainerPort: 443, HostPort: 8443},
+				},
+			},
+		},
+	}
+
+	require.NoError(t, writeKindConfigToPath(cfg, path))
+	assert.True(t, hasExtraPortMappingsAt(path), "round-trip: write then read should return true")
 }

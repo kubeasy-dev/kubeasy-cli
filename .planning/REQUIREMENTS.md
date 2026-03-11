@@ -12,7 +12,7 @@ Requirements for the Connectivity Extension milestone. Each maps to roadmap phas
 - [ ] **INFRA-01**: User can run `kubeasy setup` with nginx-ingress controller installé (ingress-nginx v1.15.0, Kind-specific manifest)
 - [ ] **INFRA-02**: User can run `kubeasy setup` avec les CRDs Gateway API v1.2.1 Standard channel installées
 - [ ] **INFRA-03**: User can run `kubeasy setup` avec le contrôleur Gateway API de cloud-provider-kind activé (bundlé, pas d'installation séparée)
-- [ ] **INFRA-04**: User can run `kubeasy setup` avec cert-manager v1.19.4 installé (deux passes : CRDs puis contrôleur)
+- [x] **INFRA-04**: User can run `kubeasy setup` avec cert-manager v1.19.4 installé (deux passes : CRDs puis contrôleur)
 - [ ] **INFRA-05**: User voit un message clair si cloud-provider-kind n'est pas en cours d'exécution — avec instructions d'installation (détection seulement, pas auto-install)
 - [x] **INFRA-06**: Kind cluster est créé avec extraPortMappings sur ports 8080/8443 (non-privilégiés) pour nginx-ingress
 - [x] **INFRA-07**: `kubeasy setup` rapporte le statut de chaque nouveau composant (ready/not-ready/missing) dans la sortie
@@ -78,7 +78,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INFRA-01 | Phase 6 | Pending |
 | INFRA-02 | Phase 6 | Pending |
 | INFRA-03 | Phase 6 | Pending |
-| INFRA-04 | Phase 6 | Pending |
+| INFRA-04 | Phase 6 | Complete |
 | INFRA-05 | Phase 6 | Pending |
 | INFRA-06 | Phase 6 | Complete |
 | INFRA-07 | Phase 6 | Complete |

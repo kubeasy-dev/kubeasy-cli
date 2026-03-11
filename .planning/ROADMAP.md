@@ -102,7 +102,7 @@ Plans:
 | 3. Error Handling | v1.0 | 3/3 | Complete | 2026-03-09 |
 | 4. Code Quality | v1.0 | 3/3 | Complete | 2026-03-10 |
 | 5. Security Hardening | v1.0 | 2/2 | Complete | 2026-03-10 |
-| 6. Infrastructure Foundation | 1/4 | In Progress|  | - |
+| 6. Infrastructure Foundation | 2/4 | In Progress|  | - |
 | 7. Probe Pod + Internal Connectivity | v2.7.0 | 0/? | Not started | - |
 | 8. External HTTP | v2.7.0 | 0/? | Not started | - |
 | 9. TLS Validation | v2.7.0 | 0/? | Not started | - |

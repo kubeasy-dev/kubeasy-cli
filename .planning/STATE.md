@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed 06-infrastructure-foundation plan 01
-last_updated: "2026-03-11T09:10:29.585Z"
+stopped_at: Completed 06-infrastructure-foundation plan 03
+last_updated: "2026-03-11T09:19:44.480Z"
 last_activity: 2026-03-11 — Roadmap created, phases 6–9 defined, 20/20 v2.7.0 requirements mapped
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 4
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -45,6 +45,7 @@ Progress: [░░░░░░░░░░] 0%
 |-------|-------|-------|----------|
 | — | — | — | — |
 | Phase 06-infrastructure-foundation P01 | 4min | 2 tasks | 4 files |
+| Phase 06-infrastructure-foundation P03 | 7min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -63,6 +64,8 @@ Recent decisions affecting current work:
 - [Phase 06-01]: Path constants implemented as functions not vars: os.UserHomeDir() called at runtime for portability
 - [Phase 06-01]: File permissions 0o600 for kind-config.yaml per gosec G306 security requirements
 - [Phase 06-01]: nolint:unused directive for Wave 1 helpers (writeKindConfig, hasExtraPortMappings) used by plan 04 setup.go
+- [Phase 06-03]: installCertManager uses *kubernetes.Clientset (not Interface) to satisfy kube.WaitForDeploymentsReady signature
+- [Phase 06-03]: waitForCertManagerWebhookEndpoints uses legacy corev1.Endpoints API — matches cert-manager webhook service registration
 
 ### Pending Todos
 
@@ -78,6 +81,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-11T09:10:29.583Z
-Stopped at: Completed 06-infrastructure-foundation plan 01
+Last session: 2026-03-11T09:19:44.478Z
+Stopped at: Completed 06-infrastructure-foundation plan 03
 Resume file: None

@@ -59,11 +59,11 @@ Plans:
   3. Challenge spec can target a probe pod in a different namespace than the challenge namespace via `probeNamespace`
   4. A connectivity validation with `expectedStatus: 0` passes when the connection is blocked (timeout or refused)
   5. Source pod namespace is configurable via `sourceNamespace` enabling cross-namespace NetworkPolicy test scenarios
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 07-01: TBD
-- [ ] 07-02: TBD
+- [ ] 07-01-PLAN.md — Probe pod deployer: constants, CreateProbePod/DeleteProbePod/WaitForProbePodReady, SourcePod.Namespace field
+- [ ] 07-02-PLAN.md — Executor wiring: probe lifecycle in executeConnectivity, status-0 guard, wget removal, namespace resolution, loader relaxation
 
 ### Phase 8: External HTTP
 **Goal**: Users can validate external HTTP connectivity to Ingress or Gateway API resources — the CLI makes the request directly, resolves the IP from the resource status, and handles the macOS Docker routing gap
@@ -103,6 +103,6 @@ Plans:
 | 4. Code Quality | v1.0 | 3/3 | Complete | 2026-03-10 |
 | 5. Security Hardening | v1.0 | 2/2 | Complete | 2026-03-10 |
 | 6. Infrastructure Foundation | 4/4 | Complete   | 2026-03-11 | - |
-| 7. Probe Pod + Internal Connectivity | v2.7.0 | 0/? | Not started | - |
+| 7. Probe Pod + Internal Connectivity | v2.7.0 | 0/2 | Not started | - |
 | 8. External HTTP | v2.7.0 | 0/? | Not started | - |
 | 9. TLS Validation | v2.7.0 | 0/? | Not started | - |

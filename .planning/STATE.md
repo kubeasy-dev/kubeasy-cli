@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 08-external-http/08-01-PLAN.md
-last_updated: "2026-03-11T12:59:13.206Z"
+stopped_at: Completed 08-external-http/08-02-PLAN.md
+last_updated: "2026-03-11T13:04:25.671Z"
 last_activity: 2026-03-11 — Phase 7 Plan 02 complete; probe wiring + connectivity fixes; 297 tests pass
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
   percent: 0
 ---
 
@@ -51,6 +51,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 07-probe-pod-internal-connectivity P01 | 201s | 3 tasks | 4 files |
 | Phase 07-probe-pod-internal-connectivity P02 | 24min | 3 tasks | 4 files |
 | Phase 08-external-http P01 | 8min | 2 tasks | 3 files |
+| Phase 08-external-http P02 | 3min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -84,6 +85,9 @@ Recent decisions affecting current work:
 - [Phase 08-01]: Mode field is empty string (not 'internal') by default — no migration needed for existing challenges
 - [Phase 08-01]: HostHeader field lives on ConnectivityCheck (per-target), not ConnectivitySpec — per-target Host header override
 - [Phase 08-01]: mode:external + sourcePod rejected at parse time (fail fast) — executor never sees incoherent specs
+- [Phase 08-02]: TDD RED+GREEN committed atomically — pre-commit hook rejects compilation failures in test files
+- [Phase 08-02]: req.Host used for virtual-host routing in net/http (not req.Header.Set) — only req.Host overrides wire Host header
+- [Phase 08-02]: CheckRedirect returns http.ErrUseLastResponse — allows 3xx assertions in challenge specs
 
 ### Pending Todos
 
@@ -99,6 +103,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-11T12:59:13.203Z
-Stopped at: Completed 08-external-http/08-01-PLAN.md
+Last session: 2026-03-11T13:04:25.669Z
+Stopped at: Completed 08-external-http/08-02-PLAN.md
 Resume file: None

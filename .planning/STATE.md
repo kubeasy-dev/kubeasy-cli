@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed 07-probe-pod-internal-connectivity-01-PLAN.md
-last_updated: "2026-03-11T10:59:20.471Z"
-last_activity: 2026-03-11 — Roadmap created, phases 6–9 defined, 20/20 v2.7.0 requirements mapped
+stopped_at: Completed 07-probe-pod-internal-connectivity-02-PLAN.md
+last_updated: "2026-03-11T11:25:00Z"
+last_activity: 2026-03-11 — Phase 7 Plan 02 complete; probe wiring + connectivity fixes; 297 tests pass
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-11 after v2.7.0 milestone start)
 
 **Core value:** The validation system must be robust, extensible, and test-covered — so that adding a new validation type is simple and safe.
-**Current focus:** Phase 6 — Infrastructure Foundation (ready to plan)
+**Current focus:** Phase 7 — Probe Pod Internal Connectivity (complete)
 
 ## Current Position
 
-Phase: 6 of 9 (Infrastructure Foundation)
-Plan: — (not started)
-Status: Ready to plan
-Last activity: 2026-03-11 — Roadmap created, phases 6–9 defined, 20/20 v2.7.0 requirements mapped
+Phase: 7 of 9 (Probe Pod Internal Connectivity)
+Plan: 02 of 02 (complete)
+Status: Phase complete — ready to begin Phase 8
+Last activity: 2026-03-11 — Phase 7 Plan 02 complete; probe wiring + connectivity fixes; 297 tests pass
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -49,6 +49,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 06-infrastructure-foundation P02 | 12min | 2 tasks | 4 files |
 | Phase 06-infrastructure-foundation P04 | 25 | 3 tasks | 5 files |
 | Phase 07-probe-pod-internal-connectivity P01 | 201s | 3 tasks | 4 files |
+| Phase 07-probe-pod-internal-connectivity P02 | 24min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -76,6 +77,9 @@ Recent decisions affecting current work:
 - [Phase 06-04]: printComponentResult lives in cmd/setup.go not deployer/ — UI concern, not deployment concern
 - [Phase 06-04]: SetupInfrastructure kept (not deleted) — only active callers migrated to eliminate SA1019 deprecation lint
 - [Phase 07-probe-pod-internal-connectivity]: DeleteProbePod uses context.Background()+10s internally (not caller ctx) to guarantee cleanup on cancellation (PROBE-03)
+- [Phase 07-02]: restConfig.Host emptiness used as test-environment guard for fake clientset (non-nil RESTClient with nil internal client panics on Post())
+- [Phase 07-02]: blocked-as-expected per-target message not propagated to overall result (only failures are added to messages); tests assert result.Passed==true without message check
+- [Phase 07-02]: validateSourcePod is a no-op (probe mode relaxation) — empty sourcePod is valid
 
 ### Pending Todos
 
@@ -91,6 +95,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-11T10:59:20.469Z
-Stopped at: Completed 07-probe-pod-internal-connectivity-01-PLAN.md
+Last session: 2026-03-11T11:25:00Z
+Stopped at: Completed 07-probe-pod-internal-connectivity-02-PLAN.md
 Resume file: None

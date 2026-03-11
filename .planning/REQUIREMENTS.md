@@ -22,12 +22,12 @@ Requirements for the Connectivity Extension milestone. Each maps to roadmap phas
 - [x] **PROBE-01**: User peut définir une validation connectivity sans `sourcePod` — le CLI auto-déploie un pod probe (`kubeasy-probe`) avec curl dans le namespace spécifié
 - [x] **PROBE-02**: Challenge spec peut spécifier le namespace du pod probe (champ `probeNamespace`, défaut : namespace du challenge)
 - [x] **PROBE-03**: Pod probe est supprimé après la validation via un contexte de cleanup indépendant (pas le contexte de validation annulé)
-- [ ] **PROBE-04**: Fallback wget `sh -c` supprimé de `checkConnectivity` — curl uniquement, fix TODO(sec)
+- [x] **PROBE-04**: Fallback wget `sh -c` supprimé de `checkConnectivity` — curl uniquement, fix TODO(sec)
 
 ### Connectivité interne — améliorations (CONN)
 
-- [ ] **CONN-01**: User peut tester une connexion bloquée (status code 0 = timeout/refused) — déjà documenté dans types.go, doit être implémenté
-- [ ] **CONN-02**: Source pod namespace configurable dans la spec (champ `sourceNamespace`) pour les tests NetworkPolicy cross-namespace
+- [x] **CONN-01**: User peut tester une connexion bloquée (status code 0 = timeout/refused) — déjà documenté dans types.go, doit être implémenté
+- [x] **CONN-02**: Source pod namespace configurable dans la spec (champ `sourceNamespace`) pour les tests NetworkPolicy cross-namespace
 
 ### Connectivité externe (EXT)
 
@@ -85,9 +85,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PROBE-01 | Phase 7 | Complete |
 | PROBE-02 | Phase 7 | Complete |
 | PROBE-03 | Phase 7 | Complete |
-| PROBE-04 | Phase 7 | Pending |
-| CONN-01 | Phase 7 | Pending |
-| CONN-02 | Phase 7 | Pending |
+| PROBE-04 | Phase 7 | Complete |
+| CONN-01 | Phase 7 | Complete |
+| CONN-02 | Phase 7 | Complete |
 | EXT-01 | Phase 8 | Pending |
 | EXT-02 | Phase 8 | Pending |
 | EXT-03 | Phase 8 | Pending |

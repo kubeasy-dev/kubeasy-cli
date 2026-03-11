@@ -406,65 +406,16 @@ func IsInfrastructureReady() (bool, error) {
 }
 
 // IsInfrastructureReadyWithClient checks infrastructure readiness using the provided client.
+// Delegates to the per-component checkers to avoid duplicating readiness logic.
 func IsInfrastructureReadyWithClient(ctx context.Context, clientset kubernetes.Interface) (bool, error) {
-	// Check Kyverno namespace exists
-	_, err := clientset.CoreV1().Namespaces().Get(ctx, kyvernoNamespace, metav1.GetOptions{})
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			logger.Debug("Kyverno namespace does not exist")
-			return false, nil
-		}
-		return false, fmt.Errorf("error checking kyverno namespace: %w", err)
+	if ok, err := isKyvernoReadyWithClient(ctx, clientset); !ok || err != nil {
+		return ok, err
 	}
-
-	// Check Kyverno deployments
-	kyvernoDeployments := []string{
-		"kyverno-admission-controller",
-		"kyverno-background-controller",
-		"kyverno-cleanup-controller",
-		"kyverno-reports-controller",
+	ok, err := isLocalPathProvisionerReadyWithClient(ctx, clientset)
+	if ok {
+		logger.Info("Infrastructure is already installed and ready")
 	}
-	for _, name := range kyvernoDeployments {
-		dep, err := clientset.AppsV1().Deployments(kyvernoNamespace).Get(ctx, name, metav1.GetOptions{})
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				logger.Debug("Kyverno deployment '%s' not found", name)
-				return false, nil
-			}
-			return false, fmt.Errorf("error checking kyverno deployment '%s': %w", name, err)
-		}
-		if dep.Status.ReadyReplicas == 0 || dep.Status.ReadyReplicas != dep.Status.Replicas {
-			logger.Debug("Kyverno deployment '%s' not ready (Ready: %d/%d)", name, dep.Status.ReadyReplicas, dep.Status.Replicas)
-			return false, nil
-		}
-	}
-
-	// Check local-path-storage namespace exists
-	_, err = clientset.CoreV1().Namespaces().Get(ctx, localPathStorageNamespace, metav1.GetOptions{})
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			logger.Debug("local-path-storage namespace does not exist")
-			return false, nil
-		}
-		return false, fmt.Errorf("error checking local-path-storage namespace: %w", err)
-	}
-
-	// Check local-path-provisioner deployment
-	dep, err := clientset.AppsV1().Deployments(localPathStorageNamespace).Get(ctx, "local-path-provisioner", metav1.GetOptions{})
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			logger.Debug("local-path-provisioner deployment not found")
-			return false, nil
-		}
-		return false, fmt.Errorf("error checking local-path-provisioner deployment: %w", err)
-	}
-	if dep.Status.ReadyReplicas == 0 || dep.Status.ReadyReplicas != dep.Status.Replicas {
-		logger.Debug("local-path-provisioner not ready (Ready: %d/%d)", dep.Status.ReadyReplicas, dep.Status.Replicas)
-		return false, nil
-	}
-
-	logger.Info("Infrastructure is already installed and ready")
-	return true, nil
+	return ok, err
 }
 
 // certManagerCRDsURL returns the URL for the cert-manager CRDs manifest.
@@ -540,7 +491,10 @@ func waitForCertManagerWebhookEndpoints(ctx context.Context, clientset kubernete
 // Called by setup.go (plan 04) when setting up the infrastructure.
 func installCertManager(ctx context.Context, clientset *kubernetes.Clientset, dynamicClient dynamic.Interface, mapper meta.RESTMapper) ComponentResult {
 	// Idempotency check
-	ready, _ := isCertManagerReadyWithClient(ctx, clientset)
+	ready, err := isCertManagerReadyWithClient(ctx, clientset)
+	if err != nil {
+		return notReady("cert-manager", err)
+	}
 	if ready {
 		return ComponentResult{Name: "cert-manager", Status: StatusReady, Message: "already installed"}
 	}

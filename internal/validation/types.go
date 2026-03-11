@@ -44,6 +44,13 @@ type Validation struct {
 type ValidationType string
 
 const (
+	// ConnectivityModeExternal sends HTTP requests from the CLI host via net/http (no pod exec).
+	ConnectivityModeExternal = "external"
+	// ConnectivityModeInternal executes curl inside a source pod via SPDY exec (default).
+	ConnectivityModeInternal = "internal"
+)
+
+const (
 	// TypeStatus validates arbitrary status fields with operators
 	// Value: "status" - Use when checking numeric fields, string values, or any status field
 	TypeStatus ValidationType = "status"
@@ -152,9 +159,10 @@ type EventSpec struct {
 	// Common values: CrashLoopBackOff, ImagePullBackOff, OOMKilled, Error, BackOff,
 	// FailedScheduling, FailedMount, Unhealthy, Evicted, NodeNotReady
 	ForbiddenReasons []string `yaml:"forbiddenReasons" json:"forbiddenReasons"`
-	// SinceSeconds limits the time window for event checking (optional)
-	// Events older than this are ignored, e.g., 600 for last 10 minutes
-	// When omitted (0), checks all events regardless of age
+	// SinceSeconds limits the time window for event checking (optional).
+	// Events older than this are ignored, e.g., 600 for last 10 minutes.
+	// When omitted (0) in YAML: the loader applies DefaultEventSinceSeconds (300s).
+	// When explicitly set to 0 in Go code: no time filter is applied (all events checked).
 	SinceSeconds int `yaml:"sinceSeconds,omitempty" json:"sinceSeconds,omitempty"`
 }
 
@@ -201,8 +209,8 @@ type ConnectivityCheck struct {
 	// Common values: 200 (OK), 201 (Created), 204 (No Content), 301/302 (Redirects)
 	// Use 0 to verify connection failed (timeout or refused, useful for NetworkPolicy tests)
 	ExpectedStatusCode int `yaml:"expectedStatusCode" json:"expectedStatusCode"`
-	// TimeoutSeconds is the maximum time to wait for a response (optional)
-	// Default is typically 10 seconds, increase for slow services
+	// TimeoutSeconds is the maximum time to wait for a response (optional).
+	// Default: 5 seconds (DefaultConnectivityTimeoutSeconds). Increase for slow services.
 	TimeoutSeconds int `yaml:"timeoutSeconds,omitempty" json:"timeoutSeconds,omitempty"`
 	// HostHeader overrides the HTTP Host header sent with the request.
 	// Only used when Mode is "external". Absent: Host is derived from URL automatically.

@@ -67,6 +67,9 @@ func CreateProbePod(ctx context.Context, clientset kubernetes.Interface, namespa
 // PROBE-03 contract: uses an independent context.Background()+10s timeout internally
 // rather than the caller's context, to guarantee cleanup even when the caller context
 // has been cancelled (e.g., during error teardown or test cleanup).
+// The context.Context parameter is accepted for API consistency but deliberately ignored.
+//
+//nolint:revive // context is intentionally discarded — see PROBE-03 contract above
 func DeleteProbePod(_ context.Context, clientset kubernetes.Interface, namespace string) error {
 	cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

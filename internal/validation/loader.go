@@ -231,16 +231,13 @@ func parseSpec(v *Validation) error {
 			return err
 		}
 		// EXT-01: fail fast if mode: external is combined with sourcePod (incoherent spec)
-		if spec.Mode == "external" {
+		if spec.Mode == ConnectivityModeExternal {
 			sp := spec.SourcePod
 			if sp.Name != "" || len(sp.LabelSelector) > 0 || sp.Namespace != "" {
 				return fmt.Errorf("mode: external is incompatible with sourcePod (remove sourcePod or use mode: internal)")
 			}
-		} else if spec.Mode != "" && spec.Mode != "internal" {
+		} else if spec.Mode != "" && spec.Mode != ConnectivityModeInternal {
 			return fmt.Errorf("invalid mode %q: must be \"internal\" or \"external\"", spec.Mode)
-		}
-		if err := validateSourcePod(spec.SourcePod); err != nil {
-			return err
 		}
 		// Apply default timeout to connectivity targets if not specified
 		for i := range spec.Targets {
@@ -248,7 +245,20 @@ func parseSpec(v *Validation) error {
 				spec.Targets[i].TimeoutSeconds = DefaultConnectivityTimeoutSeconds
 			}
 		}
-		// TLS field on each target is populated by yaml.Unmarshal — no explicit default needed.
+		// Validate per-target TLS configuration.
+		for i, t := range spec.Targets {
+			if t.TLS == nil {
+				continue
+			}
+			// TLS config is only meaningful for external mode over https://.
+			if spec.Mode != ConnectivityModeExternal {
+				return fmt.Errorf("target %d: tls config is only valid with mode: external", i)
+			}
+			// InsecureSkipVerify is incompatible with explicit validation flags.
+			if t.TLS.InsecureSkipVerify && (t.TLS.ValidateExpiry || t.TLS.ValidateSANs) {
+				return fmt.Errorf("target %d: insecureSkipVerify: true is incompatible with validateExpiry or validateSANs", i)
+			}
+		}
 		v.Spec = spec
 
 	default:
@@ -263,12 +273,6 @@ func validateTarget(target Target) error {
 	if target.Name == "" && len(target.LabelSelector) == 0 {
 		return fmt.Errorf("target must specify either name or labelSelector")
 	}
-	return nil
-}
-
-// validateSourcePod validates the source pod config.
-// Empty name + empty labelSelector is valid (probe mode: CLI auto-deploys kubeasy-probe).
-func validateSourcePod(_ SourcePod) error {
 	return nil
 }
 

@@ -375,13 +375,18 @@ func (e *Executor) executeEvent(ctx context.Context, spec EventSpec) (bool, stri
 		return false, "", fmt.Errorf("failed to list events: %w", err)
 	}
 
-	// Filter events by time
-	sinceTime := time.Now().Add(-time.Duration(spec.SinceSeconds) * time.Second)
-
 	var forbiddenFound []string
 	podNames := make(map[string]bool)
 	for _, pod := range pods {
 		podNames[pod.Name] = true
+	}
+
+	// sinceSeconds==0 means "no time filter" — check all events regardless of age.
+	// The loader normalises 0 to DefaultEventSinceSeconds (300s) when loading from YAML,
+	// so 0 only reaches here when EventSpec is constructed directly in code.
+	var sinceTime time.Time
+	if spec.SinceSeconds > 0 {
+		sinceTime = time.Now().Add(-time.Duration(spec.SinceSeconds) * time.Second)
 	}
 
 	for _, event := range events.Items {
@@ -390,8 +395,8 @@ func (e *Executor) executeEvent(ctx context.Context, spec EventSpec) (bool, stri
 			continue
 		}
 
-		// Check if event is recent enough
-		if event.LastTimestamp.Time.Before(sinceTime) && event.EventTime.Time.Before(sinceTime) {
+		// Check if event is recent enough (skip filter when sinceTime is zero value)
+		if !sinceTime.IsZero() && event.LastTimestamp.Time.Before(sinceTime) && event.EventTime.Time.Before(sinceTime) {
 			continue
 		}
 
@@ -414,7 +419,7 @@ func (e *Executor) executeConnectivity(ctx context.Context, spec ConnectivitySpe
 	logger.Debug("Executing connectivity validation")
 
 	// EXT-01: external mode — CLI host sends HTTP request via net/http, no pod exec
-	if spec.Mode == "external" {
+	if spec.Mode == ConnectivityModeExternal {
 		return e.checkExternalConnectivityAll(ctx, spec)
 	}
 

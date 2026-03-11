@@ -444,39 +444,6 @@ func TestValidateTarget(t *testing.T) {
 	}
 }
 
-// TestValidateSourcePod tests the validateSourcePod function.
-// Since probe mode (empty sourcePod) is now valid, validateSourcePod always returns nil.
-func TestValidateSourcePod(t *testing.T) {
-	tests := []struct {
-		name      string
-		sourcePod SourcePod
-	}{
-		{
-			name:      "valid - with name",
-			sourcePod: SourcePod{Name: "client-pod"},
-		},
-		{
-			name:      "valid - with labelSelector",
-			sourcePod: SourcePod{LabelSelector: map[string]string{"role": "client"}},
-		},
-		{
-			name:      "valid - empty (probe mode)",
-			sourcePod: SourcePod{},
-		},
-		{
-			name:      "valid - with namespace only (probe mode in explicit ns)",
-			sourcePod: SourcePod{Namespace: "other-ns"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateSourcePod(tt.sourcePod)
-			assert.NoError(t, err, "validateSourcePod should accept all configs (probe mode relaxation)")
-		})
-	}
-}
-
 // TestLoadFromFile tests loading validation config from file
 func TestLoadFromFile(t *testing.T) {
 	t.Run("success - valid file", func(t *testing.T) {
@@ -932,7 +899,8 @@ objectives:
 		assert.True(t, spec.Targets[0].TLS.ValidateSANs, "ValidateSANs must be true")
 	})
 
-	t.Run("all three fields true simultaneously", func(t *testing.T) {
+	t.Run("all three fields true simultaneously - rejected at parse time", func(t *testing.T) {
+		// insecureSkipVerify: true is incompatible with validateExpiry/validateSANs — reject at parse.
 		yamlData := `
 objectives:
   - key: all-tls
@@ -947,13 +915,9 @@ objectives:
             validateExpiry: true
             validateSANs: true
 `
-		cfg, err := Parse([]byte(yamlData))
-		require.NoError(t, err)
-		spec := cfg.Validations[0].Spec.(ConnectivitySpec)
-		require.NotNil(t, spec.Targets[0].TLS)
-		assert.True(t, spec.Targets[0].TLS.InsecureSkipVerify, "InsecureSkipVerify must be true")
-		assert.True(t, spec.Targets[0].TLS.ValidateExpiry, "ValidateExpiry must be true")
-		assert.True(t, spec.Targets[0].TLS.ValidateSANs, "ValidateSANs must be true")
+		_, err := Parse([]byte(yamlData))
+		require.Error(t, err, "combining insecureSkipVerify with validateExpiry/validateSANs must be rejected")
+		assert.Contains(t, err.Error(), "insecureSkipVerify")
 	})
 
 	t.Run("empty tls block - non-nil pointer, all bools false", func(t *testing.T) {

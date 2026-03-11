@@ -43,11 +43,15 @@ func isCloudProviderKindRunning() bool {
 	return cmd.Run() == nil
 }
 
+// maxCloudProviderKindDownloadBytes caps the response body to 100 MiB to prevent
+// memory exhaustion from an unexpectedly large (or malformed) response.
+const maxCloudProviderKindDownloadBytes = 100 * 1024 * 1024
+
 // downloadCloudProviderKind downloads the cloud-provider-kind binary tar.gz from the given URL,
 // extracts the binary, writes it to destPath, and sets permissions to 0755.
 // This function uses net/http directly (not kube.FetchManifest) because FetchManifest
 // validates URLs against a Kubernetes manifest allowlist that excludes binary downloads.
-func downloadCloudProviderKind(url, destPath string) error {
+func downloadCloudProviderKind(ctx context.Context, url, destPath string) error {
 	logger.Info("Downloading cloud-provider-kind from %s", url)
 
 	// Create destination directory if it does not exist
@@ -55,8 +59,12 @@ func downloadCloudProviderKind(url, destPath string) error {
 		return fmt.Errorf("failed to create directory for cloud-provider-kind binary: %w", err)
 	}
 
-	// Download the tar.gz archive
-	resp, err := http.Get(url) //nolint:gosec // URL is constructed from the trusted CloudProviderKindVersion constant
+	// Download the tar.gz archive using a context-controlled request to avoid indefinite hangs.
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil) // URL is constructed from the trusted CloudProviderKindVersion constant
+	if err != nil {
+		return fmt.Errorf("failed to build request for cloud-provider-kind: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to download cloud-provider-kind: %w", err)
 	}
@@ -66,8 +74,8 @@ func downloadCloudProviderKind(url, destPath string) error {
 		return fmt.Errorf("failed to download cloud-provider-kind: HTTP %d", resp.StatusCode)
 	}
 
-	// Read into memory
-	data, err := io.ReadAll(resp.Body)
+	// Read into memory with a size cap to guard against unexpectedly large responses.
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxCloudProviderKindDownloadBytes))
 	if err != nil {
 		return fmt.Errorf("failed to read cloud-provider-kind response body: %w", err)
 	}
@@ -139,7 +147,7 @@ func startCloudProviderKindDetached(binPath string) error {
 // If the binary is not present, downloads it first.
 // Then starts it as a detached process and returns StatusReady.
 // Returns StatusNotReady on any error.
-func ensureCloudProviderKind(_ context.Context) ComponentResult {
+func ensureCloudProviderKind(ctx context.Context) ComponentResult {
 	const name = "cloud-provider-kind"
 
 	// Already running — nothing to do
@@ -153,7 +161,7 @@ func ensureCloudProviderKind(_ context.Context) ComponentResult {
 	// Download binary if not present
 	if _, err := os.Stat(binPath); os.IsNotExist(err) {
 		url := cloudProviderKindBinaryURL()
-		if err := downloadCloudProviderKind(url, binPath); err != nil {
+		if err := downloadCloudProviderKind(ctx, url, binPath); err != nil {
 			return notReady(name, fmt.Errorf("failed to download cloud-provider-kind: %w", err))
 		}
 	}

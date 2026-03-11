@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed 06-infrastructure-foundation plan 02
-last_updated: "2026-03-11T09:25:48.074Z"
+stopped_at: Completed 06-infrastructure-foundation plan 04
+last_updated: "2026-03-11T10:06:31.228Z"
 last_activity: 2026-03-11 — Roadmap created, phases 6–9 defined, 20/20 v2.7.0 requirements mapped
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 3
+  completed_plans: 4
   percent: 0
 ---
 
@@ -47,6 +47,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 06-infrastructure-foundation P01 | 4min | 2 tasks | 4 files |
 | Phase 06-infrastructure-foundation P03 | 7min | 2 tasks | 2 files |
 | Phase 06-infrastructure-foundation P02 | 12min | 2 tasks | 4 files |
+| Phase 06-infrastructure-foundation P04 | 25 | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -70,6 +71,9 @@ Recent decisions affecting current work:
 - [Phase 06-02]: Discovery().ServerResourcesForGroupVersion() used for Gateway API CRD check — avoids apiextensions-apiserver import
 - [Phase 06-02]: cloudProviderKindBinaryURLForPlatform(goos, goarch) extracted as testable variant — cloudProviderKindBinaryURL() delegates to it
 - [Phase 06-02]: downloadCloudProviderKind uses net/http directly — kube.FetchManifest URL allowlist rejects binary download URLs
+- [Phase 06-04]: SetupAllComponents accepts *kubernetes.Clientset (not Interface) — satisfies installCertManager and WaitForDeploymentsReady concrete-type requirement
+- [Phase 06-04]: printComponentResult lives in cmd/setup.go not deployer/ — UI concern, not deployment concern
+- [Phase 06-04]: SetupInfrastructure kept (not deleted) — only active callers migrated to eliminate SA1019 deprecation lint
 
 ### Pending Todos
 
@@ -85,6 +89,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-11T09:25:48.070Z
-Stopped at: Completed 06-infrastructure-foundation plan 02
+Last session: 2026-03-11T10:06:31.226Z
+Stopped at: Completed 06-infrastructure-foundation plan 04
 Resume file: None

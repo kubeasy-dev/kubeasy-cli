@@ -24,7 +24,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 
 **Milestone Goal:** Extend connectivity validation to support NetworkPolicy testing (probe pod), external Ingress/Gateway API validation (CLI HTTP client), and TLS certificate inspection — with the matching cluster infrastructure (nginx-ingress, Gateway API CRDs, cert-manager, cloud-provider-kind advisory).
 
-- [ ] **Phase 6: Infrastructure Foundation** — Install nginx-ingress, Gateway API CRDs + controller, cert-manager; Kind cluster extraPortMappings; cloud-provider-kind detection; setup status reporting
+- [x] **Phase 6: Infrastructure Foundation** — Install nginx-ingress, Gateway API CRDs + controller, cert-manager; Kind cluster extraPortMappings; cloud-provider-kind detection; setup status reporting (completed 2026-03-11)
 - [ ] **Phase 7: Probe Pod + Internal Connectivity** — Auto-managed probe pod for NetworkPolicy testing; cross-namespace source; blocked-connection (status 0) assertion; wget fallback removal
 - [ ] **Phase 8: External HTTP** — CLI-side HTTP requests for Ingress/Gateway API validation; Host header; IP auto-resolution from Ingress/Gateway resources; macOS fallback
 - [ ] **Phase 9: TLS Validation** — Certificate expiry, SAN hostname matching, insecureSkipVerify for self-signed certs in Kind
@@ -102,7 +102,7 @@ Plans:
 | 3. Error Handling | v1.0 | 3/3 | Complete | 2026-03-09 |
 | 4. Code Quality | v1.0 | 3/3 | Complete | 2026-03-10 |
 | 5. Security Hardening | v1.0 | 2/2 | Complete | 2026-03-10 |
-| 6. Infrastructure Foundation | 3/4 | In Progress|  | - |
+| 6. Infrastructure Foundation | 4/4 | Complete   | 2026-03-11 | - |
 | 7. Probe Pod + Internal Connectivity | v2.7.0 | 0/? | Not started | - |
 | 8. External HTTP | v2.7.0 | 0/? | Not started | - |
 | 9. TLS Validation | v2.7.0 | 0/? | Not started | - |

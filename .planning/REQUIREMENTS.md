@@ -14,8 +14,8 @@ Requirements for the Connectivity Extension milestone. Each maps to roadmap phas
 - [ ] **INFRA-03**: User can run `kubeasy setup` avec le contrôleur Gateway API de cloud-provider-kind activé (bundlé, pas d'installation séparée)
 - [ ] **INFRA-04**: User can run `kubeasy setup` avec cert-manager v1.19.4 installé (deux passes : CRDs puis contrôleur)
 - [ ] **INFRA-05**: User voit un message clair si cloud-provider-kind n'est pas en cours d'exécution — avec instructions d'installation (détection seulement, pas auto-install)
-- [ ] **INFRA-06**: Kind cluster est créé avec extraPortMappings sur ports 8080/8443 (non-privilégiés) pour nginx-ingress
-- [ ] **INFRA-07**: `kubeasy setup` rapporte le statut de chaque nouveau composant (ready/not-ready/missing) dans la sortie
+- [x] **INFRA-06**: Kind cluster est créé avec extraPortMappings sur ports 8080/8443 (non-privilégiés) pour nginx-ingress
+- [x] **INFRA-07**: `kubeasy setup` rapporte le statut de chaque nouveau composant (ready/not-ready/missing) dans la sortie
 
 ### Probe Pod — Connectivité interne (PROBE)
 
@@ -80,8 +80,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INFRA-03 | Phase 6 | Pending |
 | INFRA-04 | Phase 6 | Pending |
 | INFRA-05 | Phase 6 | Pending |
-| INFRA-06 | Phase 6 | Pending |
-| INFRA-07 | Phase 6 | Pending |
+| INFRA-06 | Phase 6 | Complete |
+| INFRA-07 | Phase 6 | Complete |
 | PROBE-01 | Phase 7 | Pending |
 | PROBE-02 | Phase 7 | Pending |
 | PROBE-03 | Phase 7 | Pending |

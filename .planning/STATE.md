@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Phase 6 context gathered
-last_updated: "2026-03-11T08:40:13.687Z"
+stopped_at: Completed 06-infrastructure-foundation plan 01
+last_updated: "2026-03-11T09:10:29.585Z"
 last_activity: 2026-03-11 — Roadmap created, phases 6–9 defined, 20/20 v2.7.0 requirements mapped
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 4
+  completed_plans: 1
   percent: 0
 ---
 
@@ -44,6 +44,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | — | — | — | — |
+| Phase 06-infrastructure-foundation P01 | 4min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -59,6 +60,9 @@ Recent decisions affecting current work:
 - [v2.7.0]: Probe pod lifecycle lives in deployer/, not validation/ — executor stays cluster-read-only
 - [v2.7.0]: connectivity `mode` field discriminant (internal/external) — no new ValidationType to preserve backend compat
 - [v2.7.0]: Gateway API CRDs pinned to v1.2.1 (not v1.5.0) — v1.5.0 requires server-side apply
+- [Phase 06-01]: Path constants implemented as functions not vars: os.UserHomeDir() called at runtime for portability
+- [Phase 06-01]: File permissions 0o600 for kind-config.yaml per gosec G306 security requirements
+- [Phase 06-01]: nolint:unused directive for Wave 1 helpers (writeKindConfig, hasExtraPortMappings) used by plan 04 setup.go
 
 ### Pending Todos
 
@@ -74,6 +78,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-11T08:40:13.678Z
-Stopped at: Phase 6 context gathered
-Resume file: .planning/phases/06-infrastructure-foundation/06-CONTEXT.md
+Last session: 2026-03-11T09:10:29.583Z
+Stopped at: Completed 06-infrastructure-foundation plan 01
+Resume file: None

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 09-tls-validation 09-01-PLAN.md
-last_updated: "2026-03-11T13:47:39.036Z"
+stopped_at: Completed 09-tls-validation 09-02-PLAN.md
+last_updated: "2026-03-11T14:15:45.705Z"
 last_activity: 2026-03-11 — Phase 7 Plan 02 complete; probe wiring + connectivity fixes; 297 tests pass
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 10
-  completed_plans: 9
+  completed_plans: 10
   percent: 0
 ---
 
@@ -53,6 +53,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 08-external-http P01 | 8min | 2 tasks | 3 files |
 | Phase 08-external-http P02 | 3min | 2 tasks | 2 files |
 | Phase 09-tls-validation P01 | 12min | 2 tasks | 3 files |
+| Phase 09-tls-validation P02 | 26min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -92,6 +93,9 @@ Recent decisions affecting current work:
 - [Phase 09-01]: TLS *TLSConfig uses pointer semantics: nil means no explicit TLS checks (Go default TLS verification applies)
 - [Phase 09-01]: TDD RED+GREEN committed atomically — pre-commit hook rejects compilation failures in test files
 - [Phase 09-01]: No loader.go validation logic change needed for TLS — yaml.Unmarshal auto-populates TLS pointer field
+- [Phase 09-tls-validation]: probeTLSCert uses InsecureSkipVerify:true always to fetch raw cert metadata even for expired/self-signed certs
+- [Phase 09-tls-validation]: hostnameForSAN helper applies HostHeader priority for SAN matching (virtual-host routing pattern)
+- [Phase 09-tls-validation]: httptest cert has *.example.com DNS SAN — Test E uses myapp.other-domain.io to trigger genuine mismatch
 
 ### Pending Todos
 
@@ -107,6 +111,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-11T13:47:39.034Z
-Stopped at: Completed 09-tls-validation 09-01-PLAN.md
+Last session: 2026-03-11T14:15:45.702Z
+Stopped at: Completed 09-tls-validation 09-02-PLAN.md
 Resume file: None

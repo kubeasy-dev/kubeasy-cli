@@ -27,7 +27,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 - [x] **Phase 6: Infrastructure Foundation** — Install nginx-ingress, Gateway API CRDs + controller, cert-manager; Kind cluster extraPortMappings; cloud-provider-kind detection; setup status reporting (completed 2026-03-11)
 - [x] **Phase 7: Probe Pod + Internal Connectivity** — Auto-managed probe pod for NetworkPolicy testing; cross-namespace source; blocked-connection (status 0) assertion; wget fallback removal (completed 2026-03-11)
 - [x] **Phase 8: External HTTP** — CLI-side HTTP requests for Ingress/Gateway API validation; Host header; IP auto-resolution from Ingress/Gateway resources; macOS fallback (completed 2026-03-11)
-- [ ] **Phase 9: TLS Validation** — Certificate expiry, SAN hostname matching, insecureSkipVerify for self-signed certs in Kind
+- [x] **Phase 9: TLS Validation** — Certificate expiry, SAN hostname matching, insecureSkipVerify for self-signed certs in Kind (completed 2026-03-11)
 
 ## Phase Details
 
@@ -106,4 +106,4 @@ Plans:
 | 6. Infrastructure Foundation | 4/4 | Complete   | 2026-03-11 | - |
 | 7. Probe Pod + Internal Connectivity | 2/2 | Complete   | 2026-03-11 | - |
 | 8. External HTTP | 2/2 | Complete   | 2026-03-11 | - |
-| 9. TLS Validation | 1/2 | In Progress|  | - |
+| 9. TLS Validation | 2/2 | Complete   | 2026-03-11 | - |

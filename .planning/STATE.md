@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed 06-infrastructure-foundation plan 03
-last_updated: "2026-03-11T09:19:44.480Z"
+stopped_at: Completed 06-infrastructure-foundation plan 02
+last_updated: "2026-03-11T09:25:48.074Z"
 last_activity: 2026-03-11 — Roadmap created, phases 6–9 defined, 20/20 v2.7.0 requirements mapped
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 4
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -46,6 +46,7 @@ Progress: [░░░░░░░░░░] 0%
 | — | — | — | — |
 | Phase 06-infrastructure-foundation P01 | 4min | 2 tasks | 4 files |
 | Phase 06-infrastructure-foundation P03 | 7min | 2 tasks | 2 files |
+| Phase 06-infrastructure-foundation P02 | 12min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -66,6 +67,9 @@ Recent decisions affecting current work:
 - [Phase 06-01]: nolint:unused directive for Wave 1 helpers (writeKindConfig, hasExtraPortMappings) used by plan 04 setup.go
 - [Phase 06-03]: installCertManager uses *kubernetes.Clientset (not Interface) to satisfy kube.WaitForDeploymentsReady signature
 - [Phase 06-03]: waitForCertManagerWebhookEndpoints uses legacy corev1.Endpoints API — matches cert-manager webhook service registration
+- [Phase 06-02]: Discovery().ServerResourcesForGroupVersion() used for Gateway API CRD check — avoids apiextensions-apiserver import
+- [Phase 06-02]: cloudProviderKindBinaryURLForPlatform(goos, goarch) extracted as testable variant — cloudProviderKindBinaryURL() delegates to it
+- [Phase 06-02]: downloadCloudProviderKind uses net/http directly — kube.FetchManifest URL allowlist rejects binary download URLs
 
 ### Pending Todos
 
@@ -81,6 +85,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-11T09:19:44.478Z
-Stopped at: Completed 06-infrastructure-foundation plan 03
+Last session: 2026-03-11T09:25:48.070Z
+Stopped at: Completed 06-infrastructure-foundation plan 02
 Resume file: None

@@ -2,6 +2,9 @@ package validation
 
 import (
 	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -2934,4 +2937,136 @@ func TestExecuteConnectivity_CrossNamespace_LabelSelector(t *testing.T) {
 		"LabelSelector lookup must use SourcePod.Namespace (CONN-02)")
 	assert.NotEqual(t, errNoRunningSourcePods, result.Message,
 		"Running pod in other-ns must be found (CONN-02)")
+}
+
+// --- External connectivity tests (EXT-01 through EXT-04) ---
+
+func TestCheckExternalConnectivity_Success(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	e := &Executor{} // net/http path — no K8s client needed
+	target := ConnectivityCheck{
+		URL:                srv.URL + "/",
+		ExpectedStatusCode: 200,
+		TimeoutSeconds:     5,
+	}
+	passed, msg := e.checkExternalConnectivity(context.Background(), target)
+	assert.True(t, passed)
+	assert.Empty(t, msg)
+}
+
+func TestCheckExternalConnectivity_WrongStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	e := &Executor{}
+	target := ConnectivityCheck{
+		URL:                srv.URL + "/",
+		ExpectedStatusCode: 200,
+		TimeoutSeconds:     5,
+	}
+	passed, msg := e.checkExternalConnectivity(context.Background(), target)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "got status 404")
+}
+
+func TestCheckExternalConnectivity_BlockedConnection(t *testing.T) {
+	e := &Executor{}
+	target := ConnectivityCheck{
+		URL:                "http://127.0.0.1:1", // port 1 — always refused
+		ExpectedStatusCode: 0,
+		TimeoutSeconds:     2,
+	}
+	passed, msg := e.checkExternalConnectivity(context.Background(), target)
+	assert.True(t, passed)
+	assert.Contains(t, msg, "blocked")
+}
+
+func TestCheckExternalConnectivity_ConnectionRefused(t *testing.T) {
+	e := &Executor{}
+	target := ConnectivityCheck{
+		URL:                "http://127.0.0.1:1", // port 1 — always refused
+		ExpectedStatusCode: 200,
+		TimeoutSeconds:     2,
+	}
+	passed, msg := e.checkExternalConnectivity(context.Background(), target)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "failed")
+}
+
+func TestCheckExternalConnectivity_HostHeader(t *testing.T) {
+	var receivedHost string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedHost = r.Host
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	e := &Executor{}
+	target := ConnectivityCheck{
+		URL:                srv.URL + "/",
+		ExpectedStatusCode: 200,
+		TimeoutSeconds:     5,
+		HostHeader:         "myapp.example.com",
+	}
+	passed, _ := e.checkExternalConnectivity(context.Background(), target)
+	assert.True(t, passed)
+	assert.Equal(t, "myapp.example.com", receivedHost)
+}
+
+func TestCheckExternalConnectivity_StatusCodes(t *testing.T) {
+	tests := []struct {
+		serverCode   int
+		expectedCode int
+		wantPassed   bool
+	}{
+		{200, 200, true},
+		{201, 201, true},
+		{301, 301, true},
+		{404, 404, true},
+		{200, 404, false},
+		{301, 200, false},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(fmt.Sprintf("server=%d_expected=%d", tc.serverCode, tc.expectedCode), func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.serverCode)
+			}))
+			defer srv.Close()
+			e := &Executor{}
+			target := ConnectivityCheck{
+				URL:                srv.URL + "/",
+				ExpectedStatusCode: tc.expectedCode,
+				TimeoutSeconds:     5,
+			}
+			passed, _ := e.checkExternalConnectivity(context.Background(), target)
+			assert.Equal(t, tc.wantPassed, passed)
+		})
+	}
+}
+
+func TestExecuteConnectivity_ExternalMode(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	// External mode — no K8s client interaction expected
+	e := NewExecutor(nil, nil, nil, "test-ns")
+	spec := ConnectivitySpec{
+		Mode: "external",
+		Targets: []ConnectivityCheck{
+			{URL: srv.URL + "/", ExpectedStatusCode: 200, TimeoutSeconds: 5},
+		},
+	}
+	passed, msg, err := e.executeConnectivity(context.Background(), spec)
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Equal(t, msgAllConnectivityPassed, msg)
 }

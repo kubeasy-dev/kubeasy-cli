@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -405,6 +406,11 @@ func (e *Executor) executeEvent(ctx context.Context, spec EventSpec) (bool, stri
 func (e *Executor) executeConnectivity(ctx context.Context, spec ConnectivitySpec) (bool, string, error) {
 	logger.Debug("Executing connectivity validation")
 
+	// EXT-01: external mode — CLI host sends HTTP request via net/http, no pod exec
+	if spec.Mode == "external" {
+		return e.checkExternalConnectivityAll(ctx, spec)
+	}
+
 	// Resolve source namespace: SourcePod.Namespace wins over executor default (CONN-02, PROBE-02)
 	sourceNamespace := e.namespace
 	if spec.SourcePod.Namespace != "" {
@@ -472,6 +478,73 @@ func (e *Executor) executeConnectivity(ctx context.Context, spec ConnectivitySpe
 		return true, msgAllConnectivityPassed, nil
 	}
 	return false, strings.Join(messages, "; "), nil
+}
+
+// checkExternalConnectivityAll iterates all targets for an external connectivity spec.
+// Mirrors the internal target loop in executeConnectivity.
+func (e *Executor) checkExternalConnectivityAll(ctx context.Context, spec ConnectivitySpec) (bool, string, error) {
+	allPassed := true
+	var messages []string
+	for _, target := range spec.Targets {
+		passed, msg := e.checkExternalConnectivity(ctx, target)
+		if !passed {
+			allPassed = false
+			messages = append(messages, msg)
+		}
+	}
+	if allPassed {
+		return true, msgAllConnectivityPassed, nil
+	}
+	return false, strings.Join(messages, "; "), nil
+}
+
+// checkExternalConnectivity sends a single HTTP request from the CLI host via net/http.
+// No pod exec — used for mode: external (EXT-01).
+func (e *Executor) checkExternalConnectivity(ctx context.Context, target ConnectivityCheck) (bool, string) {
+	timeout := target.TimeoutSeconds
+	if timeout == 0 {
+		timeout = DefaultConnectivityTimeoutSeconds
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, target.URL, nil)
+	if err != nil {
+		return false, fmt.Sprintf("Invalid URL %s: %v", target.URL, err)
+	}
+
+	// EXT-02: override wire Host header for virtual-host routing
+	// IMPORTANT: req.Host overrides the Host header on the wire.
+	// req.Header.Set("Host", h) does NOT work for the Host header in Go.
+	if target.HostHeader != "" {
+		req.Host = target.HostHeader
+	}
+
+	client := &http.Client{
+		Timeout: time.Duration(timeout) * time.Second,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			// Return redirects as-is — do not follow automatically.
+			// Allows challenge specs to assert on 3xx status codes.
+			return http.ErrUseLastResponse
+		},
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		// Connection refused or timeout — treat as "blocked" for expectedStatusCode==0
+		if target.ExpectedStatusCode == 0 {
+			return true, fmt.Sprintf("Connection to %s blocked as expected", target.URL)
+		}
+		return false, fmt.Sprintf("Connection to %s failed: %v", target.URL, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == target.ExpectedStatusCode {
+		return true, ""
+	}
+	return false, fmt.Sprintf("Connection to %s: got status %d, expected %d",
+		target.URL, resp.StatusCode, target.ExpectedStatusCode)
 }
 
 // buildCurlCommand constructs the curl argument slice for pod exec.

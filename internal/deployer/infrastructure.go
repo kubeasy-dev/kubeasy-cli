@@ -104,6 +104,7 @@ func hasExtraPortMappingsAt(path string) bool {
 const (
 	kyvernoNamespace             = "kyverno"
 	localPathStorageNamespace    = "local-path-storage"
+	certManagerNamespace         = "cert-manager"
 	defaultInfrastructureTimeout = 10 * time.Minute
 )
 
@@ -278,5 +279,54 @@ func IsInfrastructureReadyWithClient(ctx context.Context, clientset kubernetes.I
 	}
 
 	logger.Info("Infrastructure is already installed and ready")
+	return true, nil
+}
+
+// certManagerCRDsURL returns the URL for the cert-manager CRDs manifest.
+func certManagerCRDsURL() string {
+	return fmt.Sprintf("https://github.com/cert-manager/cert-manager/releases/download/%s/cert-manager.crds.yaml", CertManagerVersion)
+}
+
+// certManagerInstallURL returns the URL for the cert-manager controller install manifest.
+func certManagerInstallURL() string {
+	return fmt.Sprintf("https://github.com/cert-manager/cert-manager/releases/download/%s/cert-manager.yaml", CertManagerVersion)
+}
+
+// isCertManagerReadyWithClient checks cert-manager readiness using the provided client.
+// It returns true when the cert-manager namespace exists and all three deployments
+// (cert-manager, cert-manager-cainjector, cert-manager-webhook) have all replicas ready.
+func isCertManagerReadyWithClient(ctx context.Context, clientset kubernetes.Interface) (bool, error) {
+	// Check cert-manager namespace exists
+	_, err := clientset.CoreV1().Namespaces().Get(ctx, certManagerNamespace, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.Debug("cert-manager namespace does not exist")
+			return false, nil
+		}
+		return false, fmt.Errorf("error checking cert-manager namespace: %w", err)
+	}
+
+	// Check all three cert-manager deployments
+	certManagerDeployments := []string{
+		"cert-manager",
+		"cert-manager-cainjector",
+		"cert-manager-webhook",
+	}
+	for _, name := range certManagerDeployments {
+		dep, err := clientset.AppsV1().Deployments(certManagerNamespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				logger.Debug("cert-manager deployment '%s' not found", name)
+				return false, nil
+			}
+			return false, fmt.Errorf("error checking cert-manager deployment '%s': %w", name, err)
+		}
+		if dep.Status.ReadyReplicas == 0 || dep.Status.ReadyReplicas != dep.Status.Replicas {
+			logger.Debug("cert-manager deployment '%s' not ready (Ready: %d/%d)", name, dep.Status.ReadyReplicas, dep.Status.Replicas)
+			return false, nil
+		}
+	}
+
+	logger.Info("cert-manager is already installed and ready")
 	return true, nil
 }

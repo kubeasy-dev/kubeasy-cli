@@ -11,6 +11,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 	kindv1alpha4 "sigs.k8s.io/kind/pkg/apis/config/v1alpha4"
 )
@@ -213,6 +214,95 @@ func TestNotReady(t *testing.T) {
 	assert.Equal(t, "foo", r.Name)
 	assert.Equal(t, StatusNotReady, r.Status)
 	assert.Equal(t, "boom", r.Message)
+}
+
+// --- cert-manager URL tests ---
+
+func TestCertManagerURLs(t *testing.T) {
+	t.Run("CRDs URL contains version", func(t *testing.T) {
+		url := certManagerCRDsURL()
+		assert.Contains(t, url, CertManagerVersion, "cert-manager CRDs URL should contain the configured version")
+	})
+
+	t.Run("CRDs URL points to correct host", func(t *testing.T) {
+		url := certManagerCRDsURL()
+		assert.Contains(t, url, "github.com/cert-manager", "cert-manager CRDs URL should point to github.com/cert-manager")
+	})
+
+	t.Run("CRDs URL points to correct file", func(t *testing.T) {
+		url := certManagerCRDsURL()
+		assert.Contains(t, url, "cert-manager.crds.yaml", "cert-manager CRDs URL should point to cert-manager.crds.yaml")
+	})
+
+	t.Run("install URL contains version", func(t *testing.T) {
+		url := certManagerInstallURL()
+		assert.Contains(t, url, CertManagerVersion, "cert-manager install URL should contain the configured version")
+	})
+
+	t.Run("install URL points to correct host", func(t *testing.T) {
+		url := certManagerInstallURL()
+		assert.Contains(t, url, "github.com/cert-manager", "cert-manager install URL should point to github.com/cert-manager")
+	})
+
+	t.Run("install URL points to correct file", func(t *testing.T) {
+		url := certManagerInstallURL()
+		assert.Contains(t, url, "cert-manager.yaml", "cert-manager install URL should point to cert-manager.yaml")
+	})
+}
+
+// --- isCertManagerReadyWithClient tests ---
+
+func TestIsCertManagerReady(t *testing.T) {
+	tests := []struct {
+		name      string
+		objects   []runtime.Object
+		wantReady bool
+	}{
+		{
+			name:      "namespace missing",
+			objects:   []runtime.Object{},
+			wantReady: false,
+		},
+		{
+			name: "webhook deployment missing",
+			objects: []runtime.Object{
+				makeNamespace(certManagerNamespace),
+				makeDeployment(certManagerNamespace, "cert-manager", 1, true),
+				makeDeployment(certManagerNamespace, "cert-manager-cainjector", 1, true),
+			},
+			wantReady: false,
+		},
+		{
+			name: "webhook deployment not ready",
+			objects: []runtime.Object{
+				makeNamespace(certManagerNamespace),
+				makeDeployment(certManagerNamespace, "cert-manager", 1, true),
+				makeDeployment(certManagerNamespace, "cert-manager-cainjector", 1, true),
+				makeDeployment(certManagerNamespace, "cert-manager-webhook", 1, false),
+			},
+			wantReady: false,
+		},
+		{
+			name: "all deployments ready",
+			objects: []runtime.Object{
+				makeNamespace(certManagerNamespace),
+				makeDeployment(certManagerNamespace, "cert-manager", 1, true),
+				makeDeployment(certManagerNamespace, "cert-manager-cainjector", 1, true),
+				makeDeployment(certManagerNamespace, "cert-manager-webhook", 1, true),
+			},
+			wantReady: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clientset := fake.NewClientset(tt.objects...)
+
+			ready, err := isCertManagerReadyWithClient(context.Background(), clientset)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantReady, ready)
+		})
+	}
 }
 
 // --- hasExtraPortMappingsAt tests ---

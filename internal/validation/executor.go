@@ -34,6 +34,9 @@ const (
 	errNoMatchingPods       = "No matching pods found"
 	errNoMatchingSourcePods = "No matching source pods found"
 	errNoRunningSourcePods  = "No running source pods found"
+	// errNoSourcePodSpecified is retained as a test anchor for negative assertions
+	// in unit tests that verify empty SourcePod enters the probe branch instead.
+	// It is no longer returned by production code (Phase 07 replaced it with probe lifecycle).
 	errNoSourcePodSpecified = "No source pod specified"
 	errNoMatchingResources  = "No matching resources found"
 	errNoTargetSpecified    = "No target name or labelSelector specified"

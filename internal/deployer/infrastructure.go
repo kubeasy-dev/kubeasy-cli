@@ -3,7 +3,14 @@ package deployer
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
+	"math/big"
 	"os"
 	"path/filepath"
 	"time"
@@ -11,6 +18,7 @@ import (
 	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/kube"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -275,6 +283,104 @@ func KindConfigMatches(ref *kindv1alpha4.Cluster) bool {
 	return kindConfigMatchesAt(ref, constants.GetKindConfigPath())
 }
 
+// clusterIssuerManifest is the ClusterIssuer that delegates to the kubeasy-ca Secret.
+// Applied after installKubeasyCA creates the Secret so the cert-manager CA issuer can load it.
+const clusterIssuerManifest = `apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: kubeasy-ca
+spec:
+  ca:
+    secretName: kubeasy-ca
+`
+
+// installKubeasyCA generates a local CA, stores it in the well-known Secret
+// (cert-manager/kubeasy-ca), and creates the matching ClusterIssuer so challenge
+// manifests can request certificates signed by that CA.
+// The function is idempotent: if the Secret already exists it returns StatusReady immediately.
+func installKubeasyCA(ctx context.Context, clientset kubernetes.Interface, dynamicClient dynamic.Interface) ComponentResult {
+	const name = "kubeasy-ca"
+
+	// Idempotency check — if the Secret already exists, nothing to do.
+	_, err := clientset.CoreV1().Secrets(constants.KubeasyCASecretNamespace).
+		Get(ctx, constants.KubeasyCASecretName, metav1.GetOptions{})
+	if err == nil {
+		logger.Info("kubeasy-ca Secret already exists, skipping CA generation")
+		return ComponentResult{Name: name, Status: StatusReady, Message: "already exists"}
+	}
+	if !apierrors.IsNotFound(err) {
+		return notReady(name, fmt.Errorf("failed to check kubeasy-ca Secret: %w", err))
+	}
+
+	// Generate ECDSA P-256 CA key.
+	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return notReady(name, fmt.Errorf("failed to generate CA key: %w", err))
+	}
+
+	// Build self-signed CA certificate template.
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return notReady(name, fmt.Errorf("failed to generate serial number: %w", err))
+	}
+	now := time.Now()
+	template := &x509.Certificate{
+		SerialNumber: serial,
+		Subject:      pkix.Name{CommonName: "Kubeasy Local CA"},
+		NotBefore:    now.Add(-time.Minute), // small back-date to handle clock skew
+		NotAfter:     now.Add(10 * 365 * 24 * time.Hour),
+		IsCA:         true,
+		KeyUsage:     x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		BasicConstraintsValid: true,
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, template, template, &caKey.PublicKey, caKey)
+	if err != nil {
+		return notReady(name, fmt.Errorf("failed to create CA certificate: %w", err))
+	}
+
+	// PEM-encode cert and key.
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	keyDER, err := x509.MarshalECPrivateKey(caKey)
+	if err != nil {
+		return notReady(name, fmt.Errorf("failed to marshal CA key: %w", err))
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
+
+	// Create the well-known TLS Secret in cert-manager namespace.
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      constants.KubeasyCASecretName,
+			Namespace: constants.KubeasyCASecretNamespace,
+		},
+		Type: corev1.SecretTypeTLS,
+		Data: map[string][]byte{
+			constants.KubeasyCASecretCertKey: certPEM,
+			constants.KubeasyCASecretKeyKey:  keyPEM,
+		},
+	}
+	if _, err := clientset.CoreV1().Secrets(constants.KubeasyCASecretNamespace).
+		Create(ctx, secret, metav1.CreateOptions{}); err != nil {
+		return notReady(name, fmt.Errorf("failed to create kubeasy-ca Secret: %w", err))
+	}
+	logger.Info("kubeasy-ca Secret created.")
+
+	// Build a fresh REST mapper so the cert-manager ClusterIssuer CRD is resolvable.
+	freshGroups, err := restmapper.GetAPIGroupResources(clientset.Discovery())
+	if err != nil {
+		return notReady(name, fmt.Errorf("failed to refresh API resources for ClusterIssuer: %w", err))
+	}
+	freshMapper := restmapper.NewDiscoveryRESTMapper(freshGroups)
+
+	// Apply the ClusterIssuer that references the CA Secret.
+	if err := kube.ApplyManifest(ctx, []byte(clusterIssuerManifest), "", freshMapper, dynamicClient); err != nil {
+		return notReady(name, fmt.Errorf("failed to apply kubeasy-ca ClusterIssuer: %w", err))
+	}
+	logger.Info("kubeasy-ca ClusterIssuer created.")
+
+	return ComponentResult{Name: name, Status: StatusReady, Message: "CA generated and ClusterIssuer created"}
+}
+
 // SetupAllComponents installs all infrastructure components and returns a ComponentResult for each.
 // The order is: kyverno, local-path-provisioner, nginx-ingress, gateway-api, cert-manager, cloud-provider-kind.
 // Execution continues regardless of individual component failures — all six results are always returned.
@@ -290,13 +396,15 @@ func SetupAllComponents(ctx context.Context, clientset *kubernetes.Clientset, dy
 		mapper = restmapper.NewDiscoveryRESTMapper(groups)
 	}
 
-	results := make([]ComponentResult, 0, 6)
+	results := make([]ComponentResult, 0, 7)
 
 	results = append(results, installKyverno(ctx, clientset, dynamicClient, mapper))
 	results = append(results, installLocalPathProvisioner(ctx, clientset, dynamicClient, mapper))
 	results = append(results, installNginxIngress(ctx, clientset, dynamicClient, mapper))
 	results = append(results, installGatewayAPI(ctx, clientset, dynamicClient))
 	results = append(results, installCertManager(ctx, clientset, dynamicClient, mapper))
+	// kubeasy-ca must run after cert-manager is ready (ClusterIssuer CRD must exist).
+	results = append(results, installKubeasyCA(ctx, clientset, dynamicClient))
 	results = append(results, ensureCloudProviderKind(ctx))
 
 	return results

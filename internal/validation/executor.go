@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/deployer"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/validation/fieldpath"
@@ -510,6 +511,48 @@ func (e *Executor) checkExternalConnectivityAll(ctx context.Context, spec Connec
 	return false, strings.Join(messages, "; "), nil
 }
 
+// loadKubeasyCA reads the well-known kubeasy CA Secret from the cluster and returns an
+// *x509.CertPool that trusts it. Returns nil (silent no-op) when the Secret is absent,
+// unreadable, or contains no valid PEM certificate — the caller falls back to the OS trust store.
+func (e *Executor) loadKubeasyCA(ctx context.Context) *x509.CertPool {
+	if e.clientset == nil {
+		return nil
+	}
+	secret, err := e.clientset.CoreV1().Secrets(constants.KubeasyCASecretNamespace).
+		Get(ctx, constants.KubeasyCASecretName, metav1.GetOptions{})
+	if err != nil {
+		return nil
+	}
+	pemData, ok := secret.Data[constants.KubeasyCASecretCertKey]
+	if !ok {
+		return nil
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(pemData) {
+		return nil
+	}
+	return pool
+}
+
+// buildExternalTLSConfig constructs the *tls.Config for checkExternalConnectivity.
+// When insecureSkipVerify is set it returns early. Otherwise it auto-loads the kubeasy
+// local CA so that certs signed by it are trusted without any challenge.yaml config.
+func (e *Executor) buildExternalTLSConfig(ctx context.Context, target ConnectivityCheck) *tls.Config {
+	cfg := &tls.Config{}
+
+	if target.TLS != nil && target.TLS.InsecureSkipVerify {
+		cfg.InsecureSkipVerify = true
+		return cfg
+	}
+
+	// Auto-load local CA — silent no-op if Secret is absent (falls back to OS trust store).
+	if pool := e.loadKubeasyCA(ctx); pool != nil {
+		cfg.RootCAs = pool
+	}
+
+	return cfg
+}
+
 // checkExternalConnectivity sends a single HTTP request from the CLI host via net/http.
 // No pod exec — used for mode: external (EXT-01).
 // When target.TLS is set, performs explicit TLS certificate checks before the HTTP request.
@@ -523,10 +566,7 @@ func (e *Executor) checkExternalConnectivity(ctx context.Context, target Connect
 	defer cancel()
 
 	// Step 1 — Build tlsCfg for the HTTP transport.
-	tlsCfg := &tls.Config{}
-	if target.TLS != nil && target.TLS.InsecureSkipVerify {
-		tlsCfg.InsecureSkipVerify = true
-	}
+	tlsCfg := e.buildExternalTLSConfig(ctx, target)
 
 	// Step 2 — If explicit TLS checks requested (validateExpiry or validateSANs) AND NOT insecureSkipVerify:
 	// probe the raw cert first and apply manual validation before making the HTTP request.

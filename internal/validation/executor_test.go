@@ -2,6 +2,8 @@ package validation
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
@@ -10,6 +12,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"math/big"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -17,6 +20,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -3257,4 +3261,176 @@ func TestCheckExternalConnectivityTLS(t *testing.T) {
 		assert.True(t, passed, "expected passed=true — insecureSkipVerify must take priority, got msg: %s", msg)
 		assert.NotContains(t, msg, "Certificate expired on", "should not inspect cert when insecureSkipVerify=true, got: %s", msg)
 	})
+}
+
+// generateKubeasyCASecret generates a CA cert and returns the PEM bytes and the Secret
+// that would be stored at the well-known location (cert-manager/kubeasy-ca).
+func generateKubeasyCASecret(t *testing.T) (caPEM []byte, caKey *ecdsa.PrivateKey, secret *corev1.Secret) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	require.NoError(t, err)
+
+	now := time.Now()
+	template := &x509.Certificate{
+		SerialNumber:          serial,
+		Subject:               pkix.Name{CommonName: "Kubeasy Local CA (test)"},
+		NotBefore:             now.Add(-time.Minute),
+		NotAfter:              now.Add(24 * time.Hour),
+		IsCA:                  true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		BasicConstraintsValid: true,
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	require.NoError(t, err)
+
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	keyDER, err := x509.MarshalECPrivateKey(key)
+	require.NoError(t, err)
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
+
+	s := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      constants.KubeasyCASecretName,
+			Namespace: constants.KubeasyCASecretNamespace,
+		},
+		Type: corev1.SecretTypeTLS,
+		Data: map[string][]byte{
+			constants.KubeasyCASecretCertKey: certPEM,
+			constants.KubeasyCASecretKeyKey:  keyPEM,
+		},
+	}
+	return certPEM, key, s
+}
+
+// CA-01: loadKubeasyCA returns nil when the Secret is absent.
+func TestLoadKubeasyCA_SecretAbsent(t *testing.T) {
+	e := NewExecutor(fake.NewClientset(), nil, nil, "test-ns")
+	pool := e.loadKubeasyCA(context.Background())
+	assert.Nil(t, pool, "expected nil pool when Secret is absent")
+}
+
+// CA-02: loadKubeasyCA returns a non-nil pool when the Secret contains a valid PEM cert.
+func TestLoadKubeasyCA_ValidPEM(t *testing.T) {
+	_, _, secret := generateKubeasyCASecret(t)
+	e := NewExecutor(fake.NewClientset(secret), nil, nil, "test-ns")
+	pool := e.loadKubeasyCA(context.Background())
+	assert.NotNil(t, pool, "expected non-nil pool for valid CA Secret")
+}
+
+// CA-03: loadKubeasyCA returns nil when the tls.crt key is missing from the Secret.
+func TestLoadKubeasyCA_MissingCertKey(t *testing.T) {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      constants.KubeasyCASecretName,
+			Namespace: constants.KubeasyCASecretNamespace,
+		},
+		Type: corev1.SecretTypeTLS,
+		Data: map[string][]byte{
+			"something-else": []byte("data"),
+		},
+	}
+	e := NewExecutor(fake.NewClientset(secret), nil, nil, "test-ns")
+	pool := e.loadKubeasyCA(context.Background())
+	assert.Nil(t, pool, "expected nil pool when tls.crt key is absent")
+}
+
+// CA-04: loadKubeasyCA returns nil when tls.crt contains invalid PEM data.
+func TestLoadKubeasyCA_InvalidPEM(t *testing.T) {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      constants.KubeasyCASecretName,
+			Namespace: constants.KubeasyCASecretNamespace,
+		},
+		Type: corev1.SecretTypeTLS,
+		Data: map[string][]byte{
+			constants.KubeasyCASecretCertKey: []byte("this is not valid PEM"),
+		},
+	}
+	e := NewExecutor(fake.NewClientset(secret), nil, nil, "test-ns")
+	pool := e.loadKubeasyCA(context.Background())
+	assert.Nil(t, pool, "expected nil pool when tls.crt contains invalid PEM")
+}
+
+// CA-05: buildExternalTLSConfig with insecureSkipVerify=true → InsecureSkipVerify set, RootCAs nil.
+func TestBuildExternalTLSConfig_InsecureSkipVerify(t *testing.T) {
+	e := NewExecutor(fake.NewClientset(), nil, nil, "test-ns")
+	target := ConnectivityCheck{
+		TLS: &TLSConfig{InsecureSkipVerify: true},
+	}
+	cfg := e.buildExternalTLSConfig(context.Background(), target)
+	assert.True(t, cfg.InsecureSkipVerify, "expected InsecureSkipVerify=true")
+	assert.Nil(t, cfg.RootCAs, "expected RootCAs=nil when insecureSkipVerify is set")
+}
+
+// CA-06: buildExternalTLSConfig with a valid CA Secret → RootCAs is populated.
+func TestBuildExternalTLSConfig_WithCASecret(t *testing.T) {
+	_, _, secret := generateKubeasyCASecret(t)
+	e := NewExecutor(fake.NewClientset(secret), nil, nil, "test-ns")
+	target := ConnectivityCheck{}
+	cfg := e.buildExternalTLSConfig(context.Background(), target)
+	assert.False(t, cfg.InsecureSkipVerify)
+	assert.NotNil(t, cfg.RootCAs, "expected RootCAs to be loaded from CA Secret")
+}
+
+// CA-07: Integration — httptest TLS server signed by local CA + CA Secret in fake clientset
+// → checkExternalConnectivity returns passed=true without needing insecureSkipVerify.
+func TestCheckExternalConnectivity_LocalCASecret(t *testing.T) {
+	// 1. Generate CA
+	caPEM, caKey, caSecret := generateKubeasyCASecret(t)
+
+	// Parse the CA certificate for signing.
+	caCerts, err := x509.ParseCertificates(func() []byte {
+		block, _ := pem.Decode(caPEM)
+		require.NotNil(t, block)
+		return block.Bytes
+	}())
+	require.NoError(t, err)
+	require.Len(t, caCerts, 1)
+	caCert := caCerts[0]
+
+	// 2. Generate server cert signed by the CA (127.0.0.1 + localhost SANs).
+	srvKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	require.NoError(t, err)
+	now := time.Now()
+	srvTemplate := &x509.Certificate{
+		SerialNumber: serial,
+		Subject:      pkix.Name{CommonName: "localhost"},
+		NotBefore:    now.Add(-time.Minute),
+		NotAfter:     now.Add(24 * time.Hour),
+		DNSNames:     []string{"localhost"},
+		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},
+	}
+	srvCertDER, err := x509.CreateCertificate(rand.Reader, srvTemplate, caCert, &srvKey.PublicKey, caKey)
+	require.NoError(t, err)
+	srvCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srvCertDER})
+	srvKeyDER, err := x509.MarshalECPrivateKey(srvKey)
+	require.NoError(t, err)
+	srvKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: srvKeyDER})
+	srvTLSCert, err := tls.X509KeyPair(srvCertPEM, srvKeyPEM)
+	require.NoError(t, err)
+
+	// 3. Start TLS httptest server with the CA-signed server cert.
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	srv.TLS = &tls.Config{Certificates: []tls.Certificate{srvTLSCert}}
+	srv.StartTLS()
+	defer srv.Close()
+
+	// 4. Create executor with the CA Secret in the fake clientset.
+	e := NewExecutor(fake.NewClientset(caSecret), nil, nil, "test-ns")
+
+	// 5. Call checkExternalConnectivity — no insecureSkipVerify, no explicit TLS config.
+	target := ConnectivityCheck{
+		URL:                srv.URL + "/",
+		ExpectedStatusCode: 200,
+		TimeoutSeconds:     5,
+	}
+	passed, msg := e.checkExternalConnectivity(context.Background(), target)
+	assert.True(t, passed, "expected passed=true when CA Secret is present and cert is CA-signed, got: %s", msg)
 }

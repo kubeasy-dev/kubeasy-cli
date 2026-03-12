@@ -119,3 +119,15 @@ func GetKindConfigPath() string {
 func GetCloudProviderKindBinPath() string {
 	return filepath.Join(GetKubeasyConfigDir(), "bin", "cloud-provider-kind")
 }
+
+// KubeasyCASecretNamespace is the namespace of the well-known CA Secret.
+const KubeasyCASecretNamespace = "cert-manager"
+
+// KubeasyCASecretName is the name of the well-known CA Secret and ClusterIssuer.
+const KubeasyCASecretName = "kubeasy-ca" //nolint:gosec // not a credential — this is a public CA certificate name
+
+// KubeasyCASecretCertKey is the key holding the PEM-encoded CA certificate.
+const KubeasyCASecretCertKey = "tls.crt"
+
+// KubeasyCASecretKeyKey is the key holding the PEM-encoded CA private key.
+const KubeasyCASecretKeyKey = "tls.key"

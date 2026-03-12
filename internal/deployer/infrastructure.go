@@ -411,7 +411,7 @@ func SetupAllComponents(ctx context.Context, clientset *kubernetes.Clientset, dy
 }
 
 // SetupInfrastructure installs Kyverno and local-path-provisioner directly into the cluster.
-// Use SetupAllComponents for per-component status across all 6 infrastructure components.
+// Use SetupAllComponents for per-component status across all 7 infrastructure components.
 func SetupInfrastructure() error {
 	logger.Info("Starting infrastructure setup (Kyverno + local-path-provisioner)...")
 

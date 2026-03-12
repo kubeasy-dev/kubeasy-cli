@@ -109,8 +109,8 @@ func downloadCloudProviderKind(ctx context.Context, url, destPath string) error 
 			// ensure partial file is removed on failure
 			succeeded := false
 			defer func() {
-				_ = out.Close()
 				if !succeeded {
+					_ = out.Close() // ensure file is closed before removal
 					_ = os.Remove(destPath)
 				}
 			}()

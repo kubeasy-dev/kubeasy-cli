@@ -3298,8 +3298,8 @@ func generateKubeasyCASecret(t *testing.T) (caPEM []byte, caKey *ecdsa.PrivateKe
 		},
 		Type: corev1.SecretTypeTLS,
 		Data: map[string][]byte{
-			constants.KubeasyCASecretCertKey: certPEM,
-			constants.KubeasyCAPrivateKeyField:  keyPEM,
+			constants.KubeasyCASecretCertKey:   certPEM,
+			constants.KubeasyCAPrivateKeyField: keyPEM,
 		},
 	}
 	return certPEM, key, s

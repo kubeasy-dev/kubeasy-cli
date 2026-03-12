@@ -254,6 +254,10 @@ func parseSpec(v *Validation) error {
 			if spec.Mode != ConnectivityModeExternal {
 				return fmt.Errorf("target %d: tls config is only valid with mode: external", i)
 			}
+			// TLS config requires an https:// URL.
+			if !strings.HasPrefix(t.URL, "https://") {
+				return fmt.Errorf("target %d: tls config requires an https:// URL, got %q", i, t.URL)
+			}
 			// InsecureSkipVerify is incompatible with explicit validation flags.
 			if t.TLS.InsecureSkipVerify && (t.TLS.ValidateExpiry || t.TLS.ValidateSANs) {
 				return fmt.Errorf("target %d: insecureSkipVerify: true is incompatible with validateExpiry or validateSANs", i)

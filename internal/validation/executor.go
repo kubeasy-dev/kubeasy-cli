@@ -56,6 +56,7 @@ type Executor struct {
 	dynamicClient dynamic.Interface
 	restConfig    *rest.Config
 	namespace     string
+	probeMu       sync.Mutex // serializes probe-mode connectivity checks
 }
 
 // NewExecutor creates a new validation executor
@@ -460,15 +461,16 @@ func (e *Executor) executeConnectivity(ctx context.Context, spec ConnectivitySpe
 			return false, errNoRunningSourcePods, nil
 		}
 	default:
-		// Probe mode (PROBE-01): empty SourcePod — deploy a CLI-managed kubeasy-probe pod
+		// Probe mode (PROBE-01): empty SourcePod — deploy a CLI-managed kubeasy-probe pod.
+		// Serialize to avoid concurrent CreateProbePod collisions (fixed pod name).
+		e.probeMu.Lock()
+		defer e.probeMu.Unlock()
 		pod, err := deployer.CreateProbePod(ctx, e.clientset, sourceNamespace)
 		if err != nil {
 			return false, "", fmt.Errorf("failed to create probe pod: %w", err)
 		}
 		defer func() {
-			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			_ = deployer.DeleteProbePod(cleanupCtx, e.clientset, sourceNamespace)
+			_ = deployer.DeleteProbePod(context.Background(), e.clientset, sourceNamespace)
 		}()
 		if err := deployer.WaitForProbePodReady(ctx, e.clientset, sourceNamespace); err != nil {
 			return false, "", fmt.Errorf("probe pod failed to become ready: %w", err)
@@ -521,14 +523,20 @@ func (e *Executor) loadKubeasyCA(ctx context.Context) *x509.CertPool {
 	secret, err := e.clientset.CoreV1().Secrets(constants.KubeasyCASecretNamespace).
 		Get(ctx, constants.KubeasyCASecretName, metav1.GetOptions{})
 	if err != nil {
+		logger.Debug("loadKubeasyCA: failed to get Secret %s/%s: %v — falling back to OS trust store",
+			constants.KubeasyCASecretNamespace, constants.KubeasyCASecretName, err)
 		return nil
 	}
 	pemData, ok := secret.Data[constants.KubeasyCASecretCertKey]
 	if !ok {
+		logger.Debug("loadKubeasyCA: Secret %s/%s missing key %q — falling back to OS trust store",
+			constants.KubeasyCASecretNamespace, constants.KubeasyCASecretName, constants.KubeasyCASecretCertKey)
 		return nil
 	}
 	pool := x509.NewCertPool()
 	if !pool.AppendCertsFromPEM(pemData) {
+		logger.Debug("loadKubeasyCA: Secret %s/%s contains no valid PEM certificate — falling back to OS trust store",
+			constants.KubeasyCASecretNamespace, constants.KubeasyCASecretName)
 		return nil
 	}
 	return pool

@@ -181,11 +181,21 @@ var setupCmd = &cobra.Command{
 		}
 
 		results := deployer.SetupAllComponents(cmd.Context(), clientset, dynamicClient)
+		allReady := true
 		for _, r := range results {
 			printComponentResult(r)
+			if r.Status != deployer.StatusReady {
+				allReady = false
+			}
 		}
 
 		ui.Println()
+
+		if !allReady {
+			ui.Error("Some components failed to install. Run 'kubeasy setup' again or check logs with --debug.")
+			return fmt.Errorf("setup incomplete: one or more components failed")
+		}
+
 		ui.Success("Kubeasy environment is ready!")
 		ui.Info("You can now start challenges with 'kubeasy challenge start <slug>'")
 

@@ -3,17 +3,22 @@ package deployer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 	kindv1alpha4 "sigs.k8s.io/kind/pkg/apis/config/v1alpha4"
 )
 
@@ -579,3 +584,62 @@ func TestWriteKindConfig_RoundTrip(t *testing.T) {
 	require.NoError(t, writeKindConfigToPath(cfg, path))
 	assert.True(t, kindConfigMatchesAt(cfg, path), "round-trip: write then read should match reference")
 }
+
+// --- installKubeasyCA tests ---
+
+// CAINST-01: Secret already exists → returns StatusReady with "already exists" message.
+func TestInstallKubeasyCA_AlreadyExists(t *testing.T) {
+	existingSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      constants.KubeasyCASecretName,
+			Namespace: constants.KubeasyCASecretNamespace,
+		},
+		Type: corev1.SecretTypeTLS,
+	}
+	clientset := fake.NewClientset(existingSecret)
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme())
+
+	result := installKubeasyCA(context.Background(), clientset, dynamicClient)
+
+	assert.Equal(t, StatusReady, result.Status)
+	assert.Contains(t, result.Message, "already exists")
+}
+
+// CAINST-02: Secret absent → Secret IS created in fake clientset.
+// The fake dynamic client accepts any resource, so kube.ApplyManifest succeeds,
+// and the overall result is StatusReady.
+// Verifies the Secret was actually created.
+func TestInstallKubeasyCA_CreatesSecret(t *testing.T) {
+	clientset := fake.NewClientset()
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme())
+
+	result := installKubeasyCA(context.Background(), clientset, dynamicClient)
+
+	// The function should succeed (fake clientset accepts everything).
+	// Even if it fails due to ClusterIssuer, the Secret must have been created first.
+	secret, err := clientset.CoreV1().Secrets(constants.KubeasyCASecretNamespace).
+		Get(context.Background(), constants.KubeasyCASecretName, metav1.GetOptions{})
+	require.NoError(t, err, "Secret should have been created")
+	assert.Equal(t, constants.KubeasyCASecretName, secret.Name)
+
+	// Result is either ready (fake dynamic client accepted ClusterIssuer) or not-ready.
+	// Either way the name should be "kubeasy-ca".
+	assert.Equal(t, "kubeasy-ca", result.Name)
+}
+
+// CAINST-03: clientset.CoreV1().Secrets().Get returns a non-NotFound error → StatusNotReady.
+func TestInstallKubeasyCA_GetError(t *testing.T) {
+	clientset := fake.NewClientset()
+	clientset.PrependReactor("get", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, fmt.Errorf("etcd connection refused")
+	})
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme())
+
+	result := installKubeasyCA(context.Background(), clientset, dynamicClient)
+
+	assert.Equal(t, StatusNotReady, result.Status)
+	assert.Contains(t, result.Message, "etcd connection refused")
+}
+
+// Blank import to satisfy the schema.GroupVersionResource reference used by dynamicfake.
+var _ = schema.GroupVersionResource{}

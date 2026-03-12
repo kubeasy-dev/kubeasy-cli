@@ -382,8 +382,8 @@ func installKubeasyCA(ctx context.Context, clientset kubernetes.Interface, dynam
 }
 
 // SetupAllComponents installs all infrastructure components and returns a ComponentResult for each.
-// The order is: kyverno, local-path-provisioner, nginx-ingress, gateway-api, cert-manager, cloud-provider-kind.
-// Execution continues regardless of individual component failures — all six results are always returned.
+// The order is: kyverno, local-path-provisioner, nginx-ingress, gateway-api, cert-manager, kubeasy-ca, cloud-provider-kind.
+// Execution continues regardless of individual component failures — all seven results are always returned.
 func SetupAllComponents(ctx context.Context, clientset *kubernetes.Clientset, dynamicClient dynamic.Interface) []ComponentResult {
 	// Build REST mapper from API discovery — used for components that don't rebuild their own mapper.
 	// Gateway API rebuilds its mapper internally after CRD install (two-pass apply).

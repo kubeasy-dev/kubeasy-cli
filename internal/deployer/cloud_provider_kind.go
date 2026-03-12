@@ -106,16 +106,28 @@ func downloadCloudProviderKind(ctx context.Context, url, destPath string) error 
 			if err != nil {
 				return fmt.Errorf("failed to create cloud-provider-kind binary file: %w", err)
 			}
-			defer func() { _ = out.Close() }()
+			// ensure partial file is removed on failure
+			succeeded := false
+			defer func() {
+				_ = out.Close()
+				if !succeeded {
+					_ = os.Remove(destPath)
+				}
+			}()
 
 			if _, err := io.Copy(out, tr); err != nil { //nolint:gosec // binary from trusted source
 				return fmt.Errorf("failed to write cloud-provider-kind binary: %w", err)
+			}
+
+			if err := out.Close(); err != nil {
+				return fmt.Errorf("failed to close cloud-provider-kind binary file: %w", err)
 			}
 
 			if err := os.Chmod(destPath, 0o755); err != nil {
 				return fmt.Errorf("failed to chmod cloud-provider-kind binary: %w", err)
 			}
 
+			succeeded = true
 			logger.Info("cloud-provider-kind binary extracted to %s", destPath)
 			return nil
 		}

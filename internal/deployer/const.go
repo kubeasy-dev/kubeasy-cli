@@ -27,7 +27,7 @@ var KyvernoVersion = "v1.17.1"
 // LocalPathProvisionerVersion is the local-path-provisioner release version.
 // IMPORTANT: The comment format below is required for Renovate. Do not modify.
 // renovate: datasource=github-releases depName=rancher/local-path-provisioner
-var LocalPathProvisionerVersion = "v0.0.34"
+var LocalPathProvisionerVersion = "v0.0.35"
 
 // NginxIngressVersion is the nginx-ingress-controller release version used for ingress setup.
 // IMPORTANT: The comment format below is required for Renovate. Do not modify.

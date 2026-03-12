@@ -129,5 +129,5 @@ const KubeasyCASecretName = "kubeasy-ca" //nolint:gosec // not a credential — 
 // KubeasyCASecretCertKey is the key holding the PEM-encoded CA certificate.
 const KubeasyCASecretCertKey = "tls.crt"
 
-// KubeasyCASecretKeyKey is the key holding the PEM-encoded CA private key.
-const KubeasyCASecretKeyKey = "tls.key"
+// KubeasyCAPrivateKeyField is the Secret data key holding the PEM-encoded CA private key.
+const KubeasyCAPrivateKeyField = "tls.key"

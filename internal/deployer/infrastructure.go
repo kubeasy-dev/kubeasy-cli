@@ -355,8 +355,8 @@ func installKubeasyCA(ctx context.Context, clientset kubernetes.Interface, dynam
 		},
 		Type: corev1.SecretTypeTLS,
 		Data: map[string][]byte{
-			constants.KubeasyCASecretCertKey: certPEM,
-			constants.KubeasyCASecretKeyKey:  keyPEM,
+			constants.KubeasyCASecretCertKey:   certPEM,
+			constants.KubeasyCAPrivateKeyField: keyPEM,
 		},
 	}
 	if _, err := clientset.CoreV1().Secrets(constants.KubeasyCASecretNamespace).

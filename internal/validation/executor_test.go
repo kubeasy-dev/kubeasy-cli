@@ -2,9 +2,23 @@ package validation
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"fmt"
+	"math/big"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -1655,23 +1669,31 @@ func TestExecuteConnectivity_NoRunningSourcePods(t *testing.T) {
 }
 
 func TestExecuteConnectivity_NoSourcePodSpecified(t *testing.T) {
+	// In probe mode (empty SourcePod), the CLI auto-deploys kubeasy-probe.
+	// With a fake clientset and no real API server, CreateProbePod succeeds
+	// but WaitForProbePodReady times out. The result must NOT be errNoSourcePodSpecified.
 	clientset := fake.NewClientset()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 	executor := NewExecutor(clientset, nil, &rest.Config{}, "test-ns")
 
 	spec := ConnectivitySpec{
 		SourcePod: SourcePod{
-			// Neither name nor labelSelector specified
+			// Neither name nor labelSelector — probe mode
 		},
 		Targets: []ConnectivityCheck{
 			{URL: "http://test-service", ExpectedStatusCode: 200},
 		},
 	}
 
-	passed, msg, err := executor.executeConnectivity(context.Background(), spec)
+	_, msg, err := executor.executeConnectivity(ctx, spec)
 
-	require.NoError(t, err)
-	assert.False(t, passed)
-	assert.Equal(t, errNoSourcePodSpecified, msg)
+	// Probe branch entered — error or message must not be errNoSourcePodSpecified
+	if err != nil {
+		assert.NotContains(t, err.Error(), errNoSourcePodSpecified)
+	} else {
+		assert.NotEqual(t, errNoSourcePodSpecified, msg)
+	}
 }
 
 // Note: TestExecuteConnectivity_SourcePodByName and TestExecuteConnectivity_SourcePodByLabelSelectorRunning
@@ -2695,4 +2717,720 @@ func TestCheckConnectivity_TimeoutArg(t *testing.T) {
 	if !foundTimeout {
 		t.Errorf("expected --connect-timeout in cmd; got %v", cmd)
 	}
+}
+
+// =============================================================================
+// Phase 07-02: Probe Mode, Cross-Namespace, Blocked Connection Tests
+// =============================================================================
+
+// TestExecuteConnectivity_ProbeMode verifies that an empty SourcePod enters the probe
+// branch (not errNoSourcePodSpecified). Since no real API server exists, the probe
+// creation fails — but the error message must NOT be errNoSourcePodSpecified (PROBE-01).
+func TestExecuteConnectivity_ProbeMode(t *testing.T) {
+	executor := NewExecutor(
+		fake.NewClientset(),
+		nil,
+		&rest.Config{},
+		"test-ns",
+	)
+
+	validation := Validation{
+		Key:  "probe-mode-test",
+		Type: TypeConnectivity,
+		Spec: ConnectivitySpec{
+			SourcePod: SourcePod{}, // empty = probe mode
+			Targets: []ConnectivityCheck{
+				{URL: "http://my-service:80", ExpectedStatusCode: 200, TimeoutSeconds: 3},
+			},
+		},
+	}
+
+	result := executor.Execute(context.Background(), validation)
+
+	// The probe branch was entered — the result message must NOT be errNoSourcePodSpecified
+	assert.NotEqual(t, errNoSourcePodSpecified, result.Message,
+		"empty SourcePod must NOT return errNoSourcePodSpecified — should enter probe branch")
+	// Accept any probe-related error message (CreateProbePod will fail in fake clientset)
+	assert.False(t, result.Passed)
+}
+
+// TestExecuteConnectivity_ProbeNamespace verifies that when SourcePod.Namespace is set
+// with empty Name/LabelSelector, the probe pod is created in that namespace (PROBE-02, CONN-02).
+func TestExecuteConnectivity_ProbeNamespace(t *testing.T) {
+	// Seed clientset with no pods in "test-ns" but simulate "probe-ns" as target
+	executor := NewExecutor(
+		fake.NewClientset(),
+		nil,
+		&rest.Config{},
+		"test-ns",
+	)
+
+	validation := Validation{
+		Key:  "probe-namespace-test",
+		Type: TypeConnectivity,
+		Spec: ConnectivitySpec{
+			SourcePod: SourcePod{Namespace: "probe-ns"}, // probe mode with explicit namespace
+			Targets: []ConnectivityCheck{
+				{URL: "http://my-service:80", ExpectedStatusCode: 200, TimeoutSeconds: 3},
+			},
+		},
+	}
+
+	result := executor.Execute(context.Background(), validation)
+
+	// Should enter probe branch (and fail on CreateProbePod / WaitForProbePodReady),
+	// not errNoSourcePodSpecified
+	assert.NotEqual(t, errNoSourcePodSpecified, result.Message)
+	assert.False(t, result.Passed)
+}
+
+// TestCheckConnectivity_BlockedConnection verifies that ExpectedStatusCode==0 + exec failure
+// results in passed=true (CONN-01).
+// Since SPDY executor cannot be faked, we test at Execute level with a running pod seeded.
+// The empty restConfig triggers the test-environment guard; status-0 guard must make this pass.
+func TestCheckConnectivity_BlockedConnection(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "source-pod",
+			Namespace: "test-ns",
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+		},
+	}
+
+	executor := NewExecutor(
+		fake.NewClientset(pod),
+		nil,
+		&rest.Config{}, // empty host — triggers test-environment guard
+		"test-ns",
+	)
+
+	validation := Validation{
+		Key:  "blocked-connection-test",
+		Type: TypeConnectivity,
+		Spec: ConnectivitySpec{
+			SourcePod: SourcePod{Name: "source-pod"},
+			Targets: []ConnectivityCheck{
+				{URL: "http://blocked-svc:80", ExpectedStatusCode: 0, TimeoutSeconds: 3},
+			},
+		},
+	}
+
+	result := executor.Execute(context.Background(), validation)
+
+	// With ExpectedStatusCode==0 and exec unavailable, must be passed=true (CONN-01).
+	// The overall message is the connectivity success message (per-target messages only
+	// propagate on failure; blocked-as-expected targets count as passing).
+	assert.True(t, result.Passed,
+		"ExpectedStatusCode==0 + exec unavailable should be passed=true (blocked as expected)")
+}
+
+// TestCheckConnectivity_NoCurlFallback verifies that when exec fails and ExpectedStatusCode!=0,
+// the result is passed=false with no wget/sh -c reference (PROBE-04 wget removal).
+func TestCheckConnectivity_NoCurlFallback(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "source-pod",
+			Namespace: "test-ns",
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+		},
+	}
+
+	executor := NewExecutor(
+		fake.NewClientset(pod),
+		nil,
+		&rest.Config{}, // empty config — SPDY will fail
+		"test-ns",
+	)
+
+	validation := Validation{
+		Key:  "no-curl-fallback-test",
+		Type: TypeConnectivity,
+		Spec: ConnectivitySpec{
+			SourcePod: SourcePod{Name: "source-pod"},
+			Targets: []ConnectivityCheck{
+				{URL: "http://svc:80", ExpectedStatusCode: 200, TimeoutSeconds: 3},
+			},
+		},
+	}
+
+	result := executor.Execute(context.Background(), validation)
+
+	// SPDY fails → exec error → must be false with no wget reference
+	assert.False(t, result.Passed)
+	assert.NotContains(t, result.Message, "wget",
+		"wget fallback must be absent from result message (PROBE-04)")
+	assert.NotContains(t, result.Message, "sh -c",
+		"sh -c shell invocation must be absent from result message (PROBE-04)")
+}
+
+// TestExecuteConnectivity_CrossNamespace verifies that SourcePod.Namespace="other-ns"
+// causes the pod lookup to use "other-ns" (CONN-02).
+func TestExecuteConnectivity_CrossNamespace(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pod-in-other",
+			Namespace: "other-ns",
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+		},
+	}
+
+	executor := NewExecutor(
+		fake.NewClientset(pod),
+		nil,
+		&rest.Config{},
+		"default-ns", // executor default ns is different from pod ns
+	)
+
+	validation := Validation{
+		Key:  "cross-namespace-test",
+		Type: TypeConnectivity,
+		Spec: ConnectivitySpec{
+			SourcePod: SourcePod{Name: "pod-in-other", Namespace: "other-ns"},
+			Targets: []ConnectivityCheck{
+				{URL: "http://svc:80", ExpectedStatusCode: 200, TimeoutSeconds: 3},
+			},
+		},
+	}
+
+	result := executor.Execute(context.Background(), validation)
+
+	// Pod was found (no errNoMatchingSourcePods or similar lookup error)
+	// The result will fail (SPDY), but the error must not be a pod-not-found error
+	assert.NotContains(t, result.Message, "failed to get source pod",
+		"cross-namespace pod lookup must succeed (pod exists in other-ns)")
+}
+
+// TestExecuteConnectivity_CrossNamespace_LabelSelector verifies that SourcePod.Namespace
+// is used when listing pods by LabelSelector (CONN-02).
+func TestExecuteConnectivity_CrossNamespace_LabelSelector(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "curl-client",
+			Namespace: "other-ns",
+			Labels:    map[string]string{"app": "curl"},
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+		},
+	}
+
+	executor := NewExecutor(
+		fake.NewClientset(pod),
+		nil,
+		&rest.Config{},
+		"default-ns",
+	)
+
+	validation := Validation{
+		Key:  "cross-namespace-labelselector-test",
+		Type: TypeConnectivity,
+		Spec: ConnectivitySpec{
+			SourcePod: SourcePod{
+				LabelSelector: map[string]string{"app": "curl"},
+				Namespace:     "other-ns",
+			},
+			Targets: []ConnectivityCheck{
+				{URL: "http://svc:80", ExpectedStatusCode: 200, TimeoutSeconds: 3},
+			},
+		},
+	}
+
+	result := executor.Execute(context.Background(), validation)
+
+	// Pod was found in other-ns — must NOT return errNoMatchingSourcePods
+	assert.NotEqual(t, errNoMatchingSourcePods, result.Message,
+		"LabelSelector lookup must use SourcePod.Namespace (CONN-02)")
+	assert.NotEqual(t, errNoRunningSourcePods, result.Message,
+		"Running pod in other-ns must be found (CONN-02)")
+}
+
+// --- External connectivity tests (EXT-01 through EXT-04) ---
+
+func TestCheckExternalConnectivity_Success(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	e := &Executor{} // net/http path — no K8s client needed
+	target := ConnectivityCheck{
+		URL:                srv.URL + "/",
+		ExpectedStatusCode: 200,
+		TimeoutSeconds:     5,
+	}
+	passed, msg := e.checkExternalConnectivity(context.Background(), target)
+	assert.True(t, passed)
+	assert.Empty(t, msg)
+}
+
+func TestCheckExternalConnectivity_WrongStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	e := &Executor{}
+	target := ConnectivityCheck{
+		URL:                srv.URL + "/",
+		ExpectedStatusCode: 200,
+		TimeoutSeconds:     5,
+	}
+	passed, msg := e.checkExternalConnectivity(context.Background(), target)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "got status 404")
+}
+
+func TestCheckExternalConnectivity_BlockedConnection(t *testing.T) {
+	e := &Executor{}
+	target := ConnectivityCheck{
+		URL:                "http://127.0.0.1:1", // port 1 — always refused
+		ExpectedStatusCode: 0,
+		TimeoutSeconds:     2,
+	}
+	passed, msg := e.checkExternalConnectivity(context.Background(), target)
+	assert.True(t, passed)
+	assert.Contains(t, msg, "blocked")
+}
+
+func TestCheckExternalConnectivity_ConnectionRefused(t *testing.T) {
+	e := &Executor{}
+	target := ConnectivityCheck{
+		URL:                "http://127.0.0.1:1", // port 1 — always refused
+		ExpectedStatusCode: 200,
+		TimeoutSeconds:     2,
+	}
+	passed, msg := e.checkExternalConnectivity(context.Background(), target)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "failed")
+}
+
+func TestCheckExternalConnectivity_HostHeader(t *testing.T) {
+	var receivedHost string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedHost = r.Host
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	e := &Executor{}
+	target := ConnectivityCheck{
+		URL:                srv.URL + "/",
+		ExpectedStatusCode: 200,
+		TimeoutSeconds:     5,
+		HostHeader:         "myapp.example.com",
+	}
+	passed, _ := e.checkExternalConnectivity(context.Background(), target)
+	assert.True(t, passed)
+	assert.Equal(t, "myapp.example.com", receivedHost)
+}
+
+func TestCheckExternalConnectivity_StatusCodes(t *testing.T) {
+	tests := []struct {
+		serverCode   int
+		expectedCode int
+		wantPassed   bool
+	}{
+		{200, 200, true},
+		{201, 201, true},
+		{301, 301, true},
+		{404, 404, true},
+		{200, 404, false},
+		{301, 200, false},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(fmt.Sprintf("server=%d_expected=%d", tc.serverCode, tc.expectedCode), func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.serverCode)
+			}))
+			defer srv.Close()
+			e := &Executor{}
+			target := ConnectivityCheck{
+				URL:                srv.URL + "/",
+				ExpectedStatusCode: tc.expectedCode,
+				TimeoutSeconds:     5,
+			}
+			passed, _ := e.checkExternalConnectivity(context.Background(), target)
+			assert.Equal(t, tc.wantPassed, passed)
+		})
+	}
+}
+
+func TestExecuteConnectivity_ExternalMode(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	// External mode — no K8s client interaction expected
+	e := NewExecutor(nil, nil, nil, "test-ns")
+	spec := ConnectivitySpec{
+		Mode: "external",
+		Targets: []ConnectivityCheck{
+			{URL: srv.URL + "/", ExpectedStatusCode: 200, TimeoutSeconds: 5},
+		},
+	}
+	passed, msg, err := e.executeConnectivity(context.Background(), spec)
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Equal(t, msgAllConnectivityPassed, msg)
+}
+
+// generateExpiredCert creates a self-signed TLS certificate that is already expired.
+// Used for TLS-01 tests to validate expiry checking behaviour.
+func generateExpiredCert(t *testing.T) tls.Certificate {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "expired.example.com"},
+		NotBefore:    time.Now().Add(-48 * time.Hour),
+		NotAfter:     time.Now().Add(-24 * time.Hour), // already expired
+		DNSNames:     []string{"expired.example.com"},
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	require.NoError(t, err)
+
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	keyPEM, err := x509.MarshalPKCS8PrivateKey(key)
+	require.NoError(t, err)
+	keyPEMBlock := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyPEM})
+
+	cert, err := tls.X509KeyPair(certPEM, keyPEMBlock)
+	require.NoError(t, err)
+	return cert
+}
+
+// TestCheckExternalConnectivityTLS tests TLS-specific behaviour in checkExternalConnectivity.
+// Covers TLS-01 (expiry), TLS-02 (SANs), TLS-03 (insecureSkipVerify).
+func TestCheckExternalConnectivityTLS(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	e := NewExecutor(nil, nil, nil, "test-ns")
+
+	// Test A (TLS-03): insecureSkipVerify=true + httptest TLS server → passed=true
+	t.Run("TLS-03 insecureSkipVerify passes self-signed cert", func(t *testing.T) {
+		srv := httptest.NewTLSServer(handler)
+		defer srv.Close()
+
+		target := ConnectivityCheck{
+			URL:                srv.URL + "/",
+			ExpectedStatusCode: 200,
+			TimeoutSeconds:     5,
+			TLS:                &TLSConfig{InsecureSkipVerify: true},
+		}
+		passed, msg := e.checkExternalConnectivity(context.Background(), target)
+		assert.True(t, passed, "expected passed=true with insecureSkipVerify, got msg: %s", msg)
+	})
+
+	// Test C (TLS-01): expired cert + validateExpiry=true → passed=false, message contains "Certificate expired on"
+	t.Run("TLS-01 expired cert fails with friendly message", func(t *testing.T) {
+		srv := httptest.NewUnstartedServer(handler)
+		srv.TLS = &tls.Config{
+			Certificates: []tls.Certificate{generateExpiredCert(t)},
+		}
+		srv.StartTLS()
+		defer srv.Close()
+
+		target := ConnectivityCheck{
+			URL:                srv.URL + "/",
+			ExpectedStatusCode: 200,
+			TimeoutSeconds:     5,
+			TLS:                &TLSConfig{ValidateExpiry: true},
+		}
+		passed, msg := e.checkExternalConnectivity(context.Background(), target)
+		assert.False(t, passed, "expected passed=false for expired cert")
+		assert.Contains(t, msg, "Certificate expired on", "expected friendly expiry message, got: %s", msg)
+		assert.Contains(t, msg, "days ago", "expected days-ago in message, got: %s", msg)
+	})
+
+	// Test D (TLS-01): valid cert + validateExpiry=true → passed=true
+	t.Run("TLS-01 valid cert passes expiry check", func(t *testing.T) {
+		srv := httptest.NewTLSServer(handler)
+		defer srv.Close()
+
+		target := ConnectivityCheck{
+			URL:                srv.URL + "/",
+			ExpectedStatusCode: 200,
+			TimeoutSeconds:     5,
+			TLS: &TLSConfig{
+				InsecureSkipVerify: false,
+				ValidateExpiry:     true,
+			},
+		}
+		// httptest cert is not in OS trust store; the tls probe fetches raw cert.
+		// Since validateExpiry=true (no insecureSkipVerify), the TLS probe runs but the
+		// HTTP request itself will fail with untrusted CA.
+		// We only assert the expiry check passes (not the HTTP status check).
+		// A non-expired cert should not produce an expiry failure message.
+		passed, msg := e.checkExternalConnectivity(context.Background(), target)
+		// The cert is valid (not expired) so the expiry check should pass.
+		// The HTTP request may fail due to untrusted CA (not our concern here).
+		assert.NotContains(t, msg, "Certificate expired on", "should not report expiry failure for valid cert")
+		_ = passed // pass/fail depends on OS trust — only assert no expiry error
+	})
+
+	// Test E (TLS-02): SAN mismatch + validateSANs=true + HostHeader mismatch → passed=false
+	// httptest cert has SANs: [example.com *.example.com 127.0.0.1 ::1]
+	// Use a hostname outside *.example.com to trigger a genuine mismatch.
+	t.Run("TLS-02 SAN mismatch fails with friendly message", func(t *testing.T) {
+		srv := httptest.NewTLSServer(handler)
+		defer srv.Close()
+
+		target := ConnectivityCheck{
+			URL:                srv.URL + "/",
+			ExpectedStatusCode: 200,
+			TimeoutSeconds:     5,
+			HostHeader:         "myapp.other-domain.io", // not in httptest cert SANs
+			TLS:                &TLSConfig{ValidateSANs: true},
+		}
+		passed, msg := e.checkExternalConnectivity(context.Background(), target)
+		assert.False(t, passed, "expected passed=false for SAN mismatch")
+		assert.Contains(t, msg, "myapp.other-domain.io", "expected hostname in error message, got: %s", msg)
+		assert.Contains(t, msg, "not in SANs", "expected 'not in SANs' in message, got: %s", msg)
+	})
+
+	// Test F (TLS-02): httptest cert SAN + validateSANs=true + URL host matches SAN → passed=true
+	t.Run("TLS-02 matching SAN passes check", func(t *testing.T) {
+		srv := httptest.NewTLSServer(handler)
+		defer srv.Close()
+
+		// httptest cert has 127.0.0.1 as SAN; URL host is 127.0.0.1, no HostHeader set
+		target := ConnectivityCheck{
+			URL:                srv.URL + "/",
+			ExpectedStatusCode: 200,
+			TimeoutSeconds:     5,
+			// No HostHeader — SAN check uses URL hostname (127.0.0.1)
+			TLS: &TLSConfig{ValidateSANs: true},
+		}
+		// SAN check should pass (127.0.0.1 is in httptest cert SANs).
+		// HTTP request may fail due to untrusted CA — we only assert no SAN error.
+		_, msg := e.checkExternalConnectivity(context.Background(), target)
+		assert.NotContains(t, msg, "not in SANs", "should not report SAN failure when hostname matches, got: %s", msg)
+	})
+
+	// Test G: short-circuit — expired cert + validateExpiry → message does NOT contain "got status"
+	t.Run("TLS failure short-circuits HTTP status check", func(t *testing.T) {
+		srv := httptest.NewUnstartedServer(handler)
+		srv.TLS = &tls.Config{
+			Certificates: []tls.Certificate{generateExpiredCert(t)},
+		}
+		srv.StartTLS()
+		defer srv.Close()
+
+		target := ConnectivityCheck{
+			URL:                srv.URL + "/",
+			ExpectedStatusCode: 200,
+			TimeoutSeconds:     5,
+			TLS:                &TLSConfig{ValidateExpiry: true},
+		}
+		passed, msg := e.checkExternalConnectivity(context.Background(), target)
+		assert.False(t, passed)
+		assert.NotContains(t, msg, "got status", "TLS failure must short-circuit — no HTTP status message, got: %s", msg)
+	})
+
+	// Test H: insecureSkipVerify priority — insecureSkipVerify=true + validateExpiry=true → passed=true
+	t.Run("insecureSkipVerify takes priority over validateExpiry", func(t *testing.T) {
+		srv := httptest.NewUnstartedServer(handler)
+		srv.TLS = &tls.Config{
+			Certificates: []tls.Certificate{generateExpiredCert(t)},
+		}
+		srv.StartTLS()
+		defer srv.Close()
+
+		target := ConnectivityCheck{
+			URL:                srv.URL + "/",
+			ExpectedStatusCode: 200,
+			TimeoutSeconds:     5,
+			TLS: &TLSConfig{
+				InsecureSkipVerify: true,
+				ValidateExpiry:     true, // should be ignored when insecureSkipVerify=true
+			},
+		}
+		passed, msg := e.checkExternalConnectivity(context.Background(), target)
+		assert.True(t, passed, "expected passed=true — insecureSkipVerify must take priority, got msg: %s", msg)
+		assert.NotContains(t, msg, "Certificate expired on", "should not inspect cert when insecureSkipVerify=true, got: %s", msg)
+	})
+}
+
+// generateKubeasyCASecret generates a CA cert and returns the PEM bytes and the Secret
+// that would be stored at the well-known location (cert-manager/kubeasy-ca).
+func generateKubeasyCASecret(t *testing.T) (caPEM []byte, caKey *ecdsa.PrivateKey, secret *corev1.Secret) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	require.NoError(t, err)
+
+	now := time.Now()
+	template := &x509.Certificate{
+		SerialNumber:          serial,
+		Subject:               pkix.Name{CommonName: "Kubeasy Local CA (test)"},
+		NotBefore:             now.Add(-time.Minute),
+		NotAfter:              now.Add(24 * time.Hour),
+		IsCA:                  true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		BasicConstraintsValid: true,
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	require.NoError(t, err)
+
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	keyDER, err := x509.MarshalECPrivateKey(key)
+	require.NoError(t, err)
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
+
+	s := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      constants.KubeasyCASecretName,
+			Namespace: constants.KubeasyCASecretNamespace,
+		},
+		Type: corev1.SecretTypeTLS,
+		Data: map[string][]byte{
+			constants.KubeasyCASecretCertKey:   certPEM,
+			constants.KubeasyCAPrivateKeyField: keyPEM,
+		},
+	}
+	return certPEM, key, s
+}
+
+// CA-01: loadKubeasyCA returns nil when the Secret is absent.
+func TestLoadKubeasyCA_SecretAbsent(t *testing.T) {
+	e := NewExecutor(fake.NewClientset(), nil, nil, "test-ns")
+	pool := e.loadKubeasyCA(context.Background())
+	assert.Nil(t, pool, "expected nil pool when Secret is absent")
+}
+
+// CA-02: loadKubeasyCA returns a non-nil pool when the Secret contains a valid PEM cert.
+func TestLoadKubeasyCA_ValidPEM(t *testing.T) {
+	_, _, secret := generateKubeasyCASecret(t)
+	e := NewExecutor(fake.NewClientset(secret), nil, nil, "test-ns")
+	pool := e.loadKubeasyCA(context.Background())
+	assert.NotNil(t, pool, "expected non-nil pool for valid CA Secret")
+}
+
+// CA-03: loadKubeasyCA returns nil when the tls.crt key is missing from the Secret.
+func TestLoadKubeasyCA_MissingCertKey(t *testing.T) {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      constants.KubeasyCASecretName,
+			Namespace: constants.KubeasyCASecretNamespace,
+		},
+		Type: corev1.SecretTypeTLS,
+		Data: map[string][]byte{
+			"something-else": []byte("data"),
+		},
+	}
+	e := NewExecutor(fake.NewClientset(secret), nil, nil, "test-ns")
+	pool := e.loadKubeasyCA(context.Background())
+	assert.Nil(t, pool, "expected nil pool when tls.crt key is absent")
+}
+
+// CA-04: loadKubeasyCA returns nil when tls.crt contains invalid PEM data.
+func TestLoadKubeasyCA_InvalidPEM(t *testing.T) {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      constants.KubeasyCASecretName,
+			Namespace: constants.KubeasyCASecretNamespace,
+		},
+		Type: corev1.SecretTypeTLS,
+		Data: map[string][]byte{
+			constants.KubeasyCASecretCertKey: []byte("this is not valid PEM"),
+		},
+	}
+	e := NewExecutor(fake.NewClientset(secret), nil, nil, "test-ns")
+	pool := e.loadKubeasyCA(context.Background())
+	assert.Nil(t, pool, "expected nil pool when tls.crt contains invalid PEM")
+}
+
+// CA-05: buildExternalTLSConfig with insecureSkipVerify=true → InsecureSkipVerify set, RootCAs nil.
+func TestBuildExternalTLSConfig_InsecureSkipVerify(t *testing.T) {
+	e := NewExecutor(fake.NewClientset(), nil, nil, "test-ns")
+	target := ConnectivityCheck{
+		TLS: &TLSConfig{InsecureSkipVerify: true},
+	}
+	cfg := e.buildExternalTLSConfig(context.Background(), target)
+	assert.True(t, cfg.InsecureSkipVerify, "expected InsecureSkipVerify=true")
+	assert.Nil(t, cfg.RootCAs, "expected RootCAs=nil when insecureSkipVerify is set")
+}
+
+// CA-06: buildExternalTLSConfig with a valid CA Secret → RootCAs is populated.
+func TestBuildExternalTLSConfig_WithCASecret(t *testing.T) {
+	_, _, secret := generateKubeasyCASecret(t)
+	e := NewExecutor(fake.NewClientset(secret), nil, nil, "test-ns")
+	target := ConnectivityCheck{}
+	cfg := e.buildExternalTLSConfig(context.Background(), target)
+	assert.False(t, cfg.InsecureSkipVerify)
+	assert.NotNil(t, cfg.RootCAs, "expected RootCAs to be loaded from CA Secret")
+}
+
+// CA-07: Integration — httptest TLS server signed by local CA + CA Secret in fake clientset
+// → checkExternalConnectivity returns passed=true without needing insecureSkipVerify.
+func TestCheckExternalConnectivity_LocalCASecret(t *testing.T) {
+	// 1. Generate CA
+	caPEM, caKey, caSecret := generateKubeasyCASecret(t)
+
+	// Parse the CA certificate for signing.
+	caCerts, err := x509.ParseCertificates(func() []byte {
+		block, _ := pem.Decode(caPEM)
+		require.NotNil(t, block)
+		return block.Bytes
+	}())
+	require.NoError(t, err)
+	require.Len(t, caCerts, 1)
+	caCert := caCerts[0]
+
+	// 2. Generate server cert signed by the CA (127.0.0.1 + localhost SANs).
+	srvKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	require.NoError(t, err)
+	now := time.Now()
+	srvTemplate := &x509.Certificate{
+		SerialNumber: serial,
+		Subject:      pkix.Name{CommonName: "localhost"},
+		NotBefore:    now.Add(-time.Minute),
+		NotAfter:     now.Add(24 * time.Hour),
+		DNSNames:     []string{"localhost"},
+		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},
+	}
+	srvCertDER, err := x509.CreateCertificate(rand.Reader, srvTemplate, caCert, &srvKey.PublicKey, caKey)
+	require.NoError(t, err)
+	srvCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srvCertDER})
+	srvKeyDER, err := x509.MarshalECPrivateKey(srvKey)
+	require.NoError(t, err)
+	srvKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: srvKeyDER})
+	srvTLSCert, err := tls.X509KeyPair(srvCertPEM, srvKeyPEM)
+	require.NoError(t, err)
+
+	// 3. Start TLS httptest server with the CA-signed server cert.
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	srv.TLS = &tls.Config{Certificates: []tls.Certificate{srvTLSCert}}
+	srv.StartTLS()
+	defer srv.Close()
+
+	// 4. Create executor with the CA Secret in the fake clientset.
+	e := NewExecutor(fake.NewClientset(caSecret), nil, nil, "test-ns")
+
+	// 5. Call checkExternalConnectivity — no insecureSkipVerify, no explicit TLS config.
+	target := ConnectivityCheck{
+		URL:                srv.URL + "/",
+		ExpectedStatusCode: 200,
+		TimeoutSeconds:     5,
+	}
+	passed, msg := e.checkExternalConnectivity(context.Background(), target)
+	assert.True(t, passed, "expected passed=true when CA Secret is present and cert is CA-signed, got: %s", msg)
 }

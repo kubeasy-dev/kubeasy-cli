@@ -345,9 +345,11 @@ func TestConnectivityValidation_NoSourcePodSpecified_Failure(t *testing.T) {
 		Spec: spec,
 	})
 
-	// Should fail because no source pod is specified
+	// After Phase 07, empty SourcePod triggers probe pod lifecycle instead of returning
+	// errNoSourcePodSpecified. In envtest, the probe pod never becomes Ready (no real
+	// scheduler), so the result is a probe-related timeout failure.
 	assert.False(t, result.Passed, "Expected validation to fail when no source pod specified")
-	assert.Equal(t, "No source pod specified", result.Message)
+	assert.Contains(t, result.Message, "probe pod", "empty SourcePod must enter probe branch, not return errNoSourcePodSpecified")
 }
 
 func TestConnectivityValidation_DefaultTimeout(t *testing.T) {

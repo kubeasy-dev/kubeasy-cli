@@ -2,6 +2,7 @@ package constants
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -96,3 +97,37 @@ func VersionsCompatible(version1, version2 string) bool {
 var LogFilePath = "kubeasy-cli.log"
 
 var MaxLogLines = 1000 // Maximum number of lines to keep in the log file
+
+// GetKubeasyConfigDir returns the path to the Kubeasy configuration directory (~/.kubeasy).
+// The home directory is resolved at call time for portability.
+func GetKubeasyConfigDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ".kubeasy"
+	}
+	return filepath.Join(home, ".kubeasy")
+}
+
+// GetKindConfigPath returns the path to the Kind cluster configuration file (~/.kubeasy/kind-config.yaml).
+// The home directory is resolved at call time for portability.
+func GetKindConfigPath() string {
+	return filepath.Join(GetKubeasyConfigDir(), "kind-config.yaml")
+}
+
+// GetCloudProviderKindBinPath returns the path to the cloud-provider-kind binary (~/.kubeasy/bin/cloud-provider-kind).
+// The home directory is resolved at call time for portability.
+func GetCloudProviderKindBinPath() string {
+	return filepath.Join(GetKubeasyConfigDir(), "bin", "cloud-provider-kind")
+}
+
+// KubeasyCASecretNamespace is the namespace of the well-known CA Secret.
+const KubeasyCASecretNamespace = "cert-manager"
+
+// KubeasyCASecretName is the name of the well-known CA Secret and ClusterIssuer.
+const KubeasyCASecretName = "kubeasy-ca" //nolint:gosec // not a credential — this is a public CA certificate name
+
+// KubeasyCASecretCertKey is the key holding the PEM-encoded CA certificate.
+const KubeasyCASecretCertKey = "tls.crt"
+
+// KubeasyCAPrivateKeyField is the Secret data key holding the PEM-encoded CA private key.
+const KubeasyCAPrivateKeyField = "tls.key"

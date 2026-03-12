@@ -230,13 +230,37 @@ func parseSpec(v *Validation) error {
 		if err := yaml.Unmarshal(specYAML, &spec); err != nil {
 			return err
 		}
-		if err := validateSourcePod(spec.SourcePod); err != nil {
-			return err
+		// EXT-01: fail fast if mode: external is combined with sourcePod (incoherent spec)
+		if spec.Mode == ConnectivityModeExternal {
+			sp := spec.SourcePod
+			if sp.Name != "" || len(sp.LabelSelector) > 0 || sp.Namespace != "" {
+				return fmt.Errorf("mode: external is incompatible with sourcePod (remove sourcePod or use mode: internal)")
+			}
+		} else if spec.Mode != "" && spec.Mode != ConnectivityModeInternal {
+			return fmt.Errorf("invalid mode %q: must be \"internal\" or \"external\"", spec.Mode)
 		}
 		// Apply default timeout to connectivity targets if not specified
 		for i := range spec.Targets {
 			if spec.Targets[i].TimeoutSeconds == 0 {
 				spec.Targets[i].TimeoutSeconds = DefaultConnectivityTimeoutSeconds
+			}
+		}
+		// Validate per-target TLS configuration.
+		for i, t := range spec.Targets {
+			if t.TLS == nil {
+				continue
+			}
+			// TLS config is only meaningful for external mode over https://.
+			if spec.Mode != ConnectivityModeExternal {
+				return fmt.Errorf("target %d: tls config is only valid with mode: external", i)
+			}
+			// TLS config requires an https:// URL.
+			if !strings.HasPrefix(t.URL, "https://") {
+				return fmt.Errorf("target %d: tls config requires an https:// URL, got %q", i, t.URL)
+			}
+			// InsecureSkipVerify is incompatible with explicit validation flags.
+			if t.TLS.InsecureSkipVerify && (t.TLS.ValidateExpiry || t.TLS.ValidateSANs) {
+				return fmt.Errorf("target %d: insecureSkipVerify: true is incompatible with validateExpiry or validateSANs", i)
 			}
 		}
 		v.Spec = spec
@@ -252,14 +276,6 @@ func parseSpec(v *Validation) error {
 func validateTarget(target Target) error {
 	if target.Name == "" && len(target.LabelSelector) == 0 {
 		return fmt.Errorf("target must specify either name or labelSelector")
-	}
-	return nil
-}
-
-// validateSourcePod checks if a source pod has at least name or labelSelector
-func validateSourcePod(sourcePod SourcePod) error {
-	if sourcePod.Name == "" && len(sourcePod.LabelSelector) == 0 {
-		return fmt.Errorf("sourcePod must specify either name or labelSelector")
 	}
 	return nil
 }

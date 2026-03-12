@@ -385,21 +385,8 @@ objectives:
 `,
 			errorContains: "target must specify either name or labelSelector",
 		},
-		{
-			name: "sourcePod without name or labelSelector",
-			yaml: `
-objectives:
-  - key: test
-    type: connectivity
-    spec:
-      sourcePod:
-        container: main
-      targets:
-        - url: http://test
-          expectedStatusCode: 200
-`,
-			errorContains: "sourcePod must specify either name or labelSelector",
-		},
+		// Note: empty sourcePod (probe mode) is now valid — no test case needed here.
+		// See TestParse_ConnectivityProbeMode for probe mode acceptance test.
 	}
 
 	for _, tt := range tests {
@@ -448,42 +435,6 @@ func TestValidateTarget(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateTarget(tt.target)
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-// TestValidateSourcePod tests the validateSourcePod function
-func TestValidateSourcePod(t *testing.T) {
-	tests := []struct {
-		name        string
-		sourcePod   SourcePod
-		expectError bool
-	}{
-		{
-			name:        "valid - with name",
-			sourcePod:   SourcePod{Name: "client-pod"},
-			expectError: false,
-		},
-		{
-			name:        "valid - with labelSelector",
-			sourcePod:   SourcePod{LabelSelector: map[string]string{"role": "client"}},
-			expectError: false,
-		},
-		{
-			name:        "invalid - empty",
-			sourcePod:   SourcePod{},
-			expectError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateSourcePod(tt.sourcePod)
 			if tt.expectError {
 				assert.Error(t, err)
 			} else {
@@ -767,4 +718,257 @@ objectives:
 		require.NoError(t, err)
 		require.Len(t, config.Validations, 1)
 	})
+}
+
+// TestParse_Connectivity_ExternalMode verifies that mode: external parses correctly (EXT-01)
+func TestParse_Connectivity_ExternalMode(t *testing.T) {
+	yaml := `
+objectives:
+  - key: ext-check
+    type: connectivity
+    spec:
+      mode: external
+      targets:
+        - url: http://myapp.127-0-0-1.sslip.io:8080/
+          expectedStatusCode: 200
+`
+	cfg, err := Parse([]byte(yaml))
+	require.NoError(t, err)
+	spec := cfg.Validations[0].Spec.(ConnectivitySpec)
+	assert.Equal(t, "external", spec.Mode)
+	assert.Equal(t, "http://myapp.127-0-0-1.sslip.io:8080/", spec.Targets[0].URL)
+}
+
+// TestParse_Connectivity_ExternalModeWithSourcePod verifies that mode: external + sourcePod is rejected (EXT-02)
+func TestParse_Connectivity_ExternalModeWithSourcePod(t *testing.T) {
+	yaml := `
+objectives:
+  - key: ext-check
+    type: connectivity
+    spec:
+      mode: external
+      sourcePod:
+        name: my-pod
+      targets:
+        - url: http://example.com/
+          expectedStatusCode: 200
+`
+	_, err := Parse([]byte(yaml))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "incompatible with sourcePod")
+}
+
+// TestParse_Connectivity_SslipIO verifies that sslip.io URLs parse without modification (EXT-03)
+func TestParse_Connectivity_SslipIO(t *testing.T) {
+	yaml := `
+objectives:
+  - key: sslip-check
+    type: connectivity
+    spec:
+      mode: external
+      targets:
+        - url: http://myapp.127-0-0-1.sslip.io:8080/health
+          expectedStatusCode: 200
+          timeoutSeconds: 10
+`
+	cfg, err := Parse([]byte(yaml))
+	require.NoError(t, err)
+	spec := cfg.Validations[0].Spec.(ConnectivitySpec)
+	assert.Equal(t, "http://myapp.127-0-0-1.sslip.io:8080/health", spec.Targets[0].URL)
+}
+
+// TestParse_Connectivity_InvalidMode verifies that unknown mode values are rejected (EXT-01)
+func TestParse_Connectivity_InvalidMode(t *testing.T) {
+	yaml := `
+objectives:
+  - key: bad-check
+    type: connectivity
+    spec:
+      mode: banana
+      targets:
+        - url: http://example.com/
+          expectedStatusCode: 200
+`
+	_, err := Parse([]byte(yaml))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid mode")
+}
+
+// TestParse_Connectivity_NoMode verifies that existing specs without mode field parse unchanged (backwards compat)
+func TestParse_Connectivity_NoMode(t *testing.T) {
+	yaml := `
+objectives:
+  - key: internal-check
+    type: connectivity
+    spec:
+      sourcePod:
+        name: my-pod
+      targets:
+        - url: http://service:80/
+          expectedStatusCode: 200
+`
+	cfg, err := Parse([]byte(yaml))
+	require.NoError(t, err)
+	spec := cfg.Validations[0].Spec.(ConnectivitySpec)
+	assert.Equal(t, "", spec.Mode)
+}
+
+// TestParseConnectivityTLSBlock verifies that the tls: block in a connectivity target
+// is correctly parsed into TLSConfig (TLS-01, TLS-02, TLS-03).
+func TestParseConnectivityTLSBlock(t *testing.T) {
+	t.Run("tls block absent - TLS field is nil (no regression)", func(t *testing.T) {
+		yamlData := `
+objectives:
+  - key: no-tls
+    type: connectivity
+    spec:
+      mode: external
+      targets:
+        - url: https://myapp.example.com/
+          expectedStatusCode: 200
+`
+		cfg, err := Parse([]byte(yamlData))
+		require.NoError(t, err)
+		spec := cfg.Validations[0].Spec.(ConnectivitySpec)
+		assert.Nil(t, spec.Targets[0].TLS, "TLS field must be nil when tls: block is absent")
+	})
+
+	t.Run("insecureSkipVerify: true parses correctly", func(t *testing.T) {
+		yamlData := `
+objectives:
+  - key: skip-verify
+    type: connectivity
+    spec:
+      mode: external
+      targets:
+        - url: https://myapp.example.com/
+          expectedStatusCode: 200
+          tls:
+            insecureSkipVerify: true
+`
+		cfg, err := Parse([]byte(yamlData))
+		require.NoError(t, err)
+		spec := cfg.Validations[0].Spec.(ConnectivitySpec)
+		require.NotNil(t, spec.Targets[0].TLS, "TLS field must be non-nil when tls: block is present")
+		assert.True(t, spec.Targets[0].TLS.InsecureSkipVerify, "InsecureSkipVerify must be true")
+		assert.False(t, spec.Targets[0].TLS.ValidateExpiry, "ValidateExpiry must be false")
+		assert.False(t, spec.Targets[0].TLS.ValidateSANs, "ValidateSANs must be false")
+	})
+
+	t.Run("validateExpiry: true parses correctly", func(t *testing.T) {
+		yamlData := `
+objectives:
+  - key: validate-expiry
+    type: connectivity
+    spec:
+      mode: external
+      targets:
+        - url: https://myapp.example.com/
+          expectedStatusCode: 200
+          tls:
+            validateExpiry: true
+`
+		cfg, err := Parse([]byte(yamlData))
+		require.NoError(t, err)
+		spec := cfg.Validations[0].Spec.(ConnectivitySpec)
+		require.NotNil(t, spec.Targets[0].TLS)
+		assert.False(t, spec.Targets[0].TLS.InsecureSkipVerify)
+		assert.True(t, spec.Targets[0].TLS.ValidateExpiry, "ValidateExpiry must be true")
+		assert.False(t, spec.Targets[0].TLS.ValidateSANs)
+	})
+
+	t.Run("validateSANs: true parses correctly", func(t *testing.T) {
+		yamlData := `
+objectives:
+  - key: validate-sans
+    type: connectivity
+    spec:
+      mode: external
+      targets:
+        - url: https://myapp.example.com/
+          expectedStatusCode: 200
+          tls:
+            validateSANs: true
+`
+		cfg, err := Parse([]byte(yamlData))
+		require.NoError(t, err)
+		spec := cfg.Validations[0].Spec.(ConnectivitySpec)
+		require.NotNil(t, spec.Targets[0].TLS)
+		assert.False(t, spec.Targets[0].TLS.InsecureSkipVerify)
+		assert.False(t, spec.Targets[0].TLS.ValidateExpiry)
+		assert.True(t, spec.Targets[0].TLS.ValidateSANs, "ValidateSANs must be true")
+	})
+
+	t.Run("all three fields true simultaneously - rejected at parse time", func(t *testing.T) {
+		// insecureSkipVerify: true is incompatible with validateExpiry/validateSANs — reject at parse.
+		yamlData := `
+objectives:
+  - key: all-tls
+    type: connectivity
+    spec:
+      mode: external
+      targets:
+        - url: https://myapp.example.com/
+          expectedStatusCode: 200
+          tls:
+            insecureSkipVerify: true
+            validateExpiry: true
+            validateSANs: true
+`
+		_, err := Parse([]byte(yamlData))
+		require.Error(t, err, "combining insecureSkipVerify with validateExpiry/validateSANs must be rejected")
+		assert.Contains(t, err.Error(), "insecureSkipVerify")
+	})
+
+	t.Run("empty tls block - non-nil pointer, all bools false", func(t *testing.T) {
+		yamlData := `
+objectives:
+  - key: empty-tls
+    type: connectivity
+    spec:
+      mode: external
+      targets:
+        - url: https://myapp.example.com/
+          expectedStatusCode: 200
+          tls: {}
+`
+		cfg, err := Parse([]byte(yamlData))
+		require.NoError(t, err)
+		spec := cfg.Validations[0].Spec.(ConnectivitySpec)
+		require.NotNil(t, spec.Targets[0].TLS, "TLS pointer must be non-nil for empty tls: {} block")
+		assert.False(t, spec.Targets[0].TLS.InsecureSkipVerify, "InsecureSkipVerify must be false")
+		assert.False(t, spec.Targets[0].TLS.ValidateExpiry, "ValidateExpiry must be false")
+		assert.False(t, spec.Targets[0].TLS.ValidateSANs, "ValidateSANs must be false")
+	})
+}
+
+// TestParse_ConnectivityProbeMode verifies that a connectivity spec with empty sourcePod
+// (probe mode) is accepted by Parse without error (PROBE-01, PROBE-02).
+func TestParse_ConnectivityProbeMode(t *testing.T) {
+	yamlData := `
+objectives:
+  - key: network-blocked
+    title: Connection Blocked
+    description: Verify NetworkPolicy blocks traffic
+    order: 1
+    type: connectivity
+    spec:
+      sourcePod: {}
+      targets:
+        - url: http://my-service:80
+          expectedStatusCode: 0
+          timeoutSeconds: 3
+`
+
+	config, err := Parse([]byte(yamlData))
+	require.NoError(t, err, "probe mode (empty sourcePod) must not be rejected by Parse")
+	require.Len(t, config.Validations, 1)
+
+	spec, ok := config.Validations[0].Spec.(ConnectivitySpec)
+	require.True(t, ok, "spec should be ConnectivitySpec")
+	assert.Equal(t, "", spec.SourcePod.Name, "probe mode: Name must be empty")
+	assert.Empty(t, spec.SourcePod.LabelSelector, "probe mode: LabelSelector must be empty")
+	assert.Equal(t, "", spec.SourcePod.Namespace, "probe mode: Namespace must be empty")
+	require.Len(t, spec.Targets, 1)
+	assert.Equal(t, 0, spec.Targets[0].ExpectedStatusCode)
 }

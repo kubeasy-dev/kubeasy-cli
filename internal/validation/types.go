@@ -44,6 +44,13 @@ type Validation struct {
 type ValidationType string
 
 const (
+	// ConnectivityModeExternal sends HTTP requests from the CLI host via net/http (no pod exec).
+	ConnectivityModeExternal = "external"
+	// ConnectivityModeInternal executes curl inside a source pod via SPDY exec (default).
+	ConnectivityModeInternal = "internal"
+)
+
+const (
 	// TypeStatus validates arbitrary status fields with operators
 	// Value: "status" - Use when checking numeric fields, string values, or any status field
 	TypeStatus ValidationType = "status"
@@ -152,15 +159,21 @@ type EventSpec struct {
 	// Common values: CrashLoopBackOff, ImagePullBackOff, OOMKilled, Error, BackOff,
 	// FailedScheduling, FailedMount, Unhealthy, Evicted, NodeNotReady
 	ForbiddenReasons []string `yaml:"forbiddenReasons" json:"forbiddenReasons"`
-	// SinceSeconds limits the time window for event checking (optional)
-	// Events older than this are ignored, e.g., 600 for last 10 minutes
-	// When omitted (0), checks all events regardless of age
+	// SinceSeconds limits the time window for event checking (optional).
+	// Events older than this are ignored, e.g., 600 for last 10 minutes.
+	// When omitted (0) in YAML: the loader applies DefaultEventSinceSeconds (300s).
+	// When explicitly set to 0 in Go code: no time filter is applied (all events checked).
 	SinceSeconds int `yaml:"sinceSeconds,omitempty" json:"sinceSeconds,omitempty"`
 }
 
 // ConnectivitySpec tests HTTP connectivity between pods in the cluster
 // Use when: verifying Services work, NetworkPolicies allow traffic, or inter-pod communication
 type ConnectivitySpec struct {
+	// Mode controls how connectivity checks are executed.
+	// "internal" (default, empty string): existing pod exec via curl (SPDY)
+	// "external": CLI host sends HTTP request via net/http — no pod exec
+	// When absent, defaults to internal behavior for full backwards compatibility.
+	Mode string `yaml:"mode,omitempty" json:"mode,omitempty"`
 	// SourcePod specifies which pod to execute curl/wget commands from
 	// The pod must have curl or wget installed
 	// Security note: ensure source pods are trusted as they execute HTTP requests
@@ -170,13 +183,18 @@ type ConnectivitySpec struct {
 }
 
 // SourcePod identifies the pod from which connectivity checks are executed
-// Use either Name or LabelSelector to identify the pod
+// Use either Name or LabelSelector to identify the pod, or leave both empty to
+// use a CLI-managed probe pod deployed into the challenge namespace.
 type SourcePod struct {
 	// Name matches a specific pod by exact name (mutually exclusive with LabelSelector)
 	Name string `yaml:"name,omitempty" json:"name,omitempty"`
 	// LabelSelector matches pods by labels, uses first matching pod
 	// Example: {"app": "curl-client"} or {"role": "tester"}
 	LabelSelector map[string]string `yaml:"labelSelector,omitempty" json:"labelSelector,omitempty"`
+	// Namespace is the namespace for the source pod.
+	// For probe mode (no Name/LabelSelector): probe pod is created here (defaults to challenge namespace).
+	// For existing pod lookup (Name or LabelSelector set): executor queries this namespace instead of e.namespace.
+	Namespace string `yaml:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // ConnectivityCheck represents a single HTTP connectivity test
@@ -191,9 +209,35 @@ type ConnectivityCheck struct {
 	// Common values: 200 (OK), 201 (Created), 204 (No Content), 301/302 (Redirects)
 	// Use 0 to verify connection failed (timeout or refused, useful for NetworkPolicy tests)
 	ExpectedStatusCode int `yaml:"expectedStatusCode" json:"expectedStatusCode"`
-	// TimeoutSeconds is the maximum time to wait for a response (optional)
-	// Default is typically 10 seconds, increase for slow services
+	// TimeoutSeconds is the maximum time to wait for a response (optional).
+	// Default: 5 seconds (DefaultConnectivityTimeoutSeconds). Increase for slow services.
 	TimeoutSeconds int `yaml:"timeoutSeconds,omitempty" json:"timeoutSeconds,omitempty"`
+	// HostHeader overrides the HTTP Host header sent with the request.
+	// Only used when Mode is "external". Absent: Host is derived from URL automatically.
+	// Use when URL is a direct IP but Ingress routes by hostname.
+	HostHeader string `yaml:"hostHeader,omitempty" json:"hostHeader,omitempty"`
+	// TLS configures TLS validation behaviour for this external connectivity check.
+	// Optional — nil means no explicit TLS checks (Go default TLS verification applies).
+	// Only meaningful when Mode is "external" and URL scheme is https://.
+	TLS *TLSConfig `yaml:"tls,omitempty" json:"tls,omitempty"`
+}
+
+// TLSConfig controls TLS validation behaviour for a single external connectivity check.
+// Optional — omitting it leaves Go's default TLS verification in place.
+// InsecureSkipVerify takes priority over ValidateExpiry and ValidateSANs when true.
+type TLSConfig struct {
+	// InsecureSkipVerify skips ALL certificate checks (CA trust, expiry, SANs).
+	// Primary use: cert-manager self-signed certs in Kind clusters.
+	InsecureSkipVerify bool `yaml:"insecureSkipVerify,omitempty" json:"insecureSkipVerify,omitempty"`
+
+	// ValidateExpiry explicitly checks cert NotAfter > now with a friendly error message.
+	// Only active when InsecureSkipVerify is false.
+	ValidateExpiry bool `yaml:"validateExpiry,omitempty" json:"validateExpiry,omitempty"`
+
+	// ValidateSANs explicitly checks that the request hostname appears in cert DNSNames.
+	// Uses HostHeader for SAN matching when set (virtual-host routing pattern).
+	// Only active when InsecureSkipVerify is false.
+	ValidateSANs bool `yaml:"validateSANs,omitempty" json:"validateSANs,omitempty"`
 }
 
 // Result represents the outcome of a single validation execution

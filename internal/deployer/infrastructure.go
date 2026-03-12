@@ -325,12 +325,12 @@ func installKubeasyCA(ctx context.Context, clientset kubernetes.Interface, dynam
 	}
 	now := time.Now()
 	template := &x509.Certificate{
-		SerialNumber: serial,
-		Subject:      pkix.Name{CommonName: "Kubeasy Local CA"},
-		NotBefore:    now.Add(-time.Minute), // small back-date to handle clock skew
-		NotAfter:     now.Add(10 * 365 * 24 * time.Hour),
-		IsCA:         true,
-		KeyUsage:     x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		SerialNumber:          serial,
+		Subject:               pkix.Name{CommonName: "Kubeasy Local CA"},
+		NotBefore:             now.Add(-time.Minute), // small back-date to handle clock skew
+		NotAfter:              now.Add(10 * 365 * 24 * time.Hour),
+		IsCA:                  true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		BasicConstraintsValid: true,
 	}
 

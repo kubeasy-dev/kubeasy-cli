@@ -12,7 +12,7 @@ const ProbePodName = "kubeasy-probe"
 // ProbePodImageVersion is the curlimages/curl image tag for the probe pod.
 // IMPORTANT: The comment format below is required for Renovate. Do not modify.
 // renovate: datasource=docker depName=curlimages/curl
-var ProbePodImageVersion = "8.13.0"
+var ProbePodImageVersion = "8.18.0"
 
 // probePodImage returns the full curlimages/curl image reference with version.
 func probePodImage() string {

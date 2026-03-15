@@ -42,7 +42,7 @@ var GatewayAPICRDsVersion = "v1.2.1"
 // CertManagerVersion is the cert-manager release version used for TLS certificate management.
 // IMPORTANT: The comment format below is required for Renovate. Do not modify.
 // renovate: datasource=github-releases depName=cert-manager/cert-manager
-var CertManagerVersion = "v1.19.4"
+var CertManagerVersion = "v1.20.0"
 
 // CloudProviderKindVersion is the cloud-provider-kind release version for LoadBalancer support.
 // IMPORTANT: The comment format below is required for Renovate. Do not modify.

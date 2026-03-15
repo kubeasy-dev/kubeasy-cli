@@ -37,7 +37,7 @@ var NginxIngressVersion = "v1.15.0"
 // GatewayAPICRDsVersion is the Gateway API CRDs release version.
 // IMPORTANT: The comment format below is required for Renovate. Do not modify.
 // renovate: datasource=github-releases depName=kubernetes-sigs/gateway-api
-var GatewayAPICRDsVersion = "v1.2.1"
+var GatewayAPICRDsVersion = "v1.5.1"
 
 // CertManagerVersion is the cert-manager release version used for TLS certificate management.
 // IMPORTANT: The comment format below is required for Renovate. Do not modify.

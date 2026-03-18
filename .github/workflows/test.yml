@@ -42,7 +42,7 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Install Task
-        uses: go-task/setup-task@0ab1b2a65bc55236a3bc64cde78f80e20e8885c2 # v1
+        uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3 # v1.1.0
 
       - name: Run unit tests
         run: task test:unit
@@ -72,7 +72,7 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Install Task
-        uses: go-task/setup-task@0ab1b2a65bc55236a3bc64cde78f80e20e8885c2 # v1
+        uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3 # v1.1.0
 
       - name: Run integration tests
         run: task test:integration
@@ -114,7 +114,7 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Install Task
-        uses: go-task/setup-task@0ab1b2a65bc55236a3bc64cde78f80e20e8885c2 # v1
+        uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3 # v1.1.0
 
       - name: Run e2e tests
         run: task test:e2e

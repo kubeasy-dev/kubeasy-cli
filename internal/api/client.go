@@ -101,7 +101,6 @@ func GetChallengeBySlug(ctx context.Context, slug string) (*ChallengeEntity, err
 		Difficulty:       string(resp.JSON200.Difficulty),
 		Theme:            resp.JSON200.Theme,
 		InitialSituation: resp.JSON200.InitialSituation,
-		Objective:        resp.JSON200.Objective,
 	}
 	return challenge, nil
 }

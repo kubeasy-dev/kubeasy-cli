@@ -46,13 +46,6 @@ var getChallengeCmd = &cobra.Command{
 			ui.Println()
 		}
 
-		// Display objective
-		if challenge.Objective != "" {
-			pterm.DefaultSection.Println("Objective")
-			pterm.Println(challenge.Objective)
-			ui.Println()
-		}
-
 		ui.Info("Press Enter to continue...")
 		_, _ = bufio.NewReader(os.Stdin).ReadBytes('\n')
 

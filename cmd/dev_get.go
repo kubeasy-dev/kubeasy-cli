@@ -22,7 +22,6 @@ type challengeMetadata struct {
 	EstimatedTime    int    `yaml:"estimatedTime"`
 	Description      string `yaml:"description"`
 	InitialSituation string `yaml:"initialSituation"`
-	Objective        string `yaml:"objective"`
 	Objectives       []struct {
 		Key   string `yaml:"key"`
 		Title string `yaml:"title"`
@@ -92,13 +91,6 @@ This is the dev equivalent of 'kubeasy challenge get'.`,
 		if sit := strings.TrimSpace(meta.InitialSituation); sit != "" {
 			pterm.DefaultSection.Println("Initial Situation")
 			pterm.Println(sit)
-			ui.Println()
-		}
-
-		// Objective
-		if obj := strings.TrimSpace(meta.Objective); obj != "" {
-			pterm.DefaultSection.Println("Objective")
-			pterm.Println(obj)
 			ui.Println()
 		}
 

@@ -28,7 +28,6 @@ type ChallengeResponse struct {
 	Difficulty       string `json:"difficulty"` // "easy" | "medium" | "hard"
 	Theme            string `json:"theme"`
 	InitialSituation string `json:"initial_situation"`
-	Objective        string `json:"objective"`
 }
 
 // ChallengeStatusResponse represents the response from GET /api/cli/challenge/[slug]/status

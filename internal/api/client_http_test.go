@@ -147,7 +147,6 @@ func TestGetChallengeBySlug_Success(t *testing.T) {
 			Difficulty:       "easy",
 			Theme:            "resources-scaling",
 			InitialSituation: "A pod is being evicted",
-			Objective:        "Fix the pod",
 		}
 		_ = json.NewEncoder(w).Encode(response)
 	})
@@ -458,7 +457,6 @@ func TestGetChallengeBySlug_ReturnsExpectedID(t *testing.T) {
 			Difficulty:       "easy",
 			Theme:            "testing",
 			InitialSituation: "Test",
-			Objective:        "Test",
 		}
 		_ = json.NewEncoder(w).Encode(response)
 	})

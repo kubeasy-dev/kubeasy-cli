@@ -190,7 +190,6 @@ func TestResponseUnmarshaling(t *testing.T) {
 		assert.Equal(t, "easy", challenge.Difficulty)
 		assert.Equal(t, "resources-scaling", challenge.Theme)
 		assert.Equal(t, "Pod is evicted", challenge.InitialSituation)
-		assert.Equal(t, "Make it run", challenge.Objective)
 	})
 
 	t.Run("UserProfile with optional lastName", func(t *testing.T) {

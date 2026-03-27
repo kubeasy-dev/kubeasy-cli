@@ -45,10 +45,6 @@ func (e *Executor) executeTriggered(ctx context.Context, spec TriggeredSpec) (bo
 	}
 
 	// Step 3: run then validators
-	if len(spec.Then) == 0 {
-		return true, "Trigger executed successfully", nil
-	}
-
 	var failures []string
 	for _, v := range spec.Then {
 		result := e.Execute(ctx, v)
@@ -179,10 +175,12 @@ func (e *Executor) executeTriggerLoadFromPod(ctx context.Context, trigger Trigge
 	}
 
 	totalRequests := rps * durationSec
-	// Run a shell loop inside the pod: avoids N separate exec calls
+	// Run a shell loop inside the pod. The URL is single-quoted and internal single
+	// quotes are escaped to prevent shell injection (POSIX quoting: ' → '\'' ).
+	quotedURL := "'" + strings.ReplaceAll(trigger.URL, "'", `'\''`) + "'"
 	cmd := []string{
 		"sh", "-c",
-		fmt.Sprintf("for i in $(seq 1 %d); do curl -s -o /dev/null %s; done", totalRequests, trigger.URL),
+		fmt.Sprintf("for i in $(seq 1 %d); do curl -s -o /dev/null -- %s; done", totalRequests, quotedURL),
 	}
 
 	req := e.clientset.CoreV1().RESTClient().Post().
@@ -293,6 +291,9 @@ func (e *Executor) executeTriggerRollout(ctx context.Context, trigger TriggerCon
 
 // executeTriggerScale patches the replica count of a resource.
 func (e *Executor) executeTriggerScale(ctx context.Context, trigger TriggerConfig) error {
+	if trigger.Replicas == nil {
+		return fmt.Errorf("scale trigger: replicas is required")
+	}
 	gvr, err := getGVRForKind(trigger.Target.Kind)
 	if err != nil {
 		return fmt.Errorf("scale trigger: %w", err)

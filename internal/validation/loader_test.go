@@ -1369,6 +1369,21 @@ objectives:
 `,
 			errorContains: "target must specify either name or labelSelector",
 		},
+		{
+			name: "contains must be a map",
+			yaml: `
+objectives:
+  - key: test
+    type: spec
+    spec:
+      target:
+        name: web-app
+      checks:
+        - path: spec.template.spec.volumes
+          contains: "not-a-map"
+`,
+			errorContains: "contains must be a map",
+		},
 	}
 
 	for _, tt := range tests {

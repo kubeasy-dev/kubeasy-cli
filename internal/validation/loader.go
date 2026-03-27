@@ -324,6 +324,11 @@ func parseSpec(v *Validation) error {
 			if checkCount > 1 {
 				return fmt.Errorf("check %d (path %q): only one of exists, value, or contains may be set", i, check.Path)
 			}
+			if check.Contains != nil {
+				if _, ok := check.Contains.(map[string]interface{}); !ok {
+					return fmt.Errorf("check %d (path %q): contains must be a map", i, check.Path)
+				}
+			}
 		}
 		v.Spec = spec
 

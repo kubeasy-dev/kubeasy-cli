@@ -4052,6 +4052,8 @@ func TestSpecValuesEqual(t *testing.T) {
 		{"bool mismatch", true, false, false},
 		{"nil vs nil", nil, nil, true},
 		{"nil vs string", nil, "foo", false},
+		// No string fallback: a map and its Sprintf representation must NOT match
+		{"map vs string representation", map[string]interface{}{"a": "1"}, "map[a:1]", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

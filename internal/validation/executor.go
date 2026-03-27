@@ -1184,6 +1184,8 @@ func (e *Executor) executeSpec(ctx context.Context, spec SpecSpec) (bool, string
 
 // specValuesEqual compares two values for equality, normalizing numeric types.
 // Handles int/int64/float64 mismatches that arise from YAML vs JSON unmarshaling.
+// Returns false for non-equal types that are not both numeric — no string fallback to avoid
+// false positives (e.g., a map and its fmt.Sprintf representation would otherwise match).
 func specValuesEqual(actual, expected interface{}) bool {
 	if reflect.DeepEqual(actual, expected) {
 		return true
@@ -1194,8 +1196,7 @@ func specValuesEqual(actual, expected interface{}) bool {
 	if aIsNum && bIsNum {
 		return fa == fb
 	}
-	// Fallback: string representation
-	return fmt.Sprintf("%v", actual) == fmt.Sprintf("%v", expected)
+	return false
 }
 
 // toSpecFloat64 converts a numeric value to float64. Returns (0, false) for non-numeric types.

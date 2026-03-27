@@ -274,6 +274,24 @@ type RbacCheck struct {
 	Allowed bool `yaml:"allowed" json:"allowed"`
 }
 
+// TypeRegistration associates a ValidationType with its empty spec struct for schema generation.
+type TypeRegistration struct {
+	Type     ValidationType
+	Spec     interface{}
+	SpecName string // Go type name, used to derive the Zod schema name (e.g. "StatusSpec" → "StatusSpecSchema")
+}
+
+// RegisteredTypes lists all validation types in display order.
+// Add new types here to automatically include them in the generated Zod schema.
+var RegisteredTypes = []TypeRegistration{
+	{TypeStatus, StatusSpec{}, "StatusSpec"},
+	{TypeCondition, ConditionSpec{}, "ConditionSpec"},
+	{TypeLog, LogSpec{}, "LogSpec"},
+	{TypeEvent, EventSpec{}, "EventSpec"},
+	{TypeConnectivity, ConnectivitySpec{}, "ConnectivitySpec"},
+	{TypeRbac, RbacSpec{}, "RbacSpec"},
+}
+
 // Result represents the outcome of a single validation execution
 // Returned by the executor and sent to the backend API
 // Note: No YAML tags as this type is only used for executor output, never parsed from challenge.yaml

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/hypersequent/zen"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/validation"
@@ -10,19 +11,21 @@ import (
 func main() {
 	c := zen.NewConverterWithOpts()
 
-	// Génère les specs et types dépendants (ordre = dépendances d'abord)
+	// Register shared types that specs depend on (must come before specs)
 	c.AddType(validation.Target{})
 	c.AddType(validation.StatusCheck{})
-	c.AddType(validation.StatusSpec{})
 	c.AddType(validation.ConditionCheck{})
-	c.AddType(validation.ConditionSpec{})
-	c.AddType(validation.LogSpec{})
-	c.AddType(validation.EventSpec{})
 	c.AddType(validation.SourcePod{})
 	c.AddType(validation.ConnectivityCheck{})
-	c.AddType(validation.ConnectivitySpec{})
+	c.AddType(validation.RbacCheck{})
 
-	// Ne pas ajouter Validation car il a Spec/RawSpec avec interface{}
+	// Register all spec types from the canonical registry — no manual updates needed
+	// when adding a new validation type: just update validation.RegisteredTypes.
+	for _, reg := range validation.RegisteredTypes {
+		c.AddType(reg.Spec)
+	}
+
+	// Note: Validation itself is not added — it has Spec/RawSpec as interface{}
 
 	output := "// ⚠️ AUTO-GENERATED - DO NOT EDIT\n"
 	output += "// Source: github.com/kubeasy-dev/kubeasy-cli/internal/validation\n"
@@ -31,22 +34,21 @@ func main() {
 
 	output += c.Export()
 
-	// Ajoute l'enum et le schema principal manuellement
-	output += `export const ObjectiveTypeSchema = z.enum([
-  "status",
-  "condition",
-  "log",
-  "event",
-  "connectivity",
+	// Build enum values and union members from the registry
+	enumValues := make([]string, 0, len(validation.RegisteredTypes))
+	unionMembers := make([]string, 0, len(validation.RegisteredTypes))
+	for _, reg := range validation.RegisteredTypes {
+		enumValues = append(enumValues, fmt.Sprintf("  %q", string(reg.Type)))
+		unionMembers = append(unionMembers, fmt.Sprintf("  %sSchema", reg.SpecName))
+	}
+
+	output += fmt.Sprintf(`export const ObjectiveTypeSchema = z.enum([
+%s,
 ]);
 export type ObjectiveType = z.infer<typeof ObjectiveTypeSchema>;
 
 export const ObjectiveSpecSchema = z.union([
-  StatusSpecSchema,
-  ConditionSpecSchema,
-  LogSpecSchema,
-  EventSpecSchema,
-  ConnectivitySpecSchema,
+%s,
 ]);
 export type ObjectiveSpec = z.infer<typeof ObjectiveSpecSchema>;
 
@@ -59,7 +61,10 @@ export const ObjectiveSchema = z.object({
   spec: ObjectiveSpecSchema,
 });
 export type Objective = z.infer<typeof ObjectiveSchema>;
-`
+`,
+		strings.Join(enumValues, ",\n"),
+		strings.Join(unionMembers, ",\n"),
+	)
 
 	fmt.Print(output)
 }

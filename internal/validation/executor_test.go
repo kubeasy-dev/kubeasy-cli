@@ -4411,3 +4411,137 @@ func TestExecuteTriggerLoad_HostBased(t *testing.T) {
 	// At 5 rps for 1 second we expect roughly 5 requests; allow ±2 for timing jitter
 	assert.GreaterOrEqual(t, count, 3, "expected at least 3 requests")
 }
+
+func TestExecuteTriggered_TriggerFailurePropagates(t *testing.T) {
+	// A delete trigger pointing to an unsupported kind should fail the trigger
+	// and propagate passed=false with the trigger error message.
+	e := NewExecutor(fake.NewClientset(), dynamicfake.NewSimpleDynamicClient(runtime.NewScheme()), &rest.Config{}, "test-ns")
+
+	spec := TriggeredSpec{
+		Trigger: TriggerConfig{
+			Type:   TriggerTypeDelete,
+			Target: &Target{Kind: "UnknownKind", Name: "some-resource"},
+		},
+		WaitAfterSeconds: 0,
+		Then: []Validation{
+			{
+				Key:  "pod-ready",
+				Type: TypeCondition,
+				Spec: ConditionSpec{
+					Target: Target{Name: "any-pod"},
+					Checks: []ConditionCheck{{Type: "Ready", Status: "True"}},
+				},
+			},
+		},
+	}
+
+	passed, msg, err := e.executeTriggered(context.Background(), spec)
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "Trigger failed")
+}
+
+func TestExecuteTriggerDelete_ByLabelSelector(t *testing.T) {
+	sc := runtime.NewScheme()
+	pod := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Pod",
+			"metadata": map[string]interface{}{
+				"name":      "target-pod",
+				"namespace": "test-ns",
+				"labels":    map[string]interface{}{"app": "target"},
+			},
+		},
+	}
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(sc, pod)
+
+	var deletedBySelector string
+	dynamicClient.PrependReactor("delete-collection", "pods", func(action ktesting.Action) (bool, runtime.Object, error) {
+		deletedBySelector = action.(ktesting.DeleteCollectionAction).GetListRestrictions().Labels.String()
+		return true, nil, nil
+	})
+	// list reactor so the pre-check finds the pod
+	dynamicClient.PrependReactor("list", "pods", func(action ktesting.Action) (bool, runtime.Object, error) {
+		list := &unstructured.UnstructuredList{Items: []unstructured.Unstructured{*pod}}
+		return true, list, nil
+	})
+
+	e := NewExecutor(fake.NewClientset(), dynamicClient, &rest.Config{}, "test-ns")
+	trigger := TriggerConfig{
+		Type:   TriggerTypeDelete,
+		Target: &Target{Kind: "Pod", LabelSelector: map[string]string{"app": "target"}},
+	}
+
+	err := e.executeTriggerDelete(context.Background(), trigger)
+	require.NoError(t, err)
+	assert.Contains(t, deletedBySelector, "app=target")
+}
+
+func TestExecuteTriggerDelete_ByLabelSelector_NoMatch(t *testing.T) {
+	sc := runtime.NewScheme()
+	_ = corev1.AddToScheme(sc)
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(sc) // no objects registered → list returns empty
+
+	e := NewExecutor(fake.NewClientset(), dynamicClient, &rest.Config{}, "test-ns")
+	trigger := TriggerConfig{
+		Type:   TriggerTypeDelete,
+		Target: &Target{Kind: "Pod", LabelSelector: map[string]string{"app": "typo"}},
+	}
+
+	err := e.executeTriggerDelete(context.Background(), trigger)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no Pod resources found")
+}
+
+func TestParse_TriggeredValidation_LoadDurationCap(t *testing.T) {
+	yaml := `
+objectives:
+  - key: bad
+    type: triggered
+    spec:
+      trigger:
+        type: load
+        url: "http://svc:80/"
+        durationSeconds: 9999
+      then:
+        - type: condition
+          spec:
+            target:
+              kind: Pod
+              name: p
+            checks:
+              - type: Ready
+                status: "True"
+`
+	_, err := Parse([]byte(yaml))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "durationSeconds")
+	assert.Contains(t, err.Error(), "exceeds maximum")
+}
+
+func TestParse_TriggeredValidation_LoadRPSCap(t *testing.T) {
+	yaml := `
+objectives:
+  - key: bad
+    type: triggered
+    spec:
+      trigger:
+        type: load
+        url: "http://svc:80/"
+        requestsPerSecond: 9999
+      then:
+        - type: condition
+          spec:
+            target:
+              kind: Pod
+              name: p
+            checks:
+              - type: Ready
+                status: "True"
+`
+	_, err := Parse([]byte(yaml))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "requestsPerSecond")
+	assert.Contains(t, err.Error(), "exceeds maximum")
+}

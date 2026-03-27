@@ -30,9 +30,14 @@ const (
 	// network issues without making validations excessively slow.
 	DefaultConnectivityTimeoutSeconds = 5
 
-	// MaxTriggerWaitSeconds caps both WaitSeconds and WaitAfterSeconds to prevent
-	// challenges from hanging the CLI indefinitely due to misconfiguration.
+	// MaxTriggerWaitSeconds caps WaitSeconds, WaitAfterSeconds, and DurationSeconds to
+	// prevent challenges from hanging the CLI indefinitely due to misconfiguration.
 	MaxTriggerWaitSeconds = 3600
+
+	// MaxLoadRPS caps the requestsPerSecond for the load trigger to prevent
+	// accidental goroutine exhaustion on the CLI host. At the default 5 s HTTP
+	// timeout, rps goroutines can pile up to rps * 5 concurrently.
+	MaxLoadRPS = 1000
 )
 
 // LoadFromFile loads validations from a local file
@@ -361,8 +366,11 @@ func parseSpec(v *Validation) error {
 			if !strings.HasPrefix(spec.Trigger.URL, "http://") && !strings.HasPrefix(spec.Trigger.URL, "https://") {
 				return fmt.Errorf("load trigger url must start with http:// or https://")
 			}
-			if spec.Trigger.WaitSeconds > MaxTriggerWaitSeconds {
-				return fmt.Errorf("load trigger waitSeconds %d exceeds maximum %d", spec.Trigger.WaitSeconds, MaxTriggerWaitSeconds)
+			if spec.Trigger.DurationSeconds > MaxTriggerWaitSeconds {
+				return fmt.Errorf("load trigger durationSeconds %d exceeds maximum %d", spec.Trigger.DurationSeconds, MaxTriggerWaitSeconds)
+			}
+			if spec.Trigger.RequestsPerSecond > MaxLoadRPS {
+				return fmt.Errorf("load trigger requestsPerSecond %d exceeds maximum %d", spec.Trigger.RequestsPerSecond, MaxLoadRPS)
 			}
 		case TriggerTypeWait:
 			if spec.Trigger.WaitSeconds > MaxTriggerWaitSeconds {

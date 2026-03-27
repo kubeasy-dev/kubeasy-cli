@@ -234,8 +234,17 @@ func (e *Executor) executeTriggerDelete(ctx context.Context, trigger TriggerConf
 		)
 	}
 
-	// Delete by label selector
+	// Delete by label selector — verify at least one resource exists to catch label typos
 	ls := labels.SelectorFromSet(trigger.Target.LabelSelector).String()
+	list, err := e.dynamicClient.Resource(gvr).Namespace(e.namespace).List(
+		ctx, metav1.ListOptions{LabelSelector: ls},
+	)
+	if err != nil {
+		return fmt.Errorf("delete trigger: failed to list resources: %w", err)
+	}
+	if len(list.Items) == 0 {
+		return fmt.Errorf("delete trigger: no %s resources found matching selector %s", trigger.Target.Kind, ls)
+	}
 	return e.dynamicClient.Resource(gvr).Namespace(e.namespace).DeleteCollection(
 		ctx, metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: ls},
 	)

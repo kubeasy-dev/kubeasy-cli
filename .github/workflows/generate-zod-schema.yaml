@@ -48,10 +48,6 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           path: monorepo
 
-      - name: Update schema in monorepo
-        run: |
-          cp /tmp/challengeObjectives.ts monorepo/packages/api-schemas/src/objectives.ts
-
       - name: Configure git
         working-directory: monorepo
         run: |
@@ -68,15 +64,17 @@ jobs:
           # Fetch all branches
           git fetch origin
 
-          # Check if branch exists remotely
+          # Switch to the target branch BEFORE copying the file to avoid
+          # "local changes would be overwritten by checkout" errors
           if git ls-remote --exit-code --heads origin "$BRANCH_NAME" >/dev/null 2>&1; then
-            # Branch exists, checkout and update
             git checkout "$BRANCH_NAME"
             git pull origin "$BRANCH_NAME"
           else
-            # Create new branch
             git checkout -b "$BRANCH_NAME"
           fi
+
+          # Copy the generated schema onto the now-correct branch
+          cp /tmp/challengeObjectives.ts packages/api-schemas/src/objectives.ts
 
           # Add and commit changes
           git add packages/api-schemas/src/objectives.ts

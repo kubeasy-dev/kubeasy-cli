@@ -1186,6 +1186,19 @@ func TestParse_DnsValidation_Errors(t *testing.T) {
 		errorContains string
 	}{
 		{
+			name: "missing sourcePod",
+			yaml: `
+objectives:
+  - key: dns-check
+    type: dns
+    spec:
+      checks:
+        - hostname: "my-svc.ns.svc.cluster.local"
+          resolves: true
+`,
+			errorContains: "sourcePod",
+		},
+		{
 			name: "empty checks",
 			yaml: `
 objectives:

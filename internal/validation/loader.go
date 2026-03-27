@@ -298,6 +298,9 @@ func parseSpec(v *Validation) error {
 		if err := yaml.Unmarshal(specYAML, &spec); err != nil {
 			return err
 		}
+		if spec.SourcePod.Name == "" && len(spec.SourcePod.LabelSelector) == 0 {
+			return fmt.Errorf("dns validation must specify sourcePod.name or sourcePod.labelSelector")
+		}
 		if len(spec.Checks) == 0 {
 			return fmt.Errorf("dns validation must have at least one check")
 		}

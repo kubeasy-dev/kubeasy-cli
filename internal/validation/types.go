@@ -263,6 +263,8 @@ type DnsCheck struct {
 	Hostname string `yaml:"hostname" json:"hostname"`
 	// Resolves specifies the expected outcome: true if the name should resolve,
 	// false if it should return NXDOMAIN (namespace isolation, deleted service, etc.)
+	// NOTE: Go's zero value for bool is false. Always set this field explicitly —
+	// omitting it silently creates a "must not resolve" check.
 	Resolves bool `yaml:"resolves" json:"resolves"`
 }
 

@@ -36,9 +36,9 @@ const (
 	errNoMatchingPods       = "No matching pods found"
 	errNoMatchingSourcePods = "No matching source pods found"
 	errNoRunningSourcePods  = "No running source pods found"
-	// errNoSourcePodSpecified is retained as a test anchor for negative assertions
-	// in unit tests that verify empty SourcePod enters the probe branch instead.
-	// It is no longer returned by production code (Phase 07 replaced it with probe lifecycle).
+	// errNoSourcePodSpecified is returned by the dns validator when no sourcePod is specified
+	// (dns has no probe-mode fallback). It is also retained as a test anchor for connectivity
+	// tests that verify empty SourcePod enters the probe branch instead of this error.
 	errNoSourcePodSpecified = "No source pod specified"
 	errNoMatchingResources  = "No matching resources found"
 	errNoTargetSpecified    = "No target name or labelSelector specified"
@@ -1149,13 +1149,30 @@ func (e *Executor) executeDns(ctx context.Context, spec DnsSpec) (bool, string, 
 	var failures []string
 	for _, check := range spec.Checks {
 		cmd := []string{"nslookup", check.Hostname}
-		stdout, _, execErr := e.execInPod(ctx, sourcePod, cmd)
+		stdout, stderr, execErr := e.execInPod(ctx, sourcePod, cmd)
 
-		// nslookup exits non-zero on NXDOMAIN; also check stdout for NXDOMAIN or "can't find"
-		resolved := execErr == nil &&
-			!strings.Contains(stdout, "NXDOMAIN") &&
-			!strings.Contains(stdout, "can't find") &&
-			!strings.Contains(stdout, "server can't find")
+		// Combine stdout+stderr: nslookup implementations vary in which stream carries the error.
+		// busybox writes "** server can't find hostname: NXDOMAIN" to stdout;
+		// bind9 also uses stdout but some versions differ.
+		combined := stdout + stderr
+
+		isNxdomain := strings.Contains(combined, "NXDOMAIN") ||
+			strings.Contains(combined, "can't find") ||
+			strings.Contains(combined, "server can't find")
+
+		var resolved bool
+		switch {
+		case execErr == nil:
+			resolved = !isNxdomain
+		case isNxdomain:
+			// nslookup exits non-zero on NXDOMAIN — this is an expected DNS failure outcome
+			resolved = false
+		default:
+			// Genuine exec error (pod crash, nslookup binary not found, context timeout, etc.)
+			// Surface immediately so the caller can distinguish DNS failures from infra failures.
+			failures = append(failures, fmt.Sprintf("%s: exec error: %v", check.Hostname, execErr))
+			continue
+		}
 
 		if resolved != check.Resolves {
 			if check.Resolves {

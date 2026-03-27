@@ -3713,14 +3713,14 @@ func TestExecuteDns_NoSourcePodSpecified(t *testing.T) {
 	assert.Equal(t, errNoSourcePodSpecified, msg)
 }
 
-// Note: TestExecuteDns_ResolvesTrue and TestExecuteDns_ResolvesFalse cannot be fully tested
-// with a fake clientset because fake.NewClientset() does not provide a real RESTClient for
-// pod exec operations. These scenarios are covered by integration tests.
-// The execInPod guard (restConfig.Host == "") returns an error for tests, so we verify
-// the DNS validation correctly handles exec failures.
+// Note: Real DNS resolution (resolves: true/false with actual nslookup output) cannot be tested
+// with a fake clientset — those scenarios are covered by integration tests.
+// The execInPod guard (restConfig.Host == "") returns a non-NXDOMAIN exec error with empty
+// output. Tests below verify the executor correctly surfaces that as an exec error rather than
+// treating it as a silent DNS pass.
 
-func TestExecuteDns_ExecFailure_ResolvesTrue(t *testing.T) {
-	// When execInPod fails and resolves: true, validation should fail with an error message
+func TestExecuteDns_ExecError_ResolvesTrue(t *testing.T) {
+	// When execInPod returns an error without NXDOMAIN output, failure surfaces as exec error.
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "client-pod",
@@ -3730,7 +3730,7 @@ func TestExecuteDns_ExecFailure_ResolvesTrue(t *testing.T) {
 		Status: corev1.PodStatus{Phase: corev1.PodRunning},
 	}
 	clientset := fake.NewClientset(pod)
-	// restConfig with empty Host triggers the test-environment guard in execInPod
+	// restConfig with empty Host triggers the test-environment guard in execInPod (no NXDOMAIN output)
 	executor := NewExecutor(clientset, nil, &rest.Config{}, "test-ns")
 
 	spec := DnsSpec{
@@ -3742,14 +3742,15 @@ func TestExecuteDns_ExecFailure_ResolvesTrue(t *testing.T) {
 
 	passed, msg, err := executor.executeDns(context.Background(), spec)
 	require.NoError(t, err)
-	// execInPod fails → resolved=false, but resolves: true → failure
 	assert.False(t, passed)
 	assert.Contains(t, msg, "my-svc.test-ns.svc.cluster.local")
-	assert.Contains(t, msg, "NXDOMAIN")
+	assert.Contains(t, msg, "exec error")
 }
 
-func TestExecuteDns_ExecFailure_ResolvesFalse(t *testing.T) {
-	// When execInPod fails and resolves: false, the check should pass (exec err = NXDOMAIN-like)
+func TestExecuteDns_ExecError_ResolvesFalse(t *testing.T) {
+	// Even when resolves: false, a non-NXDOMAIN exec error must surface as failure.
+	// This ensures infra failures (pod crash, missing binary) are not silently treated as
+	// a successful NXDOMAIN result — the caller must fix the infra before DNS can be trusted.
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "client-pod",
@@ -3770,9 +3771,8 @@ func TestExecuteDns_ExecFailure_ResolvesFalse(t *testing.T) {
 
 	passed, msg, err := executor.executeDns(context.Background(), spec)
 	require.NoError(t, err)
-	// execInPod fails → resolved=false, resolves: false → pass
-	assert.True(t, passed)
-	assert.Equal(t, msgAllDnsChecksPassed, msg)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "exec error")
 }
 
 func TestExecuteDns_CrossNamespace(t *testing.T) {

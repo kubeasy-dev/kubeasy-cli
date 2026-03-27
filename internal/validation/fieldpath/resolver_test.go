@@ -681,3 +681,167 @@ func TestResolve_MultipleArrayFilters(t *testing.T) {
 	assert.True(t, found)
 	assert.Equal(t, "True", value)
 }
+
+// TestParseRaw verifies that ParseRaw parses paths without the "status." prefix.
+func TestParseRaw(t *testing.T) {
+	tests := []struct {
+		name           string
+		path           string
+		expectedTokens []PathToken
+		expectError    bool
+	}{
+		{
+			name: "simple top-level field",
+			path: "spec",
+			expectedTokens: []PathToken{
+				FieldToken{Name: "spec"},
+			},
+		},
+		{
+			name: "nested path",
+			path: "spec.replicas",
+			expectedTokens: []PathToken{
+				FieldToken{Name: "spec"},
+				FieldToken{Name: "replicas"},
+			},
+		},
+		{
+			name: "deep path with array index",
+			path: "spec.template.spec.containers[0].livenessProbe",
+			expectedTokens: []PathToken{
+				FieldToken{Name: "spec"},
+				FieldToken{Name: "template"},
+				FieldToken{Name: "spec"},
+				FieldToken{Name: "containers"},
+				ArrayIndexToken{Index: 0},
+				FieldToken{Name: "livenessProbe"},
+			},
+		},
+		{
+			name: "path with array filter",
+			path: "spec.template.spec.containers[name=app].resources",
+			expectedTokens: []PathToken{
+				FieldToken{Name: "spec"},
+				FieldToken{Name: "template"},
+				FieldToken{Name: "spec"},
+				FieldToken{Name: "containers"},
+				ArrayFilterToken{FilterField: "name", FilterValue: "app"},
+				FieldToken{Name: "resources"},
+			},
+		},
+		{
+			name:        "empty path",
+			path:        "",
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tokens, err := ParseRaw(tt.path)
+			if tt.expectError {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedTokens, tokens)
+		})
+	}
+}
+
+// TestGetRaw verifies that GetRaw resolves paths from the object root (no "status." prefix).
+func TestGetRaw(t *testing.T) {
+	obj := map[string]interface{}{
+		"spec": map[string]interface{}{
+			"replicas": int64(3),
+			"template": map[string]interface{}{
+				"spec": map[string]interface{}{
+					"containers": []interface{}{
+						map[string]interface{}{
+							"name": "app",
+							"resources": map[string]interface{}{
+								"limits": map[string]interface{}{
+									"memory": "256Mi",
+								},
+							},
+							"livenessProbe": map[string]interface{}{
+								"httpGet": map[string]interface{}{"path": "/health", "port": int64(8080)},
+							},
+						},
+						map[string]interface{}{
+							"name": "sidecar",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name          string
+		path          string
+		expectedValue interface{}
+		expectedFound bool
+		expectError   bool
+	}{
+		{
+			name:          "top-level map",
+			path:          "spec",
+			expectedFound: true,
+		},
+		{
+			name:          "nested scalar",
+			path:          "spec.replicas",
+			expectedValue: int64(3),
+			expectedFound: true,
+		},
+		{
+			name:          "deeply nested scalar via index",
+			path:          "spec.template.spec.containers[0].resources.limits.memory",
+			expectedValue: "256Mi",
+			expectedFound: true,
+		},
+		{
+			name:          "nested field via array filter",
+			path:          "spec.template.spec.containers[name=app].resources.limits.memory",
+			expectedValue: "256Mi",
+			expectedFound: true,
+		},
+		{
+			name:          "existing probe field",
+			path:          "spec.template.spec.containers[0].livenessProbe",
+			expectedFound: true,
+		},
+		{
+			name:          "absent field returns not found",
+			path:          "spec.template.spec.containers[0].readinessProbe",
+			expectedFound: false,
+		},
+		{
+			name:          "no status prefix applied — status key is not auto-added",
+			path:          "spec.replicas",
+			expectedValue: int64(3),
+			expectedFound: true,
+		},
+		{
+			name:        "invalid path",
+			path:        "",
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			val, found, err := GetRaw(obj, tt.path)
+			if tt.expectError {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedFound, found)
+			if tt.expectedValue != nil {
+				assert.Equal(t, tt.expectedValue, val)
+			}
+		})
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -33,6 +34,7 @@ import (
 
 const (
 	// Error messages (validation failures or missing resources)
+	errNoChecksSpecified    = "No checks specified"
 	errNoMatchingPods       = "No matching pods found"
 	errNoMatchingSourcePods = "No matching source pods found"
 	errNoRunningSourcePods  = "No running source pods found"
@@ -50,6 +52,7 @@ const (
 	msgFoundAllExpectedStrings = "Found all expected strings in logs"
 	msgNoForbiddenEvents       = "No forbidden events found"
 	msgAllRbacChecksPassed     = "All RBAC checks passed" //nolint:gosec // not a credential
+	msgAllSpecChecksPassed     = "All spec checks passed" //nolint:gosec // not a credential
 )
 
 // Executor executes validations against a Kubernetes cluster
@@ -130,6 +133,14 @@ func (e *Executor) Execute(ctx context.Context, v Validation) Result {
 			return result
 		}
 		result.Passed, result.Message, err = e.executeRbac(ctx, spec)
+	case TypeSpec:
+		spec, ok := v.Spec.(SpecSpec)
+		if !ok {
+			result.Message = fmt.Sprintf("internal error: expected SpecSpec, got %T", v.Spec)
+			result.Duration = time.Since(start)
+			return result
+		}
+		result.Passed, result.Message, err = e.executeSpec(ctx, spec)
 	default:
 		result.Message = fmt.Sprintf("Unknown validation type: %s", v.Type)
 		result.Duration = time.Since(start)
@@ -182,7 +193,7 @@ func (e *Executor) executeStatus(ctx context.Context, spec StatusSpec) (bool, st
 	logger.Debug("Executing status validation for %s", spec.Target.Kind)
 
 	if len(spec.Checks) == 0 {
-		return false, "No checks specified", nil
+		return false, errNoChecksSpecified, nil
 	}
 
 	// Get the resource
@@ -259,7 +270,7 @@ func (e *Executor) executeCondition(ctx context.Context, spec ConditionSpec) (bo
 	logger.Debug("Executing condition validation for %s", spec.Target.Kind)
 
 	if len(spec.Checks) == 0 {
-		return false, "No checks specified", nil
+		return false, errNoChecksSpecified, nil
 	}
 
 	pods, err := e.getTargetPods(ctx, spec.Target)
@@ -853,6 +864,14 @@ func getGVRForKind(kind string) (schema.GroupVersionResource, error) {
 		return schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}, nil
 	case "service":
 		return schema.GroupVersionResource{Group: "", Version: "v1", Resource: "services"}, nil
+	case "configmap":
+		return schema.GroupVersionResource{Group: "", Version: "v1", Resource: "configmaps"}, nil
+	case "secret":
+		return schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}, nil
+	case "persistentvolumeclaim":
+		return schema.GroupVersionResource{Group: "", Version: "v1", Resource: "persistentvolumeclaims"}, nil
+	case "serviceaccount":
+		return schema.GroupVersionResource{Group: "", Version: "v1", Resource: "serviceaccounts"}, nil
 	default:
 		return schema.GroupVersionResource{}, fmt.Errorf("unsupported resource kind: %s", kind)
 	}
@@ -1059,4 +1078,164 @@ func (e *Executor) executeRbac(ctx context.Context, spec RbacSpec) (bool, string
 	}
 
 	return true, msgAllRbacChecksPassed, nil
+}
+
+// executeSpec validates resource manifest fields using path-based checks
+func (e *Executor) executeSpec(ctx context.Context, spec SpecSpec) (bool, string, error) {
+	logger.Debug("Executing spec validation for %s", spec.Target.Kind)
+
+	if len(spec.Checks) == 0 {
+		return false, errNoChecksSpecified, nil
+	}
+
+	gvr, err := getGVRForKind(spec.Target.Kind)
+	if err != nil {
+		return false, "", err
+	}
+
+	var obj *unstructured.Unstructured
+
+	switch {
+	case spec.Target.Name != "":
+		obj, err = e.dynamicClient.Resource(gvr).Namespace(e.namespace).Get(ctx, spec.Target.Name, metav1.GetOptions{})
+	case len(spec.Target.LabelSelector) > 0:
+		list, listErr := e.dynamicClient.Resource(gvr).Namespace(e.namespace).List(ctx, metav1.ListOptions{
+			LabelSelector: labels.SelectorFromSet(spec.Target.LabelSelector).String(),
+		})
+		if listErr != nil {
+			return false, "", listErr
+		}
+		if len(list.Items) == 0 {
+			return false, errNoMatchingResources, nil
+		}
+		obj = &list.Items[0]
+	default:
+		return false, errNoTargetSpecified, nil
+	}
+
+	if err != nil {
+		return false, "", fmt.Errorf("failed to get resource: %w", err)
+	}
+
+	allPassed := true
+	var messages []string
+
+	for _, check := range spec.Checks {
+		actual, found, resolveErr := fieldpath.GetRaw(obj.Object, check.Path)
+		if resolveErr != nil {
+			allPassed = false
+			messages = append(messages, fmt.Sprintf("path %q: %v", check.Path, resolveErr))
+			continue
+		}
+
+		switch {
+		case check.Exists != nil:
+			if found != *check.Exists {
+				allPassed = false
+				if *check.Exists {
+					messages = append(messages, fmt.Sprintf("path %q: field not found (expected to exist)", check.Path))
+				} else {
+					messages = append(messages, fmt.Sprintf("path %q: field exists with value %v (expected to be absent)", check.Path, actual))
+				}
+			}
+
+		case check.Value != nil:
+			if !found {
+				allPassed = false
+				messages = append(messages, fmt.Sprintf("path %q: field not found", check.Path))
+				continue
+			}
+			if !specValuesEqual(actual, check.Value) {
+				allPassed = false
+				messages = append(messages, fmt.Sprintf("path %q: got %v, expected %v", check.Path, actual, check.Value))
+			}
+
+		case check.Contains != nil:
+			if !found {
+				allPassed = false
+				messages = append(messages, fmt.Sprintf("path %q: field not found", check.Path))
+				continue
+			}
+			slice, ok := actual.([]interface{})
+			if !ok {
+				allPassed = false
+				messages = append(messages, fmt.Sprintf("path %q: field is not a list (got %T)", check.Path, actual))
+				continue
+			}
+			matchFound := false
+			for _, elem := range slice {
+				if deepContains(elem, check.Contains) {
+					matchFound = true
+					break
+				}
+			}
+			if !matchFound {
+				allPassed = false
+				messages = append(messages, fmt.Sprintf("path %q: no element matches %v", check.Path, check.Contains))
+			}
+		}
+	}
+
+	if allPassed {
+		return true, msgAllSpecChecksPassed, nil
+	}
+	return false, strings.Join(messages, "; "), nil
+}
+
+// specValuesEqual compares two values for equality, normalizing numeric types.
+// Handles int/int64/float64 mismatches that arise from YAML vs JSON unmarshaling.
+// Returns false for non-equal types that are not both numeric — no string fallback to avoid
+// false positives (e.g., a map and its fmt.Sprintf representation would otherwise match).
+func specValuesEqual(actual, expected interface{}) bool {
+	if reflect.DeepEqual(actual, expected) {
+		return true
+	}
+	// Normalize both to float64 for numeric comparison
+	fa, aIsNum := toSpecFloat64(actual)
+	fb, bIsNum := toSpecFloat64(expected)
+	if aIsNum && bIsNum {
+		return fa == fb
+	}
+	return false
+}
+
+// toSpecFloat64 converts a numeric value to float64. Returns (0, false) for non-numeric types.
+func toSpecFloat64(v interface{}) (float64, bool) {
+	switch n := v.(type) {
+	case int:
+		return float64(n), true
+	case int32:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	case float32:
+		return float64(n), true
+	case float64:
+		return n, true
+	}
+	return 0, false
+}
+
+// deepContains reports whether actual contains all key-value pairs defined in expected.
+// For maps: every key in expected must exist in actual with a matching value (recursive).
+// For other types: uses specValuesEqual for comparison.
+func deepContains(actual, expected interface{}) bool {
+	expectedMap, ok := expected.(map[string]interface{})
+	if !ok {
+		return specValuesEqual(actual, expected)
+	}
+	actualMap, ok := actual.(map[string]interface{})
+	if !ok {
+		return false
+	}
+	for k, ev := range expectedMap {
+		av, exists := actualMap[k]
+		if !exists {
+			return false
+		}
+		if !deepContains(av, ev) {
+			return false
+		}
+	}
+	return true
 }

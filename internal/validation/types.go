@@ -69,6 +69,9 @@ const (
 	// TypeRbac validates ServiceAccount permissions using SubjectAccessReview
 	// Value: "rbac" - Use when verifying RBAC rules grant or deny specific actions
 	TypeRbac ValidationType = "rbac"
+	// TypeSpec validates resource manifest fields (spec, metadata, etc.)
+	// Value: "spec" - Use when verifying configuration was applied correctly (probes, limits, volumes, etc.)
+	TypeSpec ValidationType = "spec"
 )
 
 // Target identifies a Kubernetes resource to validate
@@ -274,6 +277,35 @@ type RbacCheck struct {
 	Allowed bool `yaml:"allowed" json:"allowed"`
 }
 
+// SpecSpec validates resource manifest fields using path-based checks
+// Use when: verifying that configuration was applied (health probes, resource limits, volume mounts, etc.)
+// Works with any Kubernetes resource kind via the dynamic client
+type SpecSpec struct {
+	// Target specifies which Kubernetes resource to check
+	Target Target `yaml:"target" json:"target"`
+	// Checks lists all field checks that must pass
+	Checks []SpecCheck `yaml:"checks" json:"checks"`
+}
+
+// SpecCheck defines a single manifest field check
+// Exactly one of Exists, Value, or Contains must be set
+type SpecCheck struct {
+	// Path is the dot-separated field path from the root of the resource
+	// Supports array index: "spec.template.spec.containers[0].livenessProbe"
+	// Supports array filter: "spec.template.spec.containers[name=app].resources"
+	Path string `yaml:"path" json:"path"`
+	// Exists checks whether the field is present (true) or absent (false)
+	// When true: fails if the field is missing
+	// When false: fails if the field is present
+	Exists *bool `yaml:"exists,omitempty" json:"exists,omitempty"`
+	// Value checks that the field equals the given value (deep equality)
+	// Supports strings, integers, booleans
+	Value interface{} `yaml:"value,omitempty" json:"value,omitempty"`
+	// Contains checks that the field (a list) contains at least one element matching the given sub-structure
+	// Example: check that spec.template.spec.volumes contains a volume with a specific claimName
+	Contains interface{} `yaml:"contains,omitempty" json:"contains,omitempty"`
+}
+
 // TypeRegistration associates a ValidationType with its empty spec struct for schema generation.
 type TypeRegistration struct {
 	Type     ValidationType
@@ -290,6 +322,7 @@ var RegisteredTypes = []TypeRegistration{
 	{TypeEvent, EventSpec{}, "EventSpec"},
 	{TypeConnectivity, ConnectivitySpec{}, "ConnectivitySpec"},
 	{TypeRbac, RbacSpec{}, "RbacSpec"},
+	{TypeSpec, SpecSpec{}, "SpecSpec"},
 }
 
 // Result represents the outcome of a single validation execution

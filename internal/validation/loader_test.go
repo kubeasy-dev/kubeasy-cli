@@ -972,3 +972,166 @@ objectives:
 	require.Len(t, spec.Targets, 1)
 	assert.Equal(t, 0, spec.Targets[0].ExpectedStatusCode)
 }
+
+// TestParse_RbacValidation tests parsing of RBAC validation spec
+func TestParse_RbacValidation(t *testing.T) {
+	yaml := `
+objectives:
+  - key: rbac-permissions
+    title: RBAC Permissions
+    description: ServiceAccount must have the correct permissions
+    order: 1
+    type: rbac
+    spec:
+      serviceAccount: monitoring-sa
+      namespace: challenge-xyz
+      checks:
+        - verb: list
+          resource: pods
+          allowed: true
+        - verb: get
+          resource: configmaps
+          allowed: true
+        - verb: list
+          resource: secrets
+          allowed: false
+        - verb: list
+          resource: pods
+          namespace: kube-system
+          allowed: false
+`
+
+	config, err := Parse([]byte(yaml))
+	require.NoError(t, err)
+	require.Len(t, config.Validations, 1)
+
+	v := config.Validations[0]
+	assert.Equal(t, "rbac-permissions", v.Key)
+	assert.Equal(t, TypeRbac, v.Type)
+
+	spec, ok := v.Spec.(RbacSpec)
+	require.True(t, ok, "spec should be RbacSpec")
+	assert.Equal(t, "monitoring-sa", spec.ServiceAccount)
+	assert.Equal(t, "challenge-xyz", spec.Namespace)
+	require.Len(t, spec.Checks, 4)
+
+	assert.Equal(t, "list", spec.Checks[0].Verb)
+	assert.Equal(t, "pods", spec.Checks[0].Resource)
+	assert.True(t, spec.Checks[0].Allowed)
+	assert.Empty(t, spec.Checks[0].Namespace)
+
+	assert.Equal(t, "list", spec.Checks[2].Verb)
+	assert.Equal(t, "secrets", spec.Checks[2].Resource)
+	assert.False(t, spec.Checks[2].Allowed)
+
+	// Per-check namespace override
+	assert.Equal(t, "kube-system", spec.Checks[3].Namespace)
+	assert.False(t, spec.Checks[3].Allowed)
+}
+
+// TestParse_RbacValidation_Errors tests error cases for RBAC validation parsing
+func TestParse_RbacValidation_Errors(t *testing.T) {
+	tests := []struct {
+		name          string
+		yaml          string
+		errorContains string
+	}{
+		{
+			name: "missing serviceAccount",
+			yaml: `
+objectives:
+  - key: rbac-check
+    type: rbac
+    spec:
+      namespace: challenge-xyz
+      checks:
+        - verb: list
+          resource: pods
+          allowed: true
+`,
+			errorContains: "serviceAccount",
+		},
+		{
+			name: "missing namespace",
+			yaml: `
+objectives:
+  - key: rbac-check
+    type: rbac
+    spec:
+      serviceAccount: my-sa
+      checks:
+        - verb: list
+          resource: pods
+          allowed: true
+`,
+			errorContains: "namespace",
+		},
+		{
+			name: "empty checks",
+			yaml: `
+objectives:
+  - key: rbac-check
+    type: rbac
+    spec:
+      serviceAccount: my-sa
+      namespace: challenge-xyz
+      checks: []
+`,
+			errorContains: "at least one check",
+		},
+		{
+			name: "invalid verb",
+			yaml: `
+objectives:
+  - key: rbac-check
+    type: rbac
+    spec:
+      serviceAccount: my-sa
+      namespace: challenge-xyz
+      checks:
+        - verb: exec
+          resource: pods
+          allowed: true
+`,
+			errorContains: "invalid verb",
+		},
+		{
+			name: "missing resource",
+			yaml: `
+objectives:
+  - key: rbac-check
+    type: rbac
+    spec:
+      serviceAccount: my-sa
+      namespace: challenge-xyz
+      checks:
+        - verb: list
+          allowed: true
+`,
+			errorContains: "resource is required",
+		},
+		{
+			name: "missing verb",
+			yaml: `
+objectives:
+  - key: rbac-check
+    type: rbac
+    spec:
+      serviceAccount: my-sa
+      namespace: challenge-xyz
+      checks:
+        - resource: pods
+          allowed: true
+`,
+			errorContains: "verb is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Parse([]byte(tt.yaml))
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.errorContains)
+		})
+	}
+}

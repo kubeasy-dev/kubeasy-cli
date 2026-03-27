@@ -18,6 +18,7 @@ import (
 	"github.com/kubeasy-dev/kubeasy-cli/internal/deployer"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/validation/fieldpath"
+	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -48,6 +49,7 @@ const (
 	msgAllConditionsMet        = "All %d pod(s) meet the required conditions"
 	msgFoundAllExpectedStrings = "Found all expected strings in logs"
 	msgNoForbiddenEvents       = "No forbidden events found"
+	msgAllRbacChecksPassed     = "All RBAC checks passed" //nolint:gosec // not a credential
 )
 
 // Executor executes validations against a Kubernetes cluster
@@ -120,6 +122,14 @@ func (e *Executor) Execute(ctx context.Context, v Validation) Result {
 			return result
 		}
 		result.Passed, result.Message, err = e.executeConnectivity(ctx, spec)
+	case TypeRbac:
+		spec, ok := v.Spec.(RbacSpec)
+		if !ok {
+			result.Message = fmt.Sprintf("internal error: expected RbacSpec, got %T", v.Spec)
+			result.Duration = time.Since(start)
+			return result
+		}
+		result.Passed, result.Message, err = e.executeRbac(ctx, spec)
 	default:
 		result.Message = fmt.Sprintf("Unknown validation type: %s", v.Type)
 		result.Duration = time.Since(start)
@@ -998,4 +1008,55 @@ func compareNumeric(actual float64, operator string, expected interface{}) (bool
 	default:
 		return false, fmt.Errorf("unknown operator: %s", operator)
 	}
+}
+
+// executeRbac validates ServiceAccount permissions using SubjectAccessReview
+func (e *Executor) executeRbac(ctx context.Context, spec RbacSpec) (bool, string, error) {
+	saUser := fmt.Sprintf("system:serviceaccount:%s:%s", spec.Namespace, spec.ServiceAccount)
+
+	for i, check := range spec.Checks {
+		checkNS := spec.Namespace
+		if check.Namespace != "" {
+			checkNS = check.Namespace
+		}
+
+		sar := &authv1.SubjectAccessReview{
+			Spec: authv1.SubjectAccessReviewSpec{
+				User: saUser,
+				// Include SA groups so that permissions granted via group bindings
+				// (system:serviceaccounts, system:serviceaccounts:<ns>) are honoured,
+				// matching the behaviour of kubectl auth can-i --as system:serviceaccount:ns:sa
+				Groups: []string{
+					"system:serviceaccounts",
+					fmt.Sprintf("system:serviceaccounts:%s", spec.Namespace),
+				},
+				ResourceAttributes: &authv1.ResourceAttributes{
+					Verb:        check.Verb,
+					Resource:    check.Resource,
+					Subresource: check.Subresource,
+					Namespace:   checkNS,
+				},
+			},
+		}
+
+		result, err := e.clientset.AuthorizationV1().SubjectAccessReviews().Create(ctx, sar, metav1.CreateOptions{})
+		if err != nil {
+			return false, "", fmt.Errorf("check %d: SubjectAccessReview failed: %w", i, err)
+		}
+
+		if result.Status.Allowed != check.Allowed {
+			expected := "allowed"
+			actual := "denied"
+			if !check.Allowed {
+				expected = "denied"
+				actual = "allowed"
+			}
+			return false, fmt.Sprintf(
+				"check %d: %s %s in namespace %q: expected %s but was %s",
+				i, check.Verb, check.Resource, checkNS, expected, actual,
+			), nil
+		}
+	}
+
+	return true, msgAllRbacChecksPassed, nil
 }

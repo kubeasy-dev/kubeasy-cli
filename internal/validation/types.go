@@ -66,6 +66,9 @@ const (
 	// TypeConnectivity tests HTTP connectivity between pods
 	// Value: "connectivity" - Use when verifying Services, NetworkPolicies, or inter-pod communication
 	TypeConnectivity ValidationType = "connectivity"
+	// TypeRbac validates ServiceAccount permissions using SubjectAccessReview
+	// Value: "rbac" - Use when verifying RBAC rules grant or deny specific actions
+	TypeRbac ValidationType = "rbac"
 )
 
 // Target identifies a Kubernetes resource to validate
@@ -238,6 +241,37 @@ type TLSConfig struct {
 	// Uses HostHeader for SAN matching when set (virtual-host routing pattern).
 	// Only active when InsecureSkipVerify is false.
 	ValidateSANs bool `yaml:"validateSANs,omitempty" json:"validateSANs,omitempty"`
+}
+
+// RbacSpec validates ServiceAccount permissions using SubjectAccessReview
+// Use when: verifying that a ServiceAccount has exactly the right permissions (not too broad, not too narrow)
+type RbacSpec struct {
+	// ServiceAccount is the name of the ServiceAccount to check permissions for
+	ServiceAccount string `yaml:"serviceAccount" json:"serviceAccount"`
+	// Namespace is the namespace of the ServiceAccount
+	Namespace string `yaml:"namespace" json:"namespace"`
+	// Checks lists all permission checks that must pass
+	Checks []RbacCheck `yaml:"checks" json:"checks"`
+}
+
+// RbacCheck defines a single RBAC permission check using SubjectAccessReview
+type RbacCheck struct {
+	// Verb is the Kubernetes API verb to check
+	// Supported: get, list, watch, create, update, patch, delete, deletecollection
+	Verb string `yaml:"verb" json:"verb"`
+	// Resource is the Kubernetes resource type to check (e.g., pods, configmaps, secrets)
+	Resource string `yaml:"resource" json:"resource"`
+	// Subresource is an optional Kubernetes subresource to check (e.g., exec, log, portforward)
+	// Example: resource: pods, subresource: exec checks pods/exec permission
+	Subresource string `yaml:"subresource,omitempty" json:"subresource,omitempty"`
+	// Namespace overrides the check namespace for cross-namespace testing
+	// If empty, uses the ServiceAccount's namespace from RbacSpec
+	Namespace string `yaml:"namespace,omitempty" json:"namespace,omitempty"`
+	// Allowed specifies whether the action should be permitted (true) or denied (false)
+	// Use allowed: false for anti-bypass checks (e.g., verifying cluster-admin was not granted)
+	// NOTE: Go's zero value for bool is false. Always set this field explicitly — omitting it
+	// silently creates an anti-bypass check, which will pass if the SA has no permissions (default).
+	Allowed bool `yaml:"allowed" json:"allowed"`
 }
 
 // Result represents the outcome of a single validation execution

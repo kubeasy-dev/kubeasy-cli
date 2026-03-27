@@ -265,6 +265,34 @@ func parseSpec(v *Validation) error {
 		}
 		v.Spec = spec
 
+	case TypeRbac:
+		var spec RbacSpec
+		if err := yaml.Unmarshal(specYAML, &spec); err != nil {
+			return err
+		}
+		if spec.ServiceAccount == "" {
+			return fmt.Errorf("rbac validation must specify serviceAccount")
+		}
+		if spec.Namespace == "" {
+			return fmt.Errorf("rbac validation must specify namespace")
+		}
+		if len(spec.Checks) == 0 {
+			return fmt.Errorf("rbac validation must have at least one check")
+		}
+		validVerbs := []string{"get", "list", "watch", "create", "update", "patch", "delete", "deletecollection"}
+		for i, check := range spec.Checks {
+			if check.Verb == "" {
+				return fmt.Errorf("check %d: verb is required", i)
+			}
+			if !containsString(validVerbs, check.Verb) {
+				return fmt.Errorf("check %d: invalid verb %q (valid: %v)", i, check.Verb, validVerbs)
+			}
+			if check.Resource == "" {
+				return fmt.Errorf("check %d: resource is required", i)
+			}
+		}
+		v.Spec = spec
+
 	default:
 		return fmt.Errorf("unknown validation type: %s", v.Type)
 	}

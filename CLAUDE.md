@@ -250,6 +250,27 @@ The CLI now uses a **self-contained validation executor** that loads validation 
 - See [docs/MIGRATION.md](docs/MIGRATION.md) for complete migration guide
 - RBAC validation type re-introduced (v2.x) using `SubjectAccessReview` with scoped checks. The original removal was due to an operator-based implementation that required privileged CRD access. The new CLI-based implementation uses the standard `SubjectAccessReview` API (same as `kubectl auth can-i`) and supports anti-bypass checks (`allowed: false`) to prevent cluster-admin escalation.
 
+## Adding a New Validation Type
+
+To add a new validation type, touch **exactly these locations** — nothing else:
+
+1. **`internal/validation/types.go`**
+   - Add a `TypeXxx ValidationType = "xxx"` constant
+   - Add the `XxxSpec` and optional `XxxCheck` structs
+   - Add an entry to `RegisteredTypes` (drives Zod schema generation automatically)
+
+2. **`internal/validation/loader.go`** — add a `case TypeXxx:` in `parseSpec()` with field validation
+
+3. **`internal/validation/executor.go`** — add a `case TypeXxx:` in `Execute()` + implement `executeXxx()`
+
+4. **Tests** — add parsing tests in `loader_test.go` and execution tests in `executor_test.go`
+
+### Zod Schema Generation
+
+The CI workflow `generate-zod-schema.yaml` runs `go run hack/generate-schema/main.go` on every push to `main` and opens a PR in the `website` repo to update `schemas/challengeObjectives.ts`.
+
+**No changes to `hack/generate-schema/main.go` are needed** — it reads `validation.RegisteredTypes` automatically. Adding the entry to `RegisteredTypes` is sufficient for the new type to appear in the generated TypeScript schema.
+
 ## Important Implementation Details
 
 ### Context Management

@@ -113,6 +113,11 @@ func (e *Executor) executeTriggerLoad(ctx context.Context, trigger TriggerConfig
 	for {
 		select {
 		case <-ctx.Done():
+			// wg.Wait() blocks until all in-flight goroutines finish. The 5 s
+			// http.Client.Timeout bounds this for connected requests, but a goroutine
+			// stuck in dial (stalled DNS, unreachable host) can block beyond the
+			// cancellation signal. This is acceptable for in-cluster challenges where
+			// targets are always reachable.
 			wg.Wait()
 			return ctx.Err()
 		case t := <-ticker.C:
@@ -232,7 +237,11 @@ func (e *Executor) executeTriggerDelete(ctx context.Context, trigger TriggerConf
 		return fmt.Errorf("delete trigger: %w", err)
 	}
 
-	logger.Debug("Delete trigger: %s %s/%s", trigger.Target.Kind, e.namespace, trigger.Target.Name)
+	if trigger.Target.Name != "" {
+		logger.Debug("Delete trigger: %s %s/%s", trigger.Target.Kind, e.namespace, trigger.Target.Name)
+	} else {
+		logger.Debug("Delete trigger: %s %s selector=%v", trigger.Target.Kind, e.namespace, trigger.Target.LabelSelector)
+	}
 
 	if trigger.Target.Name != "" {
 		return e.dynamicClient.Resource(gvr).Namespace(e.namespace).Delete(
@@ -351,7 +360,10 @@ func firstContainerName(obj *unstructured.Unstructured) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("invalid container entry format")
 	}
-	name, _, _ := unstructured.NestedString(first, "name")
+	name, _, err := unstructured.NestedString(first, "name")
+	if err != nil {
+		return "", fmt.Errorf("failed to read container name: %w", err)
+	}
 	if name == "" {
 		return "", fmt.Errorf("first container has no name")
 	}

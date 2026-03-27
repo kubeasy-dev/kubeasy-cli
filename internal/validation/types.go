@@ -257,15 +257,20 @@ type RbacSpec struct {
 // RbacCheck defines a single RBAC permission check using SubjectAccessReview
 type RbacCheck struct {
 	// Verb is the Kubernetes API verb to check
-	// Supported: get, list, watch, create, update, patch, delete
+	// Supported: get, list, watch, create, update, patch, delete, deletecollection
 	Verb string `yaml:"verb" json:"verb"`
 	// Resource is the Kubernetes resource type to check (e.g., pods, configmaps, secrets)
 	Resource string `yaml:"resource" json:"resource"`
+	// Subresource is an optional Kubernetes subresource to check (e.g., exec, log, portforward)
+	// Example: resource: pods, subresource: exec checks pods/exec permission
+	Subresource string `yaml:"subresource,omitempty" json:"subresource,omitempty"`
 	// Namespace overrides the check namespace for cross-namespace testing
 	// If empty, uses the ServiceAccount's namespace from RbacSpec
 	Namespace string `yaml:"namespace,omitempty" json:"namespace,omitempty"`
 	// Allowed specifies whether the action should be permitted (true) or denied (false)
 	// Use allowed: false for anti-bypass checks (e.g., verifying cluster-admin was not granted)
+	// NOTE: Go's zero value for bool is false. Always set this field explicitly — omitting it
+	// silently creates an anti-bypass check, which will pass if the SA has no permissions (default).
 	Allowed bool `yaml:"allowed" json:"allowed"`
 }
 

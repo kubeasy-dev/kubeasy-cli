@@ -248,7 +248,7 @@ The CLI now uses a **self-contained validation executor** that loads validation 
 - Old operator-based system (≤v1.3.0) used CRDs
 - New CLI-based system (≥v1.4.0) loads from challenge.yaml
 - See [docs/MIGRATION.md](docs/MIGRATION.md) for complete migration guide
-- RBAC validation type removed for security reasons
+- RBAC validation type re-introduced (v2.x) using `SubjectAccessReview` with scoped checks. The original removal was due to an operator-based implementation that required privileged CRD access. The new CLI-based implementation uses the standard `SubjectAccessReview` API (same as `kubectl auth can-i`) and supports anti-bypass checks (`allowed: false`) to prevent cluster-admin escalation.
 
 ## Important Implementation Details
 

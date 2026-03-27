@@ -1023,10 +1023,18 @@ func (e *Executor) executeRbac(ctx context.Context, spec RbacSpec) (bool, string
 		sar := &authv1.SubjectAccessReview{
 			Spec: authv1.SubjectAccessReviewSpec{
 				User: saUser,
+				// Include SA groups so that permissions granted via group bindings
+				// (system:serviceaccounts, system:serviceaccounts:<ns>) are honoured,
+				// matching the behaviour of kubectl auth can-i --as system:serviceaccount:ns:sa
+				Groups: []string{
+					"system:serviceaccounts",
+					fmt.Sprintf("system:serviceaccounts:%s", spec.Namespace),
+				},
 				ResourceAttributes: &authv1.ResourceAttributes{
-					Verb:      check.Verb,
-					Resource:  check.Resource,
-					Namespace: checkNS,
+					Verb:        check.Verb,
+					Resource:    check.Resource,
+					Subresource: check.Subresource,
+					Namespace:   checkNS,
 				},
 			},
 		}

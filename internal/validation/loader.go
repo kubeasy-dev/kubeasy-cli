@@ -279,7 +279,7 @@ func parseSpec(v *Validation) error {
 		if len(spec.Checks) == 0 {
 			return fmt.Errorf("rbac validation must have at least one check")
 		}
-		validVerbs := []string{"get", "list", "watch", "create", "update", "patch", "delete"}
+		validVerbs := []string{"get", "list", "watch", "create", "update", "patch", "delete", "deletecollection"}
 		for i, check := range spec.Checks {
 			if check.Verb == "" {
 				return fmt.Errorf("check %d: verb is required", i)

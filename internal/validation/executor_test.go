@@ -3438,13 +3438,13 @@ func TestCheckExternalConnectivity_LocalCASecret(t *testing.T) {
 }
 
 // makeRbacClientset creates a fake clientset with a SubjectAccessReview reactor.
-// allowedVerbs maps "verb/resource/namespace" to whether the SAR should be allowed.
+// allowedMap maps "verb/resource/subresource/namespace" to whether the SAR should be allowed.
 func makeRbacClientset(allowedMap map[string]bool) *fake.Clientset {
 	clientset := fake.NewClientset()
 	clientset.PrependReactor("create", "subjectaccessreviews", func(action ktesting.Action) (bool, runtime.Object, error) {
 		sar := action.(ktesting.CreateAction).GetObject().(*authv1.SubjectAccessReview)
 		ra := sar.Spec.ResourceAttributes
-		key := ra.Verb + "/" + ra.Resource + "/" + ra.Namespace
+		key := ra.Verb + "/" + ra.Resource + "/" + ra.Subresource + "/" + ra.Namespace
 		result := sar.DeepCopy()
 		result.Status.Allowed = allowedMap[key]
 		return true, result, nil
@@ -3456,10 +3456,10 @@ func TestExecuteRbac_AllChecksPassed(t *testing.T) {
 	// monitoring-sa can list pods and get configmaps in challenge-xyz
 	// but cannot list secrets (anti-bypass check)
 	allowedMap := map[string]bool{
-		"list/pods/challenge-xyz":      true,
-		"get/configmaps/challenge-xyz": true,
-		"list/secrets/challenge-xyz":   false,
-		"list/pods/kube-system":        false,
+		"list/pods//challenge-xyz":      true,
+		"get/configmaps//challenge-xyz": true,
+		"list/secrets//challenge-xyz":   false,
+		"list/pods//kube-system":        false,
 	}
 	clientset := makeRbacClientset(allowedMap)
 	e := NewExecutor(clientset, nil, nil, "challenge-xyz")
@@ -3484,7 +3484,7 @@ func TestExecuteRbac_AllChecksPassed(t *testing.T) {
 func TestExecuteRbac_AllowedCheckFails(t *testing.T) {
 	// SA does NOT have list pods permission but check expects allowed: true
 	allowedMap := map[string]bool{
-		"list/pods/challenge-xyz": false,
+		"list/pods//challenge-xyz": false,
 	}
 	clientset := makeRbacClientset(allowedMap)
 	e := NewExecutor(clientset, nil, nil, "challenge-xyz")
@@ -3509,7 +3509,7 @@ func TestExecuteRbac_AllowedCheckFails(t *testing.T) {
 func TestExecuteRbac_AntiBypassFails(t *testing.T) {
 	// SA has list secrets permission but check expects allowed: false (anti-bypass)
 	allowedMap := map[string]bool{
-		"list/secrets/challenge-xyz": true, // cluster-admin bypass grants this
+		"list/secrets//challenge-xyz": true, // cluster-admin bypass grants this
 	}
 	clientset := makeRbacClientset(allowedMap)
 	e := NewExecutor(clientset, nil, nil, "challenge-xyz")
@@ -3532,7 +3532,7 @@ func TestExecuteRbac_AntiBypassFails(t *testing.T) {
 func TestExecuteRbac_PerCheckNamespaceOverride(t *testing.T) {
 	// Check uses a different namespace than the ServiceAccount namespace
 	allowedMap := map[string]bool{
-		"list/pods/other-ns": true,
+		"list/pods//other-ns": true,
 	}
 	clientset := makeRbacClientset(allowedMap)
 	e := NewExecutor(clientset, nil, nil, "challenge-xyz")
@@ -3575,4 +3575,53 @@ func TestExecuteRbac_SubjectAccessReviewUserFormat(t *testing.T) {
 	_, _, err := e.executeRbac(context.Background(), spec)
 	require.NoError(t, err)
 	assert.Equal(t, "system:serviceaccount:challenge-xyz:my-sa", capturedUser)
+}
+
+func TestExecuteRbac_SubresourceCheck(t *testing.T) {
+	// pods/exec permission check uses subresource field
+	allowedMap := map[string]bool{
+		"create/pods/exec/challenge-xyz": true,
+	}
+	clientset := makeRbacClientset(allowedMap)
+	e := NewExecutor(clientset, nil, nil, "challenge-xyz")
+
+	spec := RbacSpec{
+		ServiceAccount: "my-sa",
+		Namespace:      "challenge-xyz",
+		Checks: []RbacCheck{
+			{Verb: "create", Resource: "pods", Subresource: "exec", Allowed: true},
+		},
+	}
+
+	passed, msg, err := e.executeRbac(context.Background(), spec)
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Equal(t, msgAllRbacChecksPassed, msg)
+}
+
+func TestExecuteRbac_GroupsIncludedInSAR(t *testing.T) {
+	// Verify the SAR includes the SA's default groups so group-based RoleBindings are evaluated
+	var capturedGroups []string
+	clientset := fake.NewClientset()
+	clientset.PrependReactor("create", "subjectaccessreviews", func(action ktesting.Action) (bool, runtime.Object, error) {
+		sar := action.(ktesting.CreateAction).GetObject().(*authv1.SubjectAccessReview)
+		capturedGroups = sar.Spec.Groups
+		result := sar.DeepCopy()
+		result.Status.Allowed = true
+		return true, result, nil
+	})
+	e := NewExecutor(clientset, nil, nil, "challenge-xyz")
+
+	spec := RbacSpec{
+		ServiceAccount: "my-sa",
+		Namespace:      "challenge-xyz",
+		Checks: []RbacCheck{
+			{Verb: "list", Resource: "pods", Allowed: true},
+		},
+	}
+
+	_, _, err := e.executeRbac(context.Background(), spec)
+	require.NoError(t, err)
+	assert.Contains(t, capturedGroups, "system:serviceaccounts")
+	assert.Contains(t, capturedGroups, "system:serviceaccounts:challenge-xyz")
 }

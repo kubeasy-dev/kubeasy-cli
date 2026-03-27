@@ -130,6 +130,14 @@ func (e *Executor) Execute(ctx context.Context, v Validation) Result {
 			return result
 		}
 		result.Passed, result.Message, err = e.executeRbac(ctx, spec)
+	case TypeDns:
+		spec, ok := v.Spec.(DnsSpec)
+		if !ok {
+			result.Message = fmt.Sprintf("internal error: expected DnsSpec, got %T", v.Spec)
+			result.Duration = time.Since(start)
+			return result
+		}
+		result.Passed, result.Message, err = e.executeDns(ctx, spec)
 	default:
 		result.Message = fmt.Sprintf("Unknown validation type: %s", v.Type)
 		result.Duration = time.Since(start)
@@ -1059,4 +1067,107 @@ func (e *Executor) executeRbac(ctx context.Context, spec RbacSpec) (bool, string
 	}
 
 	return true, msgAllRbacChecksPassed, nil
+}
+
+// execInPod executes a command inside a running pod and returns stdout, stderr, and any error.
+// Used by DNS and connectivity validators that need in-cluster exec.
+func (e *Executor) execInPod(ctx context.Context, pod *corev1.Pod, cmd []string) (string, string, error) {
+	if e.restConfig == nil || e.restConfig.Host == "" {
+		return "", "", fmt.Errorf("exec not available in test environment")
+	}
+
+	req := e.clientset.CoreV1().RESTClient().Post().
+		Resource("pods").
+		Name(pod.Name).
+		Namespace(pod.Namespace).
+		SubResource("exec").
+		VersionedParams(&corev1.PodExecOptions{
+			Command: cmd,
+			Stdout:  true,
+			Stderr:  true,
+		}, scheme.ParameterCodec)
+
+	executor, err := remotecommand.NewSPDYExecutor(e.restConfig, "POST", req.URL())
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create executor: %w", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	err = executor.StreamWithContext(ctx, remotecommand.StreamOptions{
+		Stdout: &stdout,
+		Stderr: &stderr,
+	})
+	return stdout.String(), stderr.String(), err
+}
+
+const msgAllDnsChecksPassed = "All DNS checks passed" //nolint:gosec // not a credential
+
+// executeDns validates DNS resolution of hostnames from inside the cluster.
+// It runs nslookup inside the source pod for each check and compares the outcome
+// (resolved vs NXDOMAIN) to the expected resolves flag.
+func (e *Executor) executeDns(ctx context.Context, spec DnsSpec) (bool, string, error) {
+	logger.Debug("Executing DNS validation")
+
+	// Resolve source namespace
+	sourceNamespace := e.namespace
+	if spec.SourcePod.Namespace != "" {
+		sourceNamespace = spec.SourcePod.Namespace
+	}
+
+	// Find source pod
+	var sourcePod *corev1.Pod
+	switch {
+	case spec.SourcePod.Name != "":
+		pod, err := e.clientset.CoreV1().Pods(sourceNamespace).Get(ctx, spec.SourcePod.Name, metav1.GetOptions{})
+		if err != nil {
+			return false, "", fmt.Errorf("failed to get source pod: %w", err)
+		}
+		sourcePod = pod
+	case len(spec.SourcePod.LabelSelector) > 0:
+		pods, err := e.clientset.CoreV1().Pods(sourceNamespace).List(ctx, metav1.ListOptions{
+			LabelSelector: labels.SelectorFromSet(spec.SourcePod.LabelSelector).String(),
+		})
+		if err != nil {
+			return false, "", fmt.Errorf("failed to list source pods: %w", err)
+		}
+		if len(pods.Items) == 0 {
+			return false, errNoMatchingSourcePods, nil
+		}
+		for i := range pods.Items {
+			if pods.Items[i].Status.Phase == corev1.PodRunning {
+				sourcePod = &pods.Items[i]
+				break
+			}
+		}
+		if sourcePod == nil {
+			return false, errNoRunningSourcePods, nil
+		}
+	default:
+		return false, errNoSourcePodSpecified, nil
+	}
+
+	var failures []string
+	for _, check := range spec.Checks {
+		cmd := []string{"nslookup", check.Hostname}
+		stdout, _, execErr := e.execInPod(ctx, sourcePod, cmd)
+
+		// nslookup exits non-zero on NXDOMAIN; also check stdout for NXDOMAIN or "can't find"
+		resolved := execErr == nil &&
+			!strings.Contains(stdout, "NXDOMAIN") &&
+			!strings.Contains(stdout, "can't find") &&
+			!strings.Contains(stdout, "server can't find")
+
+		if resolved != check.Resolves {
+			if check.Resolves {
+				failures = append(failures, fmt.Sprintf("%s: expected to resolve but got NXDOMAIN", check.Hostname))
+			} else {
+				failures = append(failures, fmt.Sprintf("%s: expected NXDOMAIN but resolved successfully", check.Hostname))
+			}
+		}
+	}
+
+	if len(failures) == 0 {
+		return true, msgAllDnsChecksPassed, nil
+	}
+	return false, strings.Join(failures, "; "), nil
 }

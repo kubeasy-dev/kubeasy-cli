@@ -1135,3 +1135,90 @@ objectives:
 		})
 	}
 }
+
+// TestParse_DnsValidation tests parsing of DNS validation spec
+func TestParse_DnsValidation(t *testing.T) {
+	input := `
+objectives:
+  - key: headless-dns
+    title: Headless DNS
+    description: Headless service DNS must resolve
+    order: 1
+    type: dns
+    spec:
+      sourcePod:
+        labelSelector:
+          app: client
+      checks:
+        - hostname: "my-service.challenge-xyz.svc.cluster.local"
+          resolves: true
+        - hostname: "db-0.db-headless.challenge-xyz.svc.cluster.local"
+          resolves: true
+        - hostname: "restricted.other-ns.svc.cluster.local"
+          resolves: false
+`
+
+	config, err := Parse([]byte(input))
+	require.NoError(t, err)
+	require.Len(t, config.Validations, 1)
+
+	v := config.Validations[0]
+	assert.Equal(t, "headless-dns", v.Key)
+	assert.Equal(t, TypeDns, v.Type)
+
+	spec, ok := v.Spec.(DnsSpec)
+	require.True(t, ok, "spec should be DnsSpec")
+	assert.Equal(t, "client", spec.SourcePod.LabelSelector["app"])
+	require.Len(t, spec.Checks, 3)
+	assert.Equal(t, "my-service.challenge-xyz.svc.cluster.local", spec.Checks[0].Hostname)
+	assert.True(t, spec.Checks[0].Resolves)
+	assert.Equal(t, "db-0.db-headless.challenge-xyz.svc.cluster.local", spec.Checks[1].Hostname)
+	assert.True(t, spec.Checks[1].Resolves)
+	assert.Equal(t, "restricted.other-ns.svc.cluster.local", spec.Checks[2].Hostname)
+	assert.False(t, spec.Checks[2].Resolves)
+}
+
+// TestParse_DnsValidation_Errors tests error cases for DNS validation parsing
+func TestParse_DnsValidation_Errors(t *testing.T) {
+	tests := []struct {
+		name          string
+		yaml          string
+		errorContains string
+	}{
+		{
+			name: "empty checks",
+			yaml: `
+objectives:
+  - key: dns-check
+    type: dns
+    spec:
+      sourcePod:
+        name: my-pod
+      checks: []
+`,
+			errorContains: "at least one check",
+		},
+		{
+			name: "missing hostname",
+			yaml: `
+objectives:
+  - key: dns-check
+    type: dns
+    spec:
+      sourcePod:
+        name: my-pod
+      checks:
+        - resolves: true
+`,
+			errorContains: "hostname is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Parse([]byte(tt.yaml))
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.errorContains)
+		})
+	}
+}

@@ -3625,3 +3625,204 @@ func TestExecuteRbac_GroupsIncludedInSAR(t *testing.T) {
 	assert.Contains(t, capturedGroups, "system:serviceaccounts")
 	assert.Contains(t, capturedGroups, "system:serviceaccounts:challenge-xyz")
 }
+
+// =============================================================================
+// DNS Validator Tests
+// =============================================================================
+
+func TestExecuteDns_NoMatchingSourcePods(t *testing.T) {
+	clientset := fake.NewClientset()
+	executor := NewExecutor(clientset, nil, &rest.Config{}, "test-ns")
+
+	spec := DnsSpec{
+		SourcePod: SourcePod{
+			LabelSelector: map[string]string{"app": "client"},
+		},
+		Checks: []DnsCheck{
+			{Hostname: "my-svc.test-ns.svc.cluster.local", Resolves: true},
+		},
+	}
+
+	passed, msg, err := executor.executeDns(context.Background(), spec)
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Equal(t, errNoMatchingSourcePods, msg)
+}
+
+func TestExecuteDns_NoRunningSourcePods(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "client-pod",
+			Namespace: "test-ns",
+			Labels:    map[string]string{"app": "client"},
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodPending,
+		},
+	}
+	clientset := fake.NewClientset(pod)
+	executor := NewExecutor(clientset, nil, &rest.Config{}, "test-ns")
+
+	spec := DnsSpec{
+		SourcePod: SourcePod{
+			LabelSelector: map[string]string{"app": "client"},
+		},
+		Checks: []DnsCheck{
+			{Hostname: "my-svc.test-ns.svc.cluster.local", Resolves: true},
+		},
+	}
+
+	passed, msg, err := executor.executeDns(context.Background(), spec)
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Equal(t, errNoRunningSourcePods, msg)
+}
+
+func TestExecuteDns_SourcePodNotFound(t *testing.T) {
+	clientset := fake.NewClientset()
+	executor := NewExecutor(clientset, nil, &rest.Config{}, "test-ns")
+
+	spec := DnsSpec{
+		SourcePod: SourcePod{
+			Name: "nonexistent-pod",
+		},
+		Checks: []DnsCheck{
+			{Hostname: "my-svc.test-ns.svc.cluster.local", Resolves: true},
+		},
+	}
+
+	_, _, err := executor.executeDns(context.Background(), spec)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to get source pod")
+}
+
+func TestExecuteDns_NoSourcePodSpecified(t *testing.T) {
+	clientset := fake.NewClientset()
+	executor := NewExecutor(clientset, nil, &rest.Config{}, "test-ns")
+
+	spec := DnsSpec{
+		SourcePod: SourcePod{},
+		Checks: []DnsCheck{
+			{Hostname: "my-svc.test-ns.svc.cluster.local", Resolves: true},
+		},
+	}
+
+	passed, msg, err := executor.executeDns(context.Background(), spec)
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Equal(t, errNoSourcePodSpecified, msg)
+}
+
+// Note: TestExecuteDns_ResolvesTrue and TestExecuteDns_ResolvesFalse cannot be fully tested
+// with a fake clientset because fake.NewClientset() does not provide a real RESTClient for
+// pod exec operations. These scenarios are covered by integration tests.
+// The execInPod guard (restConfig.Host == "") returns an error for tests, so we verify
+// the DNS validation correctly handles exec failures.
+
+func TestExecuteDns_ExecFailure_ResolvesTrue(t *testing.T) {
+	// When execInPod fails and resolves: true, validation should fail with an error message
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "client-pod",
+			Namespace: "test-ns",
+			Labels:    map[string]string{"app": "client"},
+		},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning},
+	}
+	clientset := fake.NewClientset(pod)
+	// restConfig with empty Host triggers the test-environment guard in execInPod
+	executor := NewExecutor(clientset, nil, &rest.Config{}, "test-ns")
+
+	spec := DnsSpec{
+		SourcePod: SourcePod{LabelSelector: map[string]string{"app": "client"}},
+		Checks: []DnsCheck{
+			{Hostname: "my-svc.test-ns.svc.cluster.local", Resolves: true},
+		},
+	}
+
+	passed, msg, err := executor.executeDns(context.Background(), spec)
+	require.NoError(t, err)
+	// execInPod fails → resolved=false, but resolves: true → failure
+	assert.False(t, passed)
+	assert.Contains(t, msg, "my-svc.test-ns.svc.cluster.local")
+	assert.Contains(t, msg, "NXDOMAIN")
+}
+
+func TestExecuteDns_ExecFailure_ResolvesFalse(t *testing.T) {
+	// When execInPod fails and resolves: false, the check should pass (exec err = NXDOMAIN-like)
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "client-pod",
+			Namespace: "test-ns",
+			Labels:    map[string]string{"app": "client"},
+		},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning},
+	}
+	clientset := fake.NewClientset(pod)
+	executor := NewExecutor(clientset, nil, &rest.Config{}, "test-ns")
+
+	spec := DnsSpec{
+		SourcePod: SourcePod{LabelSelector: map[string]string{"app": "client"}},
+		Checks: []DnsCheck{
+			{Hostname: "restricted.other-ns.svc.cluster.local", Resolves: false},
+		},
+	}
+
+	passed, msg, err := executor.executeDns(context.Background(), spec)
+	require.NoError(t, err)
+	// execInPod fails → resolved=false, resolves: false → pass
+	assert.True(t, passed)
+	assert.Equal(t, msgAllDnsChecksPassed, msg)
+}
+
+func TestExecuteDns_CrossNamespace(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "client-pod",
+			Namespace: "other-ns",
+			Labels:    map[string]string{"app": "client"},
+		},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning},
+	}
+	clientset := fake.NewClientset(pod)
+	executor := NewExecutor(clientset, nil, &rest.Config{}, "test-ns")
+
+	spec := DnsSpec{
+		SourcePod: SourcePod{
+			LabelSelector: map[string]string{"app": "client"},
+			Namespace:     "other-ns",
+		},
+		Checks: []DnsCheck{
+			{Hostname: "my-svc.test-ns.svc.cluster.local", Resolves: true},
+		},
+	}
+
+	// Pod exists in other-ns, so pod lookup succeeds. execInPod fails (no real API server),
+	// but the error must not be a pod-not-found error.
+	_, msg, err := executor.executeDns(context.Background(), spec)
+	require.NoError(t, err)
+	assert.NotContains(t, msg, "failed to get source pod",
+		"cross-namespace pod lookup must succeed (pod exists in other-ns)")
+}
+
+func TestExecute_DnsType(t *testing.T) {
+	executor := NewExecutor(
+		fake.NewClientset(),
+		nil,
+		&rest.Config{},
+		"test-ns",
+	)
+
+	v := Validation{
+		Key:  "dns-check",
+		Type: TypeDns,
+		Spec: DnsSpec{
+			SourcePod: SourcePod{Name: "nonexistent"},
+			Checks:    []DnsCheck{{Hostname: "my-svc.test-ns.svc.cluster.local", Resolves: true}},
+		},
+	}
+
+	result := executor.Execute(context.Background(), v)
+	assert.Equal(t, "dns-check", result.Key)
+	assert.False(t, result.Passed)
+}

@@ -293,6 +293,21 @@ func parseSpec(v *Validation) error {
 		}
 		v.Spec = spec
 
+	case TypeDns:
+		var spec DnsSpec
+		if err := yaml.Unmarshal(specYAML, &spec); err != nil {
+			return err
+		}
+		if len(spec.Checks) == 0 {
+			return fmt.Errorf("dns validation must have at least one check")
+		}
+		for i, check := range spec.Checks {
+			if check.Hostname == "" {
+				return fmt.Errorf("check %d: hostname is required", i)
+			}
+		}
+		v.Spec = spec
+
 	default:
 		return fmt.Errorf("unknown validation type: %s", v.Type)
 	}

@@ -1,6 +1,6 @@
 // Package validation provides types and executors for CLI-based validation
-// of Kubernetes resources. Supports 5 validation types: status, condition, log, event,
-// and connectivity. See docs/VALIDATION_EXAMPLES.md for usage examples.
+// of Kubernetes resources. Supports 6 validation types: status, condition, log, event,
+// connectivity, and dns. See docs/VALIDATION_EXAMPLES.md for usage examples.
 package validation
 
 import (
@@ -69,6 +69,9 @@ const (
 	// TypeRbac validates ServiceAccount permissions using SubjectAccessReview
 	// Value: "rbac" - Use when verifying RBAC rules grant or deny specific actions
 	TypeRbac ValidationType = "rbac"
+	// TypeDns validates intra-cluster DNS resolution using nslookup from a source pod
+	// Value: "dns" - Use when verifying headless services, StatefulSet stable DNS, or namespace isolation
+	TypeDns ValidationType = "dns"
 )
 
 // Target identifies a Kubernetes resource to validate
@@ -243,6 +246,26 @@ type TLSConfig struct {
 	ValidateSANs bool `yaml:"validateSANs,omitempty" json:"validateSANs,omitempty"`
 }
 
+// DnsSpec validates intra-cluster DNS resolution from a source pod
+// Use when: testing headless services, StatefulSet stable DNS, or namespace DNS isolation
+type DnsSpec struct {
+	// SourcePod specifies which pod to execute nslookup commands from
+	// The pod must have nslookup installed (e.g. busybox or alpine image)
+	SourcePod SourcePod `yaml:"sourcePod" json:"sourcePod"`
+	// Checks lists all DNS resolution checks to perform
+	Checks []DnsCheck `yaml:"checks" json:"checks"`
+}
+
+// DnsCheck defines a single DNS resolution check
+type DnsCheck struct {
+	// Hostname is the DNS name to resolve, e.g. "my-svc.ns.svc.cluster.local"
+	// Works with any fully-qualified or short in-cluster name
+	Hostname string `yaml:"hostname" json:"hostname"`
+	// Resolves specifies the expected outcome: true if the name should resolve,
+	// false if it should return NXDOMAIN (namespace isolation, deleted service, etc.)
+	Resolves bool `yaml:"resolves" json:"resolves"`
+}
+
 // RbacSpec validates ServiceAccount permissions using SubjectAccessReview
 // Use when: verifying that a ServiceAccount has exactly the right permissions (not too broad, not too narrow)
 type RbacSpec struct {
@@ -290,6 +313,7 @@ var RegisteredTypes = []TypeRegistration{
 	{TypeEvent, EventSpec{}, "EventSpec"},
 	{TypeConnectivity, ConnectivitySpec{}, "ConnectivitySpec"},
 	{TypeRbac, RbacSpec{}, "RbacSpec"},
+	{TypeDns, DnsSpec{}, "DnsSpec"},
 }
 
 // Result represents the outcome of a single validation execution

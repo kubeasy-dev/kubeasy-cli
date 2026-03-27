@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'pkg/validation/types.go'
+      - 'internal/validation/types.go'
   workflow_dispatch:
 
 jobs:
@@ -43,23 +43,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
         with:
-          repository: kubeasy-dev/website
+          repository: kubeasy-dev/app
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
-          path: website
+          path: monorepo
 
-      - name: Update schema in website
+      - name: Update schema in monorepo
         run: |
-          cp /tmp/challengeObjectives.ts website/schemas/challengeObjectives.ts
+          cp /tmp/challengeObjectives.ts monorepo/packages/api-schemas/src/objectives.ts
 
       - name: Configure git
-        working-directory: website
+        working-directory: monorepo
         run: |
           git config --local user.name "${{ steps.app-token.outputs.app-slug }}[bot]"
           git config --local user.email "${{ steps.get-user-id.outputs.user-id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
 
       - name: Create or update PR with schema update
-        working-directory: website
+        working-directory: monorepo
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
@@ -79,7 +79,7 @@ jobs:
           fi
 
           # Add and commit changes
-          git add schemas/challengeObjectives.ts
+          git add packages/api-schemas/src/objectives.ts
 
           # Only proceed if there are changes
           if git diff --staged --quiet; then
@@ -87,14 +87,14 @@ jobs:
             exit 0
           fi
 
-          git commit -m "chore: update challengeObjectives.ts from CLI"
+          git commit -m "chore: update objectives.ts from CLI"
 
           # Push branch (force push to update if exists)
           git push origin "$BRANCH_NAME" --force
 
           # Create PR if it doesn't exist (will fail silently if PR already exists)
           gh pr create \
-            --title "chore: update challengeObjectives.ts from CLI" \
+            --title "chore: update objectives.ts from CLI" \
             --body "To be merged at next kubeasy-cli release" \
             --base main \
             --head "$BRANCH_NAME" || echo "PR already exists, updated with new commits"

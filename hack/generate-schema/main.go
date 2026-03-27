@@ -42,9 +42,10 @@ func main() {
 		unionMembers = append(unionMembers, fmt.Sprintf("  %sSchema", reg.SpecName))
 	}
 
-	output += fmt.Sprintf(`export const ObjectiveTypeSchema = z.enum([
+	output += fmt.Sprintf(`export const objectiveTypeValues = [
 %s,
-]);
+] as const;
+export const ObjectiveTypeSchema = z.enum(objectiveTypeValues);
 export type ObjectiveType = z.infer<typeof ObjectiveTypeSchema>;
 
 export const ObjectiveSpecSchema = z.union([

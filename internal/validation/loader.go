@@ -29,6 +29,10 @@ const (
 	// 5 seconds is sufficient for healthy in-cluster HTTP requests while detecting
 	// network issues without making validations excessively slow.
 	DefaultConnectivityTimeoutSeconds = 5
+
+	// MaxTriggerWaitSeconds caps both WaitSeconds and WaitAfterSeconds to prevent
+	// challenges from hanging the CLI indefinitely due to misconfiguration.
+	MaxTriggerWaitSeconds = 3600
 )
 
 // LoadFromFile loads validations from a local file
@@ -328,6 +332,93 @@ func parseSpec(v *Validation) error {
 				if _, ok := check.Contains.(map[string]interface{}); !ok {
 					return fmt.Errorf("check %d (path %q): contains must be a map", i, check.Path)
 				}
+			}
+		}
+		v.Spec = spec
+
+	case TypeTriggered:
+		var spec TriggeredSpec
+		if err := yaml.Unmarshal(specYAML, &spec); err != nil {
+			return err
+		}
+		// Validate trigger type
+		validTriggerTypes := []string{
+			string(TriggerTypeLoad),
+			string(TriggerTypeWait),
+			string(TriggerTypeDelete),
+			string(TriggerTypeRollout),
+			string(TriggerTypeScale),
+		}
+		if !containsString(validTriggerTypes, string(spec.Trigger.Type)) {
+			return fmt.Errorf("invalid trigger type %q (valid: %v)", spec.Trigger.Type, validTriggerTypes)
+		}
+		// Validate trigger type specific fields
+		switch spec.Trigger.Type {
+		case TriggerTypeLoad:
+			if spec.Trigger.URL == "" {
+				return fmt.Errorf("load trigger requires url")
+			}
+			if !strings.HasPrefix(spec.Trigger.URL, "http://") && !strings.HasPrefix(spec.Trigger.URL, "https://") {
+				return fmt.Errorf("load trigger url must start with http:// or https://")
+			}
+			if spec.Trigger.WaitSeconds > MaxTriggerWaitSeconds {
+				return fmt.Errorf("load trigger waitSeconds %d exceeds maximum %d", spec.Trigger.WaitSeconds, MaxTriggerWaitSeconds)
+			}
+		case TriggerTypeWait:
+			if spec.Trigger.WaitSeconds > MaxTriggerWaitSeconds {
+				return fmt.Errorf("wait trigger waitSeconds %d exceeds maximum %d", spec.Trigger.WaitSeconds, MaxTriggerWaitSeconds)
+			}
+		case TriggerTypeDelete:
+			if spec.Trigger.Target == nil {
+				return fmt.Errorf("delete trigger requires target")
+			}
+			if err := validateTarget(*spec.Trigger.Target); err != nil {
+				return fmt.Errorf("delete trigger target: %w", err)
+			}
+		case TriggerTypeRollout:
+			if spec.Trigger.Target == nil {
+				return fmt.Errorf("rollout trigger requires target")
+			}
+			if spec.Trigger.Target.Name == "" {
+				return fmt.Errorf("rollout trigger requires target.name")
+			}
+			if spec.Trigger.Image == "" {
+				return fmt.Errorf("rollout trigger requires image")
+			}
+			validRolloutKinds := []string{"Deployment", "StatefulSet", "DaemonSet"}
+			if !containsString(validRolloutKinds, spec.Trigger.Target.Kind) {
+				return fmt.Errorf("rollout trigger target.kind must be one of %v, got %q", validRolloutKinds, spec.Trigger.Target.Kind)
+			}
+		case TriggerTypeScale:
+			if spec.Trigger.Target == nil {
+				return fmt.Errorf("scale trigger requires target")
+			}
+			if spec.Trigger.Target.Name == "" {
+				return fmt.Errorf("scale trigger requires target.name")
+			}
+			if spec.Trigger.Replicas == nil {
+				return fmt.Errorf("scale trigger requires replicas")
+			}
+		}
+		// Validate WaitAfterSeconds cap
+		if spec.WaitAfterSeconds > MaxTriggerWaitSeconds {
+			return fmt.Errorf("waitAfterSeconds %d exceeds maximum %d", spec.WaitAfterSeconds, MaxTriggerWaitSeconds)
+		}
+		// Validate then sub-validations
+		if len(spec.Then) == 0 {
+			return fmt.Errorf("triggered validation must have at least one then validator")
+		}
+		for i := range spec.Then {
+			// Nested triggered validators would create unbounded orchestration chains
+			if spec.Then[i].Type == TypeTriggered {
+				return fmt.Errorf("then[%d]: nested triggered validators are not supported", i)
+			}
+			// Assign a default key if not provided
+			if spec.Then[i].Key == "" {
+				spec.Then[i].Key = fmt.Sprintf("then[%d]", i)
+			}
+			if err := parseSpec(&spec.Then[i]); err != nil {
+				return fmt.Errorf("then[%d]: %w", i, err)
 			}
 		}
 		v.Spec = spec

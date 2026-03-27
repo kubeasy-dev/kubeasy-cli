@@ -72,7 +72,69 @@ const (
 	// TypeSpec validates resource manifest fields (spec, metadata, etc.)
 	// Value: "spec" - Use when verifying configuration was applied correctly (probes, limits, volumes, etc.)
 	TypeSpec ValidationType = "spec"
+	// TypeTriggered orchestrates a trigger action followed by a set of then validators
+	// Value: "triggered" - Use when validation requires a prior action (load, delete, rollout, scale, wait)
+	TypeTriggered ValidationType = "triggered"
 )
+
+// TriggerType represents the kind of action to perform before running then validators
+type TriggerType string
+
+const (
+	// TriggerTypeLoad generates HTTP traffic to trigger autoscaling or load-based behavior
+	TriggerTypeLoad TriggerType = "load"
+	// TriggerTypeWait is a no-op that simply sleeps for waitSeconds (useful for time-based events)
+	TriggerTypeWait TriggerType = "wait"
+	// TriggerTypeDelete deletes a Kubernetes resource (useful for testing persistence after restart)
+	TriggerTypeDelete TriggerType = "delete"
+	// TriggerTypeRollout patches a Deployment container image to trigger a rolling update
+	TriggerTypeRollout TriggerType = "rollout"
+	// TriggerTypeScale patches the replica count of a resource (useful for PDB, StatefulSet tests)
+	TriggerTypeScale TriggerType = "scale"
+)
+
+// TriggerConfig defines the action to perform before running then validators
+type TriggerConfig struct {
+	// Type is the kind of trigger action to execute
+	Type TriggerType `yaml:"type" json:"type"`
+
+	// URL is the HTTP endpoint to send load to (load trigger only)
+	URL string `yaml:"url,omitempty" json:"url,omitempty"`
+	// RequestsPerSecond controls the load rate (load trigger only, default: 10)
+	RequestsPerSecond int `yaml:"requestsPerSecond,omitempty" json:"requestsPerSecond,omitempty"`
+	// DurationSeconds is how long to send load (load trigger only, default: 10)
+	DurationSeconds int `yaml:"durationSeconds,omitempty" json:"durationSeconds,omitempty"`
+	// SourcePod specifies a pod to exec curl from for load generation (load trigger only).
+	// When nil, requests are sent from the CLI host via net/http.
+	SourcePod *SourcePod `yaml:"sourcePod,omitempty" json:"sourcePod,omitempty"`
+
+	// Target identifies the Kubernetes resource to act on (delete, rollout, scale triggers)
+	Target *Target `yaml:"target,omitempty" json:"target,omitempty"`
+
+	// Image is the container image to set during a rollout (rollout trigger only)
+	Image string `yaml:"image,omitempty" json:"image,omitempty"`
+	// Container is the container name to update during a rollout (rollout trigger only).
+	// Defaults to the first container if not specified.
+	Container string `yaml:"container,omitempty" json:"container,omitempty"`
+
+	// Replicas is the target replica count (scale trigger only)
+	Replicas *int32 `yaml:"replicas,omitempty" json:"replicas,omitempty"`
+
+	// WaitSeconds is how long to sleep (wait trigger only)
+	WaitSeconds int `yaml:"waitSeconds,omitempty" json:"waitSeconds,omitempty"`
+}
+
+// TriggeredSpec orchestrates a trigger action followed by a set of then validators.
+// Pure orchestrator — delegates all validation logic to existing executors.
+type TriggeredSpec struct {
+	// Trigger defines the action to perform before validating
+	Trigger TriggerConfig `yaml:"trigger" json:"trigger"`
+	// WaitAfterSeconds is how long to wait after the trigger before running then validators
+	WaitAfterSeconds int `yaml:"waitAfterSeconds" json:"waitAfterSeconds"`
+	// Then lists the validators to run after the trigger + wait.
+	// All validators must pass for the triggered validation to succeed.
+	Then []Validation `yaml:"then" json:"then"`
+}
 
 // Target identifies a Kubernetes resource to validate
 // Use either Name for exact match or LabelSelector for multiple resources
@@ -323,6 +385,7 @@ var RegisteredTypes = []TypeRegistration{
 	{TypeConnectivity, ConnectivitySpec{}, "ConnectivitySpec"},
 	{TypeRbac, RbacSpec{}, "RbacSpec"},
 	{TypeSpec, SpecSpec{}, "SpecSpec"},
+	{TypeTriggered, TriggeredSpec{}, "TriggeredSpec"},
 }
 
 // Result represents the outcome of a single validation execution

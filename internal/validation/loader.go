@@ -380,6 +380,9 @@ func parseSpec(v *Validation) error {
 			if spec.Trigger.Target == nil {
 				return fmt.Errorf("delete trigger requires target")
 			}
+			if spec.Trigger.Target.Kind == "" {
+				return fmt.Errorf("delete trigger requires target.kind")
+			}
 			if err := validateTarget(*spec.Trigger.Target); err != nil {
 				return fmt.Errorf("delete trigger target: %w", err)
 			}
@@ -400,6 +403,9 @@ func parseSpec(v *Validation) error {
 		case TriggerTypeScale:
 			if spec.Trigger.Target == nil {
 				return fmt.Errorf("scale trigger requires target")
+			}
+			if spec.Trigger.Target.Kind == "" {
+				return fmt.Errorf("scale trigger requires target.kind")
 			}
 			if spec.Trigger.Target.Name == "" {
 				return fmt.Errorf("scale trigger requires target.name")

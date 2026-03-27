@@ -138,6 +138,9 @@ func (e *Executor) executeTriggerLoad(ctx context.Context, trigger TriggerConfig
 
 // executeTriggerLoadFromPod exec's curl in a source pod to generate load.
 // Runs totalRequests = rps * durationSeconds sequential curl invocations.
+// Note: because curl calls are sequential, the actual rate is bounded by
+// min(rps, 1/response_time). Do not rely on precise RPS for rate-sensitive
+// autoscaling triggers via the pod-exec path; use the host-based path instead.
 func (e *Executor) executeTriggerLoadFromPod(ctx context.Context, trigger TriggerConfig, rps, durationSec int) error {
 	ns := e.namespace
 	if trigger.SourcePod.Namespace != "" {
@@ -221,6 +224,9 @@ func (e *Executor) executeTriggerWait(ctx context.Context, trigger TriggerConfig
 
 // executeTriggerDelete deletes a Kubernetes resource identified by target.
 func (e *Executor) executeTriggerDelete(ctx context.Context, trigger TriggerConfig) error {
+	if trigger.Target == nil {
+		return fmt.Errorf("delete trigger: target is required")
+	}
 	gvr, err := getGVRForKind(trigger.Target.Kind)
 	if err != nil {
 		return fmt.Errorf("delete trigger: %w", err)
@@ -252,6 +258,9 @@ func (e *Executor) executeTriggerDelete(ctx context.Context, trigger TriggerConf
 
 // executeTriggerRollout patches a Deployment container image to trigger a rolling update.
 func (e *Executor) executeTriggerRollout(ctx context.Context, trigger TriggerConfig) error {
+	if trigger.Target == nil {
+		return fmt.Errorf("rollout trigger: target is required")
+	}
 	gvr, err := getGVRForKind(trigger.Target.Kind)
 	if err != nil {
 		return fmt.Errorf("rollout trigger: %w", err)
@@ -300,6 +309,9 @@ func (e *Executor) executeTriggerRollout(ctx context.Context, trigger TriggerCon
 
 // executeTriggerScale patches the replica count of a resource.
 func (e *Executor) executeTriggerScale(ctx context.Context, trigger TriggerConfig) error {
+	if trigger.Target == nil {
+		return fmt.Errorf("scale trigger: target is required")
+	}
 	if trigger.Replicas == nil {
 		return fmt.Errorf("scale trigger: replicas is required")
 	}

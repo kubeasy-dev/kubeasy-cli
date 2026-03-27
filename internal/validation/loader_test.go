@@ -1394,3 +1394,482 @@ objectives:
 		})
 	}
 }
+
+// TestParse_TriggeredValidation tests parsing of triggered validation specs
+func TestParse_TriggeredValidation(t *testing.T) {
+	t.Run("load trigger with then validators", func(t *testing.T) {
+		yaml := `
+objectives:
+  - key: hpa-scales
+    type: triggered
+    spec:
+      trigger:
+        type: load
+        url: "http://webapp:80/"
+        requestsPerSecond: 100
+        durationSeconds: 60
+      waitAfterSeconds: 90
+      then:
+        - key: hpa-replicas
+          type: status
+          spec:
+            target:
+              kind: HorizontalPodAutoscaler
+              name: webapp-hpa
+            checks:
+              - field: currentReplicas
+                operator: ">="
+                value: 2
+`
+		config, err := Parse([]byte(yaml))
+		require.NoError(t, err)
+		require.Len(t, config.Validations, 1)
+
+		v := config.Validations[0]
+		assert.Equal(t, "hpa-scales", v.Key)
+		assert.Equal(t, TypeTriggered, v.Type)
+
+		spec, ok := v.Spec.(TriggeredSpec)
+		require.True(t, ok, "spec should be TriggeredSpec")
+		assert.Equal(t, TriggerTypeLoad, spec.Trigger.Type)
+		assert.Equal(t, "http://webapp:80/", spec.Trigger.URL)
+		assert.Equal(t, 100, spec.Trigger.RequestsPerSecond)
+		assert.Equal(t, 60, spec.Trigger.DurationSeconds)
+		assert.Equal(t, 90, spec.WaitAfterSeconds)
+		require.Len(t, spec.Then, 1)
+		assert.Equal(t, "hpa-replicas", spec.Then[0].Key)
+		assert.Equal(t, TypeStatus, spec.Then[0].Type)
+	})
+
+	t.Run("wait trigger", func(t *testing.T) {
+		yaml := `
+objectives:
+  - key: cert-ready
+    type: triggered
+    spec:
+      trigger:
+        type: wait
+        waitSeconds: 30
+      waitAfterSeconds: 5
+      then:
+        - key: cert-issued
+          type: condition
+          spec:
+            target:
+              kind: Pod
+              labelSelector:
+                app: webapp
+            checks:
+              - type: Ready
+                status: "True"
+`
+		config, err := Parse([]byte(yaml))
+		require.NoError(t, err)
+		spec := config.Validations[0].Spec.(TriggeredSpec)
+		assert.Equal(t, TriggerTypeWait, spec.Trigger.Type)
+		assert.Equal(t, 30, spec.Trigger.WaitSeconds)
+	})
+
+	t.Run("delete trigger", func(t *testing.T) {
+		yaml := `
+objectives:
+  - key: data-persists
+    type: triggered
+    spec:
+      trigger:
+        type: delete
+        target:
+          kind: Pod
+          labelSelector:
+            app: stateful-app
+      waitAfterSeconds: 30
+      then:
+        - key: pod-ready-again
+          type: condition
+          spec:
+            target:
+              kind: Pod
+              labelSelector:
+                app: stateful-app
+            checks:
+              - type: Ready
+                status: "True"
+`
+		config, err := Parse([]byte(yaml))
+		require.NoError(t, err)
+		spec := config.Validations[0].Spec.(TriggeredSpec)
+		assert.Equal(t, TriggerTypeDelete, spec.Trigger.Type)
+		require.NotNil(t, spec.Trigger.Target)
+		assert.Equal(t, "stateful-app", spec.Trigger.Target.LabelSelector["app"])
+	})
+
+	t.Run("rollout trigger", func(t *testing.T) {
+		yaml := `
+objectives:
+  - key: rolling-update
+    type: triggered
+    spec:
+      trigger:
+        type: rollout
+        target:
+          kind: Deployment
+          name: webapp
+        image: nginx:1.25
+        container: webapp
+      waitAfterSeconds: 60
+      then:
+        - key: deployment-available
+          type: condition
+          spec:
+            target:
+              kind: Deployment
+              name: webapp
+            checks:
+              - type: Available
+                status: "True"
+`
+		config, err := Parse([]byte(yaml))
+		require.NoError(t, err)
+		spec := config.Validations[0].Spec.(TriggeredSpec)
+		assert.Equal(t, TriggerTypeRollout, spec.Trigger.Type)
+		assert.Equal(t, "nginx:1.25", spec.Trigger.Image)
+		assert.Equal(t, "webapp", spec.Trigger.Container)
+	})
+
+	t.Run("scale trigger", func(t *testing.T) {
+		yaml := `
+objectives:
+  - key: pdb-blocks-scale
+    type: triggered
+    spec:
+      trigger:
+        type: scale
+        target:
+          kind: Deployment
+          name: webapp
+        replicas: 0
+      waitAfterSeconds: 10
+      then:
+        - key: pods-running
+          type: status
+          spec:
+            target:
+              kind: Deployment
+              name: webapp
+            checks:
+              - field: readyReplicas
+                operator: ">="
+                value: 1
+`
+		replicas := int32(0)
+		config, err := Parse([]byte(yaml))
+		require.NoError(t, err)
+		spec := config.Validations[0].Spec.(TriggeredSpec)
+		assert.Equal(t, TriggerTypeScale, spec.Trigger.Type)
+		assert.Equal(t, &replicas, spec.Trigger.Replicas)
+	})
+
+	t.Run("then key auto-assigned when missing", func(t *testing.T) {
+		yaml := `
+objectives:
+  - key: triggered-check
+    type: triggered
+    spec:
+      trigger:
+        type: load
+        url: "http://svc:80/"
+      waitAfterSeconds: 0
+      then:
+        - type: condition
+          spec:
+            target:
+              kind: Pod
+              name: my-pod
+            checks:
+              - type: Ready
+                status: "True"
+`
+		config, err := Parse([]byte(yaml))
+		require.NoError(t, err)
+		spec := config.Validations[0].Spec.(TriggeredSpec)
+		assert.Equal(t, "then[0]", spec.Then[0].Key)
+	})
+}
+
+// TestParse_TriggeredValidation_Errors tests validation errors for triggered specs
+func TestParse_TriggeredValidation_Errors(t *testing.T) {
+	tests := []struct {
+		name          string
+		yaml          string
+		errorContains string
+	}{
+		{
+			name: "unknown trigger type",
+			yaml: `
+objectives:
+  - key: bad
+    type: triggered
+    spec:
+      trigger:
+        type: unknown
+      then:
+        - type: condition
+          spec:
+            target:
+              kind: Pod
+              name: p
+            checks:
+              - type: Ready
+                status: "True"
+`,
+			errorContains: "invalid trigger type",
+		},
+		{
+			name: "load trigger missing url",
+			yaml: `
+objectives:
+  - key: bad
+    type: triggered
+    spec:
+      trigger:
+        type: load
+      then:
+        - type: condition
+          spec:
+            target:
+              kind: Pod
+              name: p
+            checks:
+              - type: Ready
+                status: "True"
+`,
+			errorContains: "load trigger requires url",
+		},
+		{
+			name: "rollout trigger missing image",
+			yaml: `
+objectives:
+  - key: bad
+    type: triggered
+    spec:
+      trigger:
+        type: rollout
+        target:
+          kind: Deployment
+          name: webapp
+      then:
+        - type: condition
+          spec:
+            target:
+              kind: Pod
+              name: p
+            checks:
+              - type: Ready
+                status: "True"
+`,
+			errorContains: "rollout trigger requires image",
+		},
+		{
+			name: "scale trigger missing replicas",
+			yaml: `
+objectives:
+  - key: bad
+    type: triggered
+    spec:
+      trigger:
+        type: scale
+        target:
+          kind: Deployment
+          name: webapp
+      then:
+        - type: condition
+          spec:
+            target:
+              kind: Pod
+              name: p
+            checks:
+              - type: Ready
+                status: "True"
+`,
+			errorContains: "scale trigger requires replicas",
+		},
+		{
+			name: "delete trigger missing target",
+			yaml: `
+objectives:
+  - key: bad
+    type: triggered
+    spec:
+      trigger:
+        type: delete
+      then:
+        - type: condition
+          spec:
+            target:
+              kind: Pod
+              name: p
+            checks:
+              - type: Ready
+                status: "True"
+`,
+			errorContains: "delete trigger requires target",
+		},
+		{
+			name: "empty then validators",
+			yaml: `
+objectives:
+  - key: bad
+    type: triggered
+    spec:
+      trigger:
+        type: wait
+      then: []
+`,
+			errorContains: "triggered validation must have at least one then validator",
+		},
+		{
+			name: "invalid then validator type",
+			yaml: `
+objectives:
+  - key: bad
+    type: triggered
+    spec:
+      trigger:
+        type: load
+        url: "http://svc:80/"
+      then:
+        - type: unknown-type
+          spec:
+            target:
+              kind: Pod
+              name: p
+`,
+			errorContains: "unknown validation type",
+		},
+		{
+			name: "load trigger non-http url",
+			yaml: `
+objectives:
+  - key: bad
+    type: triggered
+    spec:
+      trigger:
+        type: load
+        url: "file:///etc/passwd"
+      then:
+        - type: condition
+          spec:
+            target:
+              kind: Pod
+              name: p
+            checks:
+              - type: Ready
+                status: "True"
+`,
+			errorContains: "url must start with http",
+		},
+		{
+			name: "waitAfterSeconds exceeds maximum",
+			yaml: `
+objectives:
+  - key: bad
+    type: triggered
+    spec:
+      trigger:
+        type: wait
+      waitAfterSeconds: 9999
+      then:
+        - type: condition
+          spec:
+            target:
+              kind: Pod
+              name: p
+            checks:
+              - type: Ready
+                status: "True"
+`,
+			errorContains: "exceeds maximum",
+		},
+		{
+			name: "wait trigger waitSeconds exceeds maximum",
+			yaml: `
+objectives:
+  - key: bad
+    type: triggered
+    spec:
+      trigger:
+        type: wait
+        waitSeconds: 99999
+      then:
+        - type: condition
+          spec:
+            target:
+              kind: Pod
+              name: p
+            checks:
+              - type: Ready
+                status: "True"
+`,
+			errorContains: "exceeds maximum",
+		},
+		{
+			name: "nested triggered validator",
+			yaml: `
+objectives:
+  - key: bad
+    type: triggered
+    spec:
+      trigger:
+        type: wait
+      then:
+        - type: triggered
+          spec:
+            trigger:
+              type: wait
+            then:
+              - type: condition
+                spec:
+                  target:
+                    kind: Pod
+                    name: p
+                  checks:
+                    - type: Ready
+                      status: "True"
+`,
+			errorContains: "nested triggered validators are not supported",
+		},
+		{
+			name: "rollout trigger invalid kind",
+			yaml: `
+objectives:
+  - key: bad
+    type: triggered
+    spec:
+      trigger:
+        type: rollout
+        target:
+          kind: Pod
+          name: webapp
+        image: nginx:1.25
+      then:
+        - type: condition
+          spec:
+            target:
+              kind: Pod
+              name: p
+            checks:
+              - type: Ready
+                status: "True"
+`,
+			errorContains: "target.kind must be one of",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Parse([]byte(tt.yaml))
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.errorContains)
+		})
+	}
+}

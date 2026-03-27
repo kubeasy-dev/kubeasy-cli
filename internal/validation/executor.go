@@ -141,6 +141,14 @@ func (e *Executor) Execute(ctx context.Context, v Validation) Result {
 			return result
 		}
 		result.Passed, result.Message, err = e.executeSpec(ctx, spec)
+	case TypeTriggered:
+		spec, ok := v.Spec.(TriggeredSpec)
+		if !ok {
+			result.Message = fmt.Sprintf("internal error: expected TriggeredSpec, got %T", v.Spec)
+			result.Duration = time.Since(start)
+			return result
+		}
+		result.Passed, result.Message, err = e.executeTriggered(ctx, spec)
 	default:
 		result.Message = fmt.Sprintf("Unknown validation type: %s", v.Type)
 		result.Duration = time.Since(start)

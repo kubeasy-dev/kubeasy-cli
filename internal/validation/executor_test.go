@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -4111,4 +4112,436 @@ func TestDeepContains(t *testing.T) {
 			assert.Equal(t, tt.want, deepContains(tt.actual, tt.expected))
 		})
 	}
+}
+
+// ── triggered executor tests ──────────────────────────────────────────────────
+
+func TestExecuteTriggered_WaitTrigger_ThenPass(t *testing.T) {
+	// Build a ready pod for the then condition check
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "my-pod",
+			Namespace: "test-ns",
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			Conditions: []corev1.PodCondition{
+				{Type: corev1.PodReady, Status: "True"},
+			},
+		},
+	}
+	clientset := fake.NewClientset(pod)
+	e := NewExecutor(clientset, dynamicfake.NewSimpleDynamicClient(runtime.NewScheme()), &rest.Config{}, "test-ns")
+
+	spec := TriggeredSpec{
+		Trigger:          TriggerConfig{Type: TriggerTypeWait, WaitSeconds: 0},
+		WaitAfterSeconds: 0,
+		Then: []Validation{
+			{
+				Key:  "pod-ready",
+				Type: TypeCondition,
+				Spec: ConditionSpec{
+					Target: Target{Name: "my-pod"},
+					Checks: []ConditionCheck{{Type: "Ready", Status: "True"}},
+				},
+			},
+		},
+	}
+
+	passed, msg, err := e.executeTriggered(context.Background(), spec)
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Contains(t, msg, "1 then validator(s) passed")
+}
+
+func TestExecuteTriggered_ThenFail(t *testing.T) {
+	// Pod not ready → then condition fails
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "my-pod", Namespace: "test-ns"},
+		Status:     corev1.PodStatus{Phase: corev1.PodPending},
+	}
+	clientset := fake.NewClientset(pod)
+	e := NewExecutor(clientset, dynamicfake.NewSimpleDynamicClient(runtime.NewScheme()), &rest.Config{}, "test-ns")
+
+	spec := TriggeredSpec{
+		Trigger:          TriggerConfig{Type: TriggerTypeWait, WaitSeconds: 0},
+		WaitAfterSeconds: 0,
+		Then: []Validation{
+			{
+				Key:  "pod-ready",
+				Type: TypeCondition,
+				Spec: ConditionSpec{
+					Target: Target{Name: "my-pod"},
+					Checks: []ConditionCheck{{Type: "Ready", Status: "True"}},
+				},
+			},
+		},
+	}
+
+	passed, msg, err := e.executeTriggered(context.Background(), spec)
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "Then validators failed")
+	assert.Contains(t, msg, "pod-ready")
+}
+
+func TestExecuteTriggerWait_ZeroSeconds(t *testing.T) {
+	e := NewExecutor(fake.NewClientset(), dynamicfake.NewSimpleDynamicClient(runtime.NewScheme()), &rest.Config{}, "test-ns")
+	trigger := TriggerConfig{Type: TriggerTypeWait, WaitSeconds: 0}
+	err := e.executeTriggerWait(context.Background(), trigger)
+	require.NoError(t, err)
+}
+
+func TestExecuteTriggerWait_ContextCancel(t *testing.T) {
+	e := NewExecutor(fake.NewClientset(), dynamicfake.NewSimpleDynamicClient(runtime.NewScheme()), &rest.Config{}, "test-ns")
+	trigger := TriggerConfig{Type: TriggerTypeWait, WaitSeconds: 60}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // already cancelled
+	err := e.executeTriggerWait(ctx, trigger)
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
+func TestExecuteTriggerDelete_ByName(t *testing.T) {
+	sc := runtime.NewScheme()
+	_ = corev1.AddToScheme(sc)
+
+	deployment := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      "webapp",
+				"namespace": "test-ns",
+			},
+		},
+	}
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(sc, deployment)
+
+	var deletedName string
+	dynamicClient.PrependReactor("delete", "deployments", func(action ktesting.Action) (bool, runtime.Object, error) {
+		deletedName = action.(ktesting.DeleteAction).GetName()
+		return true, nil, nil
+	})
+
+	e := NewExecutor(fake.NewClientset(), dynamicClient, &rest.Config{}, "test-ns")
+	trigger := TriggerConfig{
+		Type:   TriggerTypeDelete,
+		Target: &Target{Kind: "Deployment", Name: "webapp"},
+	}
+
+	err := e.executeTriggerDelete(context.Background(), trigger)
+	require.NoError(t, err)
+	assert.Equal(t, "webapp", deletedName)
+}
+
+func TestExecuteTriggerScale(t *testing.T) {
+	sc := runtime.NewScheme()
+	deployment := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      "webapp",
+				"namespace": "test-ns",
+			},
+			"spec": map[string]interface{}{"replicas": int64(3)},
+		},
+	}
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(sc, deployment)
+
+	var patchedBytes []byte
+	dynamicClient.PrependReactor("patch", "deployments", func(action ktesting.Action) (bool, runtime.Object, error) {
+		patchedBytes = action.(ktesting.PatchAction).GetPatch()
+		return true, deployment, nil
+	})
+
+	replicas := int32(0)
+	e := NewExecutor(fake.NewClientset(), dynamicClient, &rest.Config{}, "test-ns")
+	trigger := TriggerConfig{
+		Type:     TriggerTypeScale,
+		Target:   &Target{Kind: "Deployment", Name: "webapp"},
+		Replicas: &replicas,
+	}
+
+	err := e.executeTriggerScale(context.Background(), trigger)
+	require.NoError(t, err)
+	assert.Contains(t, string(patchedBytes), `"replicas"`)
+}
+
+func TestExecuteTriggerRollout_AutoResolvesContainerName(t *testing.T) {
+	sc := runtime.NewScheme()
+	deployment := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      "webapp",
+				"namespace": "test-ns",
+			},
+			"spec": map[string]interface{}{
+				"template": map[string]interface{}{
+					"spec": map[string]interface{}{
+						"containers": []interface{}{
+							map[string]interface{}{"name": "main", "image": "nginx:1.24"},
+						},
+					},
+				},
+			},
+		},
+	}
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(sc, deployment)
+
+	var patchedBytes []byte
+	dynamicClient.PrependReactor("patch", "deployments", func(action ktesting.Action) (bool, runtime.Object, error) {
+		patchedBytes = action.(ktesting.PatchAction).GetPatch()
+		return true, deployment, nil
+	})
+
+	e := NewExecutor(fake.NewClientset(), dynamicClient, &rest.Config{}, "test-ns")
+	trigger := TriggerConfig{
+		Type:   TriggerTypeRollout,
+		Target: &Target{Kind: "Deployment", Name: "webapp"},
+		Image:  "nginx:1.25",
+		// Container intentionally omitted — should resolve to "main"
+	}
+
+	err := e.executeTriggerRollout(context.Background(), trigger)
+	require.NoError(t, err)
+	assert.Contains(t, string(patchedBytes), "nginx:1.25")
+	assert.Contains(t, string(patchedBytes), "main")
+}
+
+func TestExecuteTriggerRollout_WithContainerName(t *testing.T) {
+	sc := runtime.NewScheme()
+	deployment := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      "webapp",
+				"namespace": "test-ns",
+			},
+		},
+	}
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(sc, deployment)
+
+	var patchedBytes []byte
+	dynamicClient.PrependReactor("patch", "deployments", func(action ktesting.Action) (bool, runtime.Object, error) {
+		patchedBytes = action.(ktesting.PatchAction).GetPatch()
+		return true, deployment, nil
+	})
+
+	e := NewExecutor(fake.NewClientset(), dynamicClient, &rest.Config{}, "test-ns")
+	trigger := TriggerConfig{
+		Type:      TriggerTypeRollout,
+		Target:    &Target{Kind: "Deployment", Name: "webapp"},
+		Image:     "nginx:1.25",
+		Container: "webapp",
+	}
+
+	err := e.executeTriggerRollout(context.Background(), trigger)
+	require.NoError(t, err)
+	assert.Contains(t, string(patchedBytes), "nginx:1.25")
+	assert.Contains(t, string(patchedBytes), "webapp")
+}
+
+func TestExecute_TriggeredDispatch(t *testing.T) {
+	// Verify Execute() properly dispatches TypeTriggered
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "my-pod", Namespace: "test-ns"},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			Conditions: []corev1.PodCondition{
+				{Type: corev1.PodReady, Status: "True"},
+			},
+		},
+	}
+	clientset := fake.NewClientset(pod)
+	e := NewExecutor(clientset, dynamicfake.NewSimpleDynamicClient(runtime.NewScheme()), &rest.Config{}, "test-ns")
+
+	v := Validation{
+		Key:  "triggered-check",
+		Type: TypeTriggered,
+		Spec: TriggeredSpec{
+			Trigger:          TriggerConfig{Type: TriggerTypeWait, WaitSeconds: 0},
+			WaitAfterSeconds: 0,
+			Then: []Validation{
+				{
+					Key:  "pod-ready",
+					Type: TypeCondition,
+					Spec: ConditionSpec{
+						Target: Target{Name: "my-pod"},
+						Checks: []ConditionCheck{{Type: "Ready", Status: "True"}},
+					},
+				},
+			},
+		},
+	}
+
+	result := e.Execute(context.Background(), v)
+	assert.Equal(t, "triggered-check", result.Key)
+	assert.True(t, result.Passed)
+}
+
+func TestExecuteTriggerLoad_HostBased(t *testing.T) {
+	// Start a test HTTP server
+	var requestCount int
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requestCount++
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	e := NewExecutor(fake.NewClientset(), dynamicfake.NewSimpleDynamicClient(runtime.NewScheme()), &rest.Config{}, "test-ns")
+	trigger := TriggerConfig{
+		Type:              TriggerTypeLoad,
+		URL:               srv.URL,
+		RequestsPerSecond: 5,
+		DurationSeconds:   1,
+	}
+
+	err := e.executeTriggerLoad(context.Background(), trigger)
+	require.NoError(t, err)
+	mu.Lock()
+	count := requestCount
+	mu.Unlock()
+	// At 5 rps for 1 second we expect roughly 5 requests; allow ±2 for timing jitter
+	assert.GreaterOrEqual(t, count, 3, "expected at least 3 requests")
+}
+
+func TestExecuteTriggered_TriggerFailurePropagates(t *testing.T) {
+	// A delete trigger pointing to an unsupported kind should fail the trigger
+	// and propagate passed=false with the trigger error message.
+	e := NewExecutor(fake.NewClientset(), dynamicfake.NewSimpleDynamicClient(runtime.NewScheme()), &rest.Config{}, "test-ns")
+
+	spec := TriggeredSpec{
+		Trigger: TriggerConfig{
+			Type:   TriggerTypeDelete,
+			Target: &Target{Kind: "UnknownKind", Name: "some-resource"},
+		},
+		WaitAfterSeconds: 0,
+		Then: []Validation{
+			{
+				Key:  "pod-ready",
+				Type: TypeCondition,
+				Spec: ConditionSpec{
+					Target: Target{Name: "any-pod"},
+					Checks: []ConditionCheck{{Type: "Ready", Status: "True"}},
+				},
+			},
+		},
+	}
+
+	passed, msg, err := e.executeTriggered(context.Background(), spec)
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "Trigger failed")
+}
+
+func TestExecuteTriggerDelete_ByLabelSelector(t *testing.T) {
+	sc := runtime.NewScheme()
+	pod := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Pod",
+			"metadata": map[string]interface{}{
+				"name":      "target-pod",
+				"namespace": "test-ns",
+				"labels":    map[string]interface{}{"app": "target"},
+			},
+		},
+	}
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(sc, pod)
+
+	var deletedBySelector string
+	dynamicClient.PrependReactor("delete-collection", "pods", func(action ktesting.Action) (bool, runtime.Object, error) {
+		deletedBySelector = action.(ktesting.DeleteCollectionAction).GetListRestrictions().Labels.String()
+		return true, nil, nil
+	})
+	// list reactor so the pre-check finds the pod
+	dynamicClient.PrependReactor("list", "pods", func(action ktesting.Action) (bool, runtime.Object, error) {
+		list := &unstructured.UnstructuredList{Items: []unstructured.Unstructured{*pod}}
+		return true, list, nil
+	})
+
+	e := NewExecutor(fake.NewClientset(), dynamicClient, &rest.Config{}, "test-ns")
+	trigger := TriggerConfig{
+		Type:   TriggerTypeDelete,
+		Target: &Target{Kind: "Pod", LabelSelector: map[string]string{"app": "target"}},
+	}
+
+	err := e.executeTriggerDelete(context.Background(), trigger)
+	require.NoError(t, err)
+	assert.Contains(t, deletedBySelector, "app=target")
+}
+
+func TestExecuteTriggerDelete_ByLabelSelector_NoMatch(t *testing.T) {
+	sc := runtime.NewScheme()
+	_ = corev1.AddToScheme(sc)
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(sc) // no objects registered → list returns empty
+
+	e := NewExecutor(fake.NewClientset(), dynamicClient, &rest.Config{}, "test-ns")
+	trigger := TriggerConfig{
+		Type:   TriggerTypeDelete,
+		Target: &Target{Kind: "Pod", LabelSelector: map[string]string{"app": "typo"}},
+	}
+
+	err := e.executeTriggerDelete(context.Background(), trigger)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no Pod resources found")
+}
+
+func TestParse_TriggeredValidation_LoadDurationCap(t *testing.T) {
+	yaml := `
+objectives:
+  - key: bad
+    type: triggered
+    spec:
+      trigger:
+        type: load
+        url: "http://svc:80/"
+        durationSeconds: 9999
+      then:
+        - type: condition
+          spec:
+            target:
+              kind: Pod
+              name: p
+            checks:
+              - type: Ready
+                status: "True"
+`
+	_, err := Parse([]byte(yaml))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "durationSeconds")
+	assert.Contains(t, err.Error(), "exceeds maximum")
+}
+
+func TestParse_TriggeredValidation_LoadRPSCap(t *testing.T) {
+	yaml := `
+objectives:
+  - key: bad
+    type: triggered
+    spec:
+      trigger:
+        type: load
+        url: "http://svc:80/"
+        requestsPerSecond: 9999
+      then:
+        - type: condition
+          spec:
+            target:
+              kind: Pod
+              name: p
+            checks:
+              - type: Ready
+                status: "True"
+`
+	_, err := Parse([]byte(yaml))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "requestsPerSecond")
+	assert.Contains(t, err.Error(), "exceeds maximum")
 }

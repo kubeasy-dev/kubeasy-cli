@@ -21,6 +21,7 @@ import (
 	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -29,6 +30,7 @@ import (
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
+	ktesting "k8s.io/client-go/testing"
 )
 
 func TestNewExecutor(t *testing.T) {
@@ -3433,4 +3435,144 @@ func TestCheckExternalConnectivity_LocalCASecret(t *testing.T) {
 	}
 	passed, msg := e.checkExternalConnectivity(context.Background(), target)
 	assert.True(t, passed, "expected passed=true when CA Secret is present and cert is CA-signed, got: %s", msg)
+}
+
+// makeRbacClientset creates a fake clientset with a SubjectAccessReview reactor.
+// allowedVerbs maps "verb/resource/namespace" to whether the SAR should be allowed.
+func makeRbacClientset(allowedMap map[string]bool) *fake.Clientset {
+	clientset := fake.NewClientset()
+	clientset.PrependReactor("create", "subjectaccessreviews", func(action ktesting.Action) (bool, runtime.Object, error) {
+		sar := action.(ktesting.CreateAction).GetObject().(*authv1.SubjectAccessReview)
+		ra := sar.Spec.ResourceAttributes
+		key := ra.Verb + "/" + ra.Resource + "/" + ra.Namespace
+		result := sar.DeepCopy()
+		result.Status.Allowed = allowedMap[key]
+		return true, result, nil
+	})
+	return clientset
+}
+
+func TestExecuteRbac_AllChecksPassed(t *testing.T) {
+	// monitoring-sa can list pods and get configmaps in challenge-xyz
+	// but cannot list secrets (anti-bypass check)
+	allowedMap := map[string]bool{
+		"list/pods/challenge-xyz":      true,
+		"get/configmaps/challenge-xyz": true,
+		"list/secrets/challenge-xyz":   false,
+		"list/pods/kube-system":        false,
+	}
+	clientset := makeRbacClientset(allowedMap)
+	e := NewExecutor(clientset, nil, nil, "challenge-xyz")
+
+	spec := RbacSpec{
+		ServiceAccount: "monitoring-sa",
+		Namespace:      "challenge-xyz",
+		Checks: []RbacCheck{
+			{Verb: "list", Resource: "pods", Allowed: true},
+			{Verb: "get", Resource: "configmaps", Allowed: true},
+			{Verb: "list", Resource: "secrets", Allowed: false},
+			{Verb: "list", Resource: "pods", Namespace: "kube-system", Allowed: false},
+		},
+	}
+
+	passed, msg, err := e.executeRbac(context.Background(), spec)
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Equal(t, msgAllRbacChecksPassed, msg)
+}
+
+func TestExecuteRbac_AllowedCheckFails(t *testing.T) {
+	// SA does NOT have list pods permission but check expects allowed: true
+	allowedMap := map[string]bool{
+		"list/pods/challenge-xyz": false,
+	}
+	clientset := makeRbacClientset(allowedMap)
+	e := NewExecutor(clientset, nil, nil, "challenge-xyz")
+
+	spec := RbacSpec{
+		ServiceAccount: "my-sa",
+		Namespace:      "challenge-xyz",
+		Checks: []RbacCheck{
+			{Verb: "list", Resource: "pods", Allowed: true},
+		},
+	}
+
+	passed, msg, err := e.executeRbac(context.Background(), spec)
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "list")
+	assert.Contains(t, msg, "pods")
+	assert.Contains(t, msg, "allowed")
+	assert.Contains(t, msg, "denied")
+}
+
+func TestExecuteRbac_AntiBypassFails(t *testing.T) {
+	// SA has list secrets permission but check expects allowed: false (anti-bypass)
+	allowedMap := map[string]bool{
+		"list/secrets/challenge-xyz": true, // cluster-admin bypass grants this
+	}
+	clientset := makeRbacClientset(allowedMap)
+	e := NewExecutor(clientset, nil, nil, "challenge-xyz")
+
+	spec := RbacSpec{
+		ServiceAccount: "my-sa",
+		Namespace:      "challenge-xyz",
+		Checks: []RbacCheck{
+			{Verb: "list", Resource: "secrets", Allowed: false},
+		},
+	}
+
+	passed, msg, err := e.executeRbac(context.Background(), spec)
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "denied")
+	assert.Contains(t, msg, "allowed")
+}
+
+func TestExecuteRbac_PerCheckNamespaceOverride(t *testing.T) {
+	// Check uses a different namespace than the ServiceAccount namespace
+	allowedMap := map[string]bool{
+		"list/pods/other-ns": true,
+	}
+	clientset := makeRbacClientset(allowedMap)
+	e := NewExecutor(clientset, nil, nil, "challenge-xyz")
+
+	spec := RbacSpec{
+		ServiceAccount: "my-sa",
+		Namespace:      "challenge-xyz",
+		Checks: []RbacCheck{
+			{Verb: "list", Resource: "pods", Namespace: "other-ns", Allowed: true},
+		},
+	}
+
+	passed, msg, err := e.executeRbac(context.Background(), spec)
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Equal(t, msgAllRbacChecksPassed, msg)
+}
+
+func TestExecuteRbac_SubjectAccessReviewUserFormat(t *testing.T) {
+	// Verify the SAR user field is formatted as system:serviceaccount:<ns>:<sa>
+	var capturedUser string
+	clientset := fake.NewClientset()
+	clientset.PrependReactor("create", "subjectaccessreviews", func(action ktesting.Action) (bool, runtime.Object, error) {
+		sar := action.(ktesting.CreateAction).GetObject().(*authv1.SubjectAccessReview)
+		capturedUser = sar.Spec.User
+		result := sar.DeepCopy()
+		result.Status.Allowed = true
+		return true, result, nil
+	})
+	e := NewExecutor(clientset, nil, nil, "challenge-xyz")
+
+	spec := RbacSpec{
+		ServiceAccount: "my-sa",
+		Namespace:      "challenge-xyz",
+		Checks: []RbacCheck{
+			{Verb: "list", Resource: "pods", Allowed: true},
+		},
+	}
+
+	_, _, err := e.executeRbac(context.Background(), spec)
+	require.NoError(t, err)
+	assert.Equal(t, "system:serviceaccount:challenge-xyz:my-sa", capturedUser)
 }

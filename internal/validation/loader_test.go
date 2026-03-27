@@ -1135,3 +1135,247 @@ objectives:
 		})
 	}
 }
+
+// TestParse_SpecValidation tests parsing of spec validation
+func TestParse_SpecValidation(t *testing.T) {
+	trueVal := true
+	falseVal := false
+
+	tests := []struct {
+		name     string
+		yaml     string
+		validate func(t *testing.T, spec SpecSpec)
+	}{
+		{
+			name: "exists true check",
+			yaml: `
+objectives:
+  - key: probes-set
+    title: Health Probes
+    description: Deployment must have liveness probe configured
+    order: 1
+    type: spec
+    spec:
+      target:
+        kind: Deployment
+        name: web-app
+      checks:
+        - path: spec.template.spec.containers[0].livenessProbe
+          exists: true
+`,
+			validate: func(t *testing.T, spec SpecSpec) {
+				require.Len(t, spec.Checks, 1)
+				assert.Equal(t, "spec.template.spec.containers[0].livenessProbe", spec.Checks[0].Path)
+				assert.Equal(t, &trueVal, spec.Checks[0].Exists)
+				assert.Nil(t, spec.Checks[0].Value)
+				assert.Nil(t, spec.Checks[0].Contains)
+			},
+		},
+		{
+			name: "exists false check",
+			yaml: `
+objectives:
+  - key: no-privileged
+    title: Not Privileged
+    description: Container must not run as privileged
+    order: 1
+    type: spec
+    spec:
+      target:
+        kind: Deployment
+        name: web-app
+      checks:
+        - path: spec.template.spec.containers[0].securityContext.privileged
+          exists: false
+`,
+			validate: func(t *testing.T, spec SpecSpec) {
+				require.Len(t, spec.Checks, 1)
+				assert.Equal(t, &falseVal, spec.Checks[0].Exists)
+			},
+		},
+		{
+			name: "value check",
+			yaml: `
+objectives:
+  - key: memory-limit
+    title: Memory Limit
+    description: Memory limit must be 256Mi
+    order: 1
+    type: spec
+    spec:
+      target:
+        kind: Deployment
+        name: web-app
+      checks:
+        - path: spec.template.spec.containers[0].resources.limits.memory
+          value: "256Mi"
+`,
+			validate: func(t *testing.T, spec SpecSpec) {
+				require.Len(t, spec.Checks, 1)
+				assert.Equal(t, "256Mi", spec.Checks[0].Value)
+				assert.Nil(t, spec.Checks[0].Exists)
+				assert.Nil(t, spec.Checks[0].Contains)
+			},
+		},
+		{
+			name: "contains check",
+			yaml: `
+objectives:
+  - key: pvc-mounted
+    title: PVC Mounted
+    description: Volume must reference the notes PVC
+    order: 1
+    type: spec
+    spec:
+      target:
+        kind: Deployment
+        name: web-app
+      checks:
+        - path: spec.template.spec.volumes
+          contains:
+            persistentVolumeClaim:
+              claimName: notes-pvc
+`,
+			validate: func(t *testing.T, spec SpecSpec) {
+				require.Len(t, spec.Checks, 1)
+				assert.NotNil(t, spec.Checks[0].Contains)
+				assert.Nil(t, spec.Checks[0].Exists)
+				assert.Nil(t, spec.Checks[0].Value)
+			},
+		},
+		{
+			name: "multiple checks",
+			yaml: `
+objectives:
+  - key: probes-configured
+    title: Probes Configured
+    description: Both probes must be set
+    order: 1
+    type: spec
+    spec:
+      target:
+        kind: Deployment
+        labelSelector:
+          app: web
+      checks:
+        - path: spec.template.spec.containers[0].livenessProbe
+          exists: true
+        - path: spec.template.spec.containers[0].readinessProbe
+          exists: true
+        - path: spec.template.spec.containers[0].resources.limits.memory
+          value: "256Mi"
+`,
+			validate: func(t *testing.T, spec SpecSpec) {
+				require.Len(t, spec.Checks, 3)
+				assert.Equal(t, "spec.template.spec.containers[0].livenessProbe", spec.Checks[0].Path)
+				assert.Equal(t, "spec.template.spec.containers[0].readinessProbe", spec.Checks[1].Path)
+				assert.Equal(t, "spec.template.spec.containers[0].resources.limits.memory", spec.Checks[2].Path)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config, err := Parse([]byte(tt.yaml))
+			require.NoError(t, err)
+			require.Len(t, config.Validations, 1)
+
+			v := config.Validations[0]
+			assert.Equal(t, TypeSpec, v.Type)
+
+			spec, ok := v.Spec.(SpecSpec)
+			require.True(t, ok, "spec should be SpecSpec")
+			tt.validate(t, spec)
+		})
+	}
+}
+
+// TestParse_SpecValidation_Errors tests error cases for spec validation parsing
+func TestParse_SpecValidation_Errors(t *testing.T) {
+	tests := []struct {
+		name          string
+		yaml          string
+		errorContains string
+	}{
+		{
+			name: "no checks",
+			yaml: `
+objectives:
+  - key: test
+    type: spec
+    spec:
+      target:
+        name: web-app
+      checks: []
+`,
+			errorContains: "at least one check",
+		},
+		{
+			name: "missing path",
+			yaml: `
+objectives:
+  - key: test
+    type: spec
+    spec:
+      target:
+        name: web-app
+      checks:
+        - exists: true
+`,
+			errorContains: "path is required",
+		},
+		{
+			name: "no check type set",
+			yaml: `
+objectives:
+  - key: test
+    type: spec
+    spec:
+      target:
+        name: web-app
+      checks:
+        - path: spec.replicas
+`,
+			errorContains: "one of exists, value, or contains is required",
+		},
+		{
+			name: "multiple check types set",
+			yaml: `
+objectives:
+  - key: test
+    type: spec
+    spec:
+      target:
+        name: web-app
+      checks:
+        - path: spec.replicas
+          exists: true
+          value: 3
+`,
+			errorContains: "only one of exists, value, or contains may be set",
+		},
+		{
+			name: "missing target identifier",
+			yaml: `
+objectives:
+  - key: test
+    type: spec
+    spec:
+      target:
+        kind: Deployment
+      checks:
+        - path: spec.replicas
+          exists: true
+`,
+			errorContains: "target must specify either name or labelSelector",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Parse([]byte(tt.yaml))
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.errorContains)
+		})
+	}
+}

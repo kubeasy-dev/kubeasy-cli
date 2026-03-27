@@ -293,6 +293,40 @@ func parseSpec(v *Validation) error {
 		}
 		v.Spec = spec
 
+	case TypeSpec:
+		var spec SpecSpec
+		if err := yaml.Unmarshal(specYAML, &spec); err != nil {
+			return err
+		}
+		if err := validateTarget(spec.Target); err != nil {
+			return err
+		}
+		if len(spec.Checks) == 0 {
+			return fmt.Errorf("spec validation must have at least one check")
+		}
+		for i, check := range spec.Checks {
+			if check.Path == "" {
+				return fmt.Errorf("check %d: path is required", i)
+			}
+			checkCount := 0
+			if check.Exists != nil {
+				checkCount++
+			}
+			if check.Value != nil {
+				checkCount++
+			}
+			if check.Contains != nil {
+				checkCount++
+			}
+			if checkCount == 0 {
+				return fmt.Errorf("check %d (path %q): one of exists, value, or contains is required", i, check.Path)
+			}
+			if checkCount > 1 {
+				return fmt.Errorf("check %d (path %q): only one of exists, value, or contains may be set", i, check.Path)
+			}
+		}
+		v.Spec = spec
+
 	default:
 		return fmt.Errorf("unknown validation type: %s", v.Type)
 	}

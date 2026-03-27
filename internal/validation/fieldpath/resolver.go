@@ -138,6 +138,46 @@ func Get(obj map[string]interface{}, path string) (interface{}, bool, error) {
 	return Resolve(obj, tokens)
 }
 
+// ParseRaw parses a field path string into tokens without adding the "status." prefix.
+// Use this for paths that start from the root of the object (e.g., "spec.replicas").
+func ParseRaw(path string) ([]PathToken, error) {
+	if path == "" {
+		return nil, fmt.Errorf("field path cannot be empty")
+	}
+	if len(path) > MaxPathLength {
+		return nil, fmt.Errorf("field path exceeds maximum length of %d characters", MaxPathLength)
+	}
+	segments, err := splitPath(path)
+	if err != nil {
+		return nil, err
+	}
+	if len(segments) > MaxPathDepth {
+		return nil, fmt.Errorf("field path exceeds maximum depth of %d levels", MaxPathDepth)
+	}
+	var tokens []PathToken
+	for i, segment := range segments {
+		if segment == "" {
+			return nil, fmt.Errorf("empty segment at position %d in path %q", i, path)
+		}
+		segmentTokens, err := parseSegment(segment, i, path)
+		if err != nil {
+			return nil, err
+		}
+		tokens = append(tokens, segmentTokens...)
+	}
+	return tokens, nil
+}
+
+// GetRaw resolves a path from the root of the object without the "status." prefix.
+// Use when traversing full object paths such as "spec.template.spec.containers[0].livenessProbe".
+func GetRaw(obj map[string]interface{}, path string) (interface{}, bool, error) {
+	tokens, err := ParseRaw(path)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to parse path: %w", err)
+	}
+	return Resolve(obj, tokens)
+}
+
 // capitalizeFirst capitalizes the first letter of a string
 func capitalizeFirst(s string) string {
 	if s == "" {

@@ -3625,3 +3625,488 @@ func TestExecuteRbac_GroupsIncludedInSAR(t *testing.T) {
 	assert.Contains(t, capturedGroups, "system:serviceaccounts")
 	assert.Contains(t, capturedGroups, "system:serviceaccounts:challenge-xyz")
 }
+
+// --- Spec Validator Tests ---
+
+func makeSpecDeployment(name, ns string, specFields map[string]interface{}) *unstructured.Unstructured {
+	obj := map[string]interface{}{
+		"apiVersion": "apps/v1",
+		"kind":       "Deployment",
+		"metadata": map[string]interface{}{
+			"name":      name,
+			"namespace": ns,
+		},
+		"spec": specFields,
+	}
+	return &unstructured.Unstructured{Object: obj}
+}
+
+func TestExecuteSpec_ExistsTrue_FieldPresent(t *testing.T) {
+	deployment := makeSpecDeployment("web-app", "test-ns", map[string]interface{}{
+		"template": map[string]interface{}{
+			"spec": map[string]interface{}{
+				"containers": []interface{}{
+					map[string]interface{}{
+						"name": "app",
+						"livenessProbe": map[string]interface{}{
+							"httpGet": map[string]interface{}{"path": "/healthz", "port": int64(8080)},
+						},
+					},
+				},
+			},
+		},
+	})
+
+	scheme := runtime.NewScheme()
+	executor := NewExecutor(nil, dynamicfake.NewSimpleDynamicClient(scheme, deployment), nil, "test-ns")
+
+	trueVal := true
+	spec := SpecSpec{
+		Target: Target{Kind: "Deployment", Name: "web-app"},
+		Checks: []SpecCheck{
+			{Path: "spec.template.spec.containers[0].livenessProbe", Exists: &trueVal},
+		},
+	}
+
+	passed, msg, err := executor.executeSpec(context.Background(), spec)
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Equal(t, msgAllSpecChecksPassed, msg)
+}
+
+func TestExecuteSpec_ExistsTrue_FieldAbsent(t *testing.T) {
+	deployment := makeSpecDeployment("web-app", "test-ns", map[string]interface{}{
+		"template": map[string]interface{}{
+			"spec": map[string]interface{}{
+				"containers": []interface{}{
+					map[string]interface{}{"name": "app"},
+				},
+			},
+		},
+	})
+
+	scheme := runtime.NewScheme()
+	executor := NewExecutor(nil, dynamicfake.NewSimpleDynamicClient(scheme, deployment), nil, "test-ns")
+
+	trueVal := true
+	spec := SpecSpec{
+		Target: Target{Kind: "Deployment", Name: "web-app"},
+		Checks: []SpecCheck{
+			{Path: "spec.template.spec.containers[0].livenessProbe", Exists: &trueVal},
+		},
+	}
+
+	passed, msg, err := executor.executeSpec(context.Background(), spec)
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "field not found")
+	assert.Contains(t, msg, "expected to exist")
+}
+
+func TestExecuteSpec_ExistsFalse_FieldAbsent(t *testing.T) {
+	deployment := makeSpecDeployment("web-app", "test-ns", map[string]interface{}{
+		"template": map[string]interface{}{
+			"spec": map[string]interface{}{
+				"containers": []interface{}{
+					map[string]interface{}{"name": "app"},
+				},
+			},
+		},
+	})
+
+	scheme := runtime.NewScheme()
+	executor := NewExecutor(nil, dynamicfake.NewSimpleDynamicClient(scheme, deployment), nil, "test-ns")
+
+	falseVal := false
+	spec := SpecSpec{
+		Target: Target{Kind: "Deployment", Name: "web-app"},
+		Checks: []SpecCheck{
+			{Path: "spec.template.spec.containers[0].securityContext.privileged", Exists: &falseVal},
+		},
+	}
+
+	passed, msg, err := executor.executeSpec(context.Background(), spec)
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Equal(t, msgAllSpecChecksPassed, msg)
+}
+
+func TestExecuteSpec_ExistsFalse_FieldPresent(t *testing.T) {
+	deployment := makeSpecDeployment("web-app", "test-ns", map[string]interface{}{
+		"template": map[string]interface{}{
+			"spec": map[string]interface{}{
+				"containers": []interface{}{
+					map[string]interface{}{
+						"name": "app",
+						"securityContext": map[string]interface{}{
+							"privileged": true,
+						},
+					},
+				},
+			},
+		},
+	})
+
+	scheme := runtime.NewScheme()
+	executor := NewExecutor(nil, dynamicfake.NewSimpleDynamicClient(scheme, deployment), nil, "test-ns")
+
+	falseVal := false
+	spec := SpecSpec{
+		Target: Target{Kind: "Deployment", Name: "web-app"},
+		Checks: []SpecCheck{
+			{Path: "spec.template.spec.containers[0].securityContext.privileged", Exists: &falseVal},
+		},
+	}
+
+	passed, msg, err := executor.executeSpec(context.Background(), spec)
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "expected to be absent")
+}
+
+func TestExecuteSpec_Value_Matches(t *testing.T) {
+	deployment := makeSpecDeployment("web-app", "test-ns", map[string]interface{}{
+		"template": map[string]interface{}{
+			"spec": map[string]interface{}{
+				"containers": []interface{}{
+					map[string]interface{}{
+						"name": "app",
+						"resources": map[string]interface{}{
+							"limits": map[string]interface{}{
+								"memory": "256Mi",
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+
+	scheme := runtime.NewScheme()
+	executor := NewExecutor(nil, dynamicfake.NewSimpleDynamicClient(scheme, deployment), nil, "test-ns")
+
+	spec := SpecSpec{
+		Target: Target{Kind: "Deployment", Name: "web-app"},
+		Checks: []SpecCheck{
+			{Path: "spec.template.spec.containers[0].resources.limits.memory", Value: "256Mi"},
+		},
+	}
+
+	passed, msg, err := executor.executeSpec(context.Background(), spec)
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Equal(t, msgAllSpecChecksPassed, msg)
+}
+
+func TestExecuteSpec_Value_Mismatch(t *testing.T) {
+	deployment := makeSpecDeployment("web-app", "test-ns", map[string]interface{}{
+		"template": map[string]interface{}{
+			"spec": map[string]interface{}{
+				"containers": []interface{}{
+					map[string]interface{}{
+						"name": "app",
+						"resources": map[string]interface{}{
+							"limits": map[string]interface{}{
+								"memory": "128Mi",
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+
+	scheme := runtime.NewScheme()
+	executor := NewExecutor(nil, dynamicfake.NewSimpleDynamicClient(scheme, deployment), nil, "test-ns")
+
+	spec := SpecSpec{
+		Target: Target{Kind: "Deployment", Name: "web-app"},
+		Checks: []SpecCheck{
+			{Path: "spec.template.spec.containers[0].resources.limits.memory", Value: "256Mi"},
+		},
+	}
+
+	passed, msg, err := executor.executeSpec(context.Background(), spec)
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "got 128Mi, expected 256Mi")
+}
+
+func TestExecuteSpec_Contains_Found(t *testing.T) {
+	deployment := makeSpecDeployment("web-app", "test-ns", map[string]interface{}{
+		"template": map[string]interface{}{
+			"spec": map[string]interface{}{
+				"volumes": []interface{}{
+					map[string]interface{}{
+						"name": "data",
+						"persistentVolumeClaim": map[string]interface{}{
+							"claimName": "notes-pvc",
+						},
+					},
+				},
+			},
+		},
+	})
+
+	scheme := runtime.NewScheme()
+	executor := NewExecutor(nil, dynamicfake.NewSimpleDynamicClient(scheme, deployment), nil, "test-ns")
+
+	spec := SpecSpec{
+		Target: Target{Kind: "Deployment", Name: "web-app"},
+		Checks: []SpecCheck{
+			{
+				Path: "spec.template.spec.volumes",
+				Contains: map[string]interface{}{
+					"persistentVolumeClaim": map[string]interface{}{
+						"claimName": "notes-pvc",
+					},
+				},
+			},
+		},
+	}
+
+	passed, msg, err := executor.executeSpec(context.Background(), spec)
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Equal(t, msgAllSpecChecksPassed, msg)
+}
+
+func TestExecuteSpec_Contains_NotFound(t *testing.T) {
+	deployment := makeSpecDeployment("web-app", "test-ns", map[string]interface{}{
+		"template": map[string]interface{}{
+			"spec": map[string]interface{}{
+				"volumes": []interface{}{
+					map[string]interface{}{
+						"name":     "data",
+						"emptyDir": map[string]interface{}{},
+					},
+				},
+			},
+		},
+	})
+
+	scheme := runtime.NewScheme()
+	executor := NewExecutor(nil, dynamicfake.NewSimpleDynamicClient(scheme, deployment), nil, "test-ns")
+
+	spec := SpecSpec{
+		Target: Target{Kind: "Deployment", Name: "web-app"},
+		Checks: []SpecCheck{
+			{
+				Path: "spec.template.spec.volumes",
+				Contains: map[string]interface{}{
+					"persistentVolumeClaim": map[string]interface{}{
+						"claimName": "notes-pvc",
+					},
+				},
+			},
+		},
+	}
+
+	passed, msg, err := executor.executeSpec(context.Background(), spec)
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "no element matches")
+}
+
+func TestExecuteSpec_ArrayFilterPath(t *testing.T) {
+	deployment := makeSpecDeployment("web-app", "test-ns", map[string]interface{}{
+		"template": map[string]interface{}{
+			"spec": map[string]interface{}{
+				"containers": []interface{}{
+					map[string]interface{}{
+						"name": "sidecar",
+						"resources": map[string]interface{}{
+							"limits": map[string]interface{}{"memory": "64Mi"},
+						},
+					},
+					map[string]interface{}{
+						"name": "app",
+						"resources": map[string]interface{}{
+							"limits": map[string]interface{}{"memory": "256Mi"},
+						},
+					},
+				},
+			},
+		},
+	})
+
+	scheme := runtime.NewScheme()
+	executor := NewExecutor(nil, dynamicfake.NewSimpleDynamicClient(scheme, deployment), nil, "test-ns")
+
+	spec := SpecSpec{
+		Target: Target{Kind: "Deployment", Name: "web-app"},
+		Checks: []SpecCheck{
+			{Path: "spec.template.spec.containers[name=app].resources.limits.memory", Value: "256Mi"},
+		},
+	}
+
+	passed, msg, err := executor.executeSpec(context.Background(), spec)
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Equal(t, msgAllSpecChecksPassed, msg)
+}
+
+func TestExecuteSpec_NoMatchingResource(t *testing.T) {
+	scheme := runtime.NewScheme()
+	executor := NewExecutor(nil, dynamicfake.NewSimpleDynamicClient(scheme), nil, "test-ns")
+
+	trueVal := true
+	spec := SpecSpec{
+		Target: Target{Kind: "Deployment", Name: "missing"},
+		Checks: []SpecCheck{
+			{Path: "spec.replicas", Exists: &trueVal},
+		},
+	}
+
+	passed, _, err := executor.executeSpec(context.Background(), spec)
+	// dynamic fake returns error for missing resource
+	assert.False(t, passed || err == nil && passed)
+}
+
+func TestExecuteSpec_MultipleChecks_AllPass(t *testing.T) {
+	deployment := makeSpecDeployment("web-app", "test-ns", map[string]interface{}{
+		"template": map[string]interface{}{
+			"spec": map[string]interface{}{
+				"containers": []interface{}{
+					map[string]interface{}{
+						"name":           "app",
+						"livenessProbe":  map[string]interface{}{"httpGet": map[string]interface{}{"path": "/health", "port": int64(8080)}},
+						"readinessProbe": map[string]interface{}{"httpGet": map[string]interface{}{"path": "/ready", "port": int64(8080)}},
+						"resources": map[string]interface{}{
+							"limits": map[string]interface{}{"memory": "256Mi"},
+						},
+					},
+				},
+			},
+		},
+	})
+
+	scheme := runtime.NewScheme()
+	executor := NewExecutor(nil, dynamicfake.NewSimpleDynamicClient(scheme, deployment), nil, "test-ns")
+
+	trueVal := true
+	spec := SpecSpec{
+		Target: Target{Kind: "Deployment", Name: "web-app"},
+		Checks: []SpecCheck{
+			{Path: "spec.template.spec.containers[0].livenessProbe", Exists: &trueVal},
+			{Path: "spec.template.spec.containers[0].readinessProbe", Exists: &trueVal},
+			{Path: "spec.template.spec.containers[0].resources.limits.memory", Value: "256Mi"},
+		},
+	}
+
+	passed, msg, err := executor.executeSpec(context.Background(), spec)
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Equal(t, msgAllSpecChecksPassed, msg)
+}
+
+func TestExecuteSpec_MultipleChecks_OneFails(t *testing.T) {
+	deployment := makeSpecDeployment("web-app", "test-ns", map[string]interface{}{
+		"template": map[string]interface{}{
+			"spec": map[string]interface{}{
+				"containers": []interface{}{
+					map[string]interface{}{
+						"name":          "app",
+						"livenessProbe": map[string]interface{}{"httpGet": map[string]interface{}{"path": "/health", "port": int64(8080)}},
+						// readinessProbe absent
+						"resources": map[string]interface{}{
+							"limits": map[string]interface{}{"memory": "256Mi"},
+						},
+					},
+				},
+			},
+		},
+	})
+
+	scheme := runtime.NewScheme()
+	executor := NewExecutor(nil, dynamicfake.NewSimpleDynamicClient(scheme, deployment), nil, "test-ns")
+
+	trueVal := true
+	spec := SpecSpec{
+		Target: Target{Kind: "Deployment", Name: "web-app"},
+		Checks: []SpecCheck{
+			{Path: "spec.template.spec.containers[0].livenessProbe", Exists: &trueVal},
+			{Path: "spec.template.spec.containers[0].readinessProbe", Exists: &trueVal},
+			{Path: "spec.template.spec.containers[0].resources.limits.memory", Value: "256Mi"},
+		},
+	}
+
+	passed, msg, err := executor.executeSpec(context.Background(), spec)
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "readinessProbe")
+}
+
+func TestSpecValuesEqual(t *testing.T) {
+	tests := []struct {
+		name     string
+		actual   interface{}
+		expected interface{}
+		want     bool
+	}{
+		{"string equal", "256Mi", "256Mi", true},
+		{"string unequal", "128Mi", "256Mi", false},
+		{"int vs int64", int(3), int64(3), true},
+		{"float64 vs int", float64(3), int(3), true},
+		{"bool true", true, true, true},
+		{"bool mismatch", true, false, false},
+		{"nil vs nil", nil, nil, true},
+		{"nil vs string", nil, "foo", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, specValuesEqual(tt.actual, tt.expected))
+		})
+	}
+}
+
+func TestDeepContains(t *testing.T) {
+	tests := []struct {
+		name     string
+		actual   interface{}
+		expected interface{}
+		want     bool
+	}{
+		{
+			name:     "map fully matches",
+			actual:   map[string]interface{}{"a": "1", "b": "2"},
+			expected: map[string]interface{}{"a": "1"},
+			want:     true,
+		},
+		{
+			name:     "nested map matches",
+			actual:   map[string]interface{}{"pvc": map[string]interface{}{"claimName": "my-pvc", "extra": "val"}},
+			expected: map[string]interface{}{"pvc": map[string]interface{}{"claimName": "my-pvc"}},
+			want:     true,
+		},
+		{
+			name:     "nested map mismatch",
+			actual:   map[string]interface{}{"pvc": map[string]interface{}{"claimName": "other-pvc"}},
+			expected: map[string]interface{}{"pvc": map[string]interface{}{"claimName": "my-pvc"}},
+			want:     false,
+		},
+		{
+			name:     "missing key",
+			actual:   map[string]interface{}{"a": "1"},
+			expected: map[string]interface{}{"b": "2"},
+			want:     false,
+		},
+		{
+			name:     "scalar equal",
+			actual:   "hello",
+			expected: "hello",
+			want:     true,
+		},
+		{
+			name:     "scalar mismatch",
+			actual:   "hello",
+			expected: "world",
+			want:     false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, deepContains(tt.actual, tt.expected))
+		})
+	}
+}

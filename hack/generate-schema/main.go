@@ -29,7 +29,8 @@ func main() {
 
 	output := "// ⚠️ AUTO-GENERATED - DO NOT EDIT\n"
 	output += "// Source: github.com/kubeasy-dev/kubeasy-cli/internal/validation\n"
-	output += "// Run: go run hack/generate-schema/main.go > path/to/challengeObjectives.ts\n\n"
+	output += "// Run: go run hack/generate-schema/main.go > path/to/challengeObjectives.ts\n"
+	output += "// biome-ignore-all lint: auto-generated file\n\n"
 	output += "import { z } from \"zod\";\n\n"
 
 	output += c.Export()

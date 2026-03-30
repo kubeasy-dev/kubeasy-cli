@@ -205,6 +205,23 @@ func TestGetGVRForKind(t *testing.T) {
 			kind:     "Challenge",
 			expected: schema.GroupVersionResource{Group: "acme.cert-manager.io", Version: "v1", Resource: "challenges"},
 		},
+		// case-insensitive normalization
+		{
+			name:     "lowercase kind",
+			kind:     "deployment",
+			expected: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"},
+		},
+		{
+			name:     "uppercase kind",
+			kind:     "DEPLOYMENT",
+			expected: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"},
+		},
+		// pre-existing gap
+		{
+			name:     "CronJob",
+			kind:     "CronJob",
+			expected: schema.GroupVersionResource{Group: "batch", Version: "v1", Resource: "cronjobs"},
+		},
 		{
 			name:    "Unsupported",
 			kind:    "UnsupportedKind",

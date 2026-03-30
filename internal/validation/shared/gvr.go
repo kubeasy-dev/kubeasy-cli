@@ -94,7 +94,7 @@ func GetGVRForKind(kind string) (schema.GroupVersionResource, error) {
 	// acme.cert-manager.io/v1
 	case "order":
 		return schema.GroupVersionResource{Group: "acme.cert-manager.io", Version: "v1", Resource: "orders"}, nil
-	case "challenge":
+	case "challenge": // ACME cert-manager Challenge, not a kubeasy challenge
 		return schema.GroupVersionResource{Group: "acme.cert-manager.io", Version: "v1", Resource: "challenges"}, nil
 	default:
 		return schema.GroupVersionResource{}, fmt.Errorf("unsupported resource kind: %s", kind)

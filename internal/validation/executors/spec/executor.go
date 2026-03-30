@@ -117,6 +117,10 @@ func Execute(ctx context.Context, spec vtypes.SpecSpec, deps shared.Deps) (bool,
 				allPassed = false
 				messages = append(messages, fmt.Sprintf("path %q: no element matches %v", check.Path, check.Contains))
 			}
+
+		default:
+			allPassed = false
+			messages = append(messages, fmt.Sprintf("path %q: check has no mode set (must specify exists, value, or contains)", check.Path))
 		}
 	}
 

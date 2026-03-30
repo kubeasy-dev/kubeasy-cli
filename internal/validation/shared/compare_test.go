@@ -98,7 +98,7 @@ func TestCompareValues(t *testing.T) {
 		{"less or equal <=", 5, "<=", 5, true},
 		{"equal fails", 5, "==", 3, false},
 		{"greater fails", 3, ">", 5, false},
-		{"unknown operator defaults to ==", 5, "unknown", 5, true},
+		{"unknown operator returns false", 5, "unknown", 5, false},
 	}
 
 	for _, tt := range tests {

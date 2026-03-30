@@ -30,7 +30,12 @@ func Execute(ctx context.Context, spec vtypes.LogSpec, deps shared.Deps) (bool, 
 		return false, errNoMatchingPods, nil
 	}
 
-	sinceSeconds := int64(spec.SinceSeconds)
+	var sinceSecondsPtr *int64
+	if spec.SinceSeconds > 0 {
+		s := int64(spec.SinceSeconds)
+		sinceSecondsPtr = &s
+	}
+
 	var logErrors []string
 
 	podLogs := make(map[string]string)
@@ -42,7 +47,7 @@ func Execute(ctx context.Context, spec vtypes.LogSpec, deps shared.Deps) (bool, 
 
 		opts := &corev1.PodLogOptions{
 			Container:    container,
-			SinceSeconds: &sinceSeconds,
+			SinceSeconds: sinceSecondsPtr,
 		}
 
 		req := deps.Clientset.CoreV1().Pods(deps.Namespace).GetLogs(pod.Name, opts)

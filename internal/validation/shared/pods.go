@@ -47,7 +47,8 @@ func GetPodsForResource(ctx context.Context, deps Deps, target vtypes.Target) ([
 
 	var labelSelector string
 
-	if target.Name != "" {
+	switch {
+	case target.Name != "":
 		obj, err := deps.DynamicClient.Resource(gvr).Namespace(deps.Namespace).Get(ctx, target.Name, metav1.GetOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to get %s %s: %w", target.Kind, target.Name, err)
@@ -56,8 +57,10 @@ func GetPodsForResource(ctx context.Context, deps Deps, target vtypes.Target) ([
 		if len(selector) > 0 {
 			labelSelector = labels.SelectorFromSet(selector).String()
 		}
-	} else if len(target.LabelSelector) > 0 {
+	case len(target.LabelSelector) > 0:
 		labelSelector = labels.SelectorFromSet(target.LabelSelector).String()
+	default:
+		return nil, fmt.Errorf("target %s: must specify name or labelSelector", target.Kind)
 	}
 
 	pods, err := deps.Clientset.CoreV1().Pods(deps.Namespace).List(ctx, metav1.ListOptions{

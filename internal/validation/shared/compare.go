@@ -44,7 +44,7 @@ func CompareValues(actual int64, operator string, expected int64) bool {
 	case "<=":
 		return actual <= expected
 	default:
-		return actual == expected
+		return false
 	}
 }
 

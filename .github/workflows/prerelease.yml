@@ -2,9 +2,8 @@ name: "Pre-release Build"
 
 on:
   workflow_dispatch: {}
-  # Uncomment once validated on main to enable automatic nightly builds at 2 AM UTC:
-  # schedule:
-  #   - cron: '0 2 * * *'
+  schedule:
+    - cron: '0 2 * * *'
 
 # Ensure only one nightly run at a time — concurrent runs would race on the tag/release.
 concurrency:

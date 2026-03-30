@@ -21,6 +21,11 @@ var versionCmd = &cobra.Command{
 		fmt.Printf("kubeasy-cli %s\n", current)
 		fmt.Printf("Go %s - %s/%s\n", runtime.Version(), runtime.GOOS, runtime.GOARCH)
 
+		if isPreRelease(current) {
+			fmt.Printf("Pre-release build (%s), skipping update check.\n", current)
+			return
+		}
+
 		latest, err := fetchLatestVersion()
 		if err != nil {
 			// Non-blocking: just inform user that update check failed
@@ -104,6 +109,14 @@ func compareSemver(a, b string) int {
 		}
 	}
 	return 0
+}
+
+// isPreRelease returns true for non-semver version strings like "dev" or "nightly-abc1234".
+// These start with a non-digit character after stripping a leading 'v'.
+// Legitimate semver pre-releases like "2.7.0-rc.1" start with a digit and return false.
+func isPreRelease(v string) bool {
+	v = strings.TrimSpace(strings.TrimPrefix(v, "v"))
+	return len(v) == 0 || v[0] < '0' || v[0] > '9'
 }
 
 func splitToInt3(v string) [3]int {

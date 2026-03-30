@@ -9,11 +9,9 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
@@ -34,13 +32,6 @@ func cloudProviderKindBinaryURLForPlatform(goos, goarch string) string {
 // for the current platform (runtime.GOOS and runtime.GOARCH).
 func cloudProviderKindBinaryURL() string {
 	return cloudProviderKindBinaryURLForPlatform(runtime.GOOS, runtime.GOARCH)
-}
-
-// isCloudProviderKindRunning checks whether a cloud-provider-kind process is running
-// by querying pgrep. Returns true if pgrep exits with code 0 (process found).
-func isCloudProviderKindRunning() bool {
-	cmd := exec.Command("pgrep", "-f", "cloud-provider-kind")
-	return cmd.Run() == nil
 }
 
 // maxCloudProviderKindDownloadBytes caps the response body to 100 MiB to prevent
@@ -134,24 +125,6 @@ func downloadCloudProviderKind(ctx context.Context, url, destPath string) error 
 	}
 
 	return fmt.Errorf("cloud-provider-kind binary not found in archive from %s", url)
-}
-
-// startCloudProviderKindDetached starts cloud-provider-kind as a detached background process.
-// It uses Setsid=true to create a new session so the process survives terminal closure.
-// cmd.Start() is called but never cmd.Wait(), leaving the process running independently.
-func startCloudProviderKindDetached(binPath string) error {
-	cmd := exec.Command(binPath)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	cmd.Stdin = nil
-
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start cloud-provider-kind: %w", err)
-	}
-
-	logger.Info("cloud-provider-kind started as detached process (PID %d)", cmd.Process.Pid)
-	return nil
 }
 
 // ensureCloudProviderKind ensures the cloud-provider-kind process is running.

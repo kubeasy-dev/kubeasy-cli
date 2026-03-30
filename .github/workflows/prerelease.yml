@@ -2,9 +2,14 @@ name: "Pre-release Build"
 
 on:
   workflow_dispatch: {}
-  # Uncomment to enable automatic nightly builds at 2 AM UTC:
+  # Uncomment once validated on main to enable automatic nightly builds at 2 AM UTC:
   # schedule:
   #   - cron: '0 2 * * *'
+
+# Ensure only one nightly run at a time — concurrent runs would race on the tag/release.
+concurrency:
+  group: prerelease
+  cancel-in-progress: true
 
 # Minimal permissions at workflow level - each job specifies what it needs
 permissions: {}
@@ -15,13 +20,16 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
+
+      - name: Configure git credentials
+        run: |
+          git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
 
       - name: Set up Go
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
@@ -53,8 +61,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Summary
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           SHORT_SHA=$(git rev-parse --short HEAD)
           echo "### ✅ Pre-release build published" >> $GITHUB_STEP_SUMMARY

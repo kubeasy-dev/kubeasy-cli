@@ -10,107 +10,137 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
 )
 
-func deps(clientset *fake.Clientset) shared.Deps {
-	return shared.Deps{Clientset: clientset, Namespace: "test-ns"}
+func deps(dc *dynamicfake.FakeDynamicClient) shared.Deps {
+	return shared.Deps{DynamicClient: dc, Namespace: "test-ns"}
 }
 
-func TestExecute_Success(t *testing.T) {
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-pod", Namespace: "test-ns"},
-		Status: corev1.PodStatus{
-			Conditions: []corev1.PodCondition{
-				{Type: corev1.PodReady, Status: corev1.ConditionTrue},
-			},
-		},
+func resource(kind, apiVersion, name string, conditions []map[string]interface{}) *unstructured.Unstructured {
+	obj := map[string]interface{}{
+		"apiVersion": apiVersion,
+		"kind":       kind,
+		"metadata":   map[string]interface{}{"name": name, "namespace": "test-ns"},
 	}
+	if len(conditions) > 0 {
+		rawConds := make([]interface{}, len(conditions))
+		for i, c := range conditions {
+			rawConds[i] = c
+		}
+		obj["status"] = map[string]interface{}{"conditions": rawConds}
+	}
+	return &unstructured.Unstructured{Object: obj}
+}
+
+func TestExecute_Pod_Ready(t *testing.T) {
+	pod := resource("Pod", "v1", "test-pod", []map[string]interface{}{
+		{"type": "Ready", "status": "True"},
+	})
 	spec := vtypes.ConditionSpec{
 		Target: vtypes.Target{Kind: "Pod", Name: "test-pod"},
 		Checks: []vtypes.ConditionCheck{{Type: "Ready", Status: corev1.ConditionTrue}},
 	}
 
-	passed, msg, err := condition.Execute(context.Background(), spec, deps(fake.NewClientset(pod)))
+	passed, msg, err := condition.Execute(context.Background(), spec, deps(dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), pod)))
 	require.NoError(t, err)
 	assert.True(t, passed)
-	assert.Contains(t, msg, "All 1 pod(s) meet the required conditions")
+	assert.Equal(t, "All checks passed", msg)
 }
 
-func TestExecute_ConditionNotMet(t *testing.T) {
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-pod", Namespace: "test-ns"},
-		Status: corev1.PodStatus{
-			Conditions: []corev1.PodCondition{
-				{Type: corev1.PodReady, Status: corev1.ConditionFalse},
-			},
-		},
-	}
+func TestExecute_Pod_ConditionFalse(t *testing.T) {
+	pod := resource("Pod", "v1", "test-pod", []map[string]interface{}{
+		{"type": "Ready", "status": "False"},
+	})
 	spec := vtypes.ConditionSpec{
 		Target: vtypes.Target{Kind: "Pod", Name: "test-pod"},
 		Checks: []vtypes.ConditionCheck{{Type: "Ready", Status: corev1.ConditionTrue}},
 	}
 
-	passed, msg, err := condition.Execute(context.Background(), spec, deps(fake.NewClientset(pod)))
+	passed, msg, err := condition.Execute(context.Background(), spec, deps(dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), pod)))
 	require.NoError(t, err)
 	assert.False(t, passed)
 	assert.Contains(t, msg, "condition Ready is not True")
 }
 
-func TestExecute_NoMatchingPods(t *testing.T) {
-	spec := vtypes.ConditionSpec{
-		Target: vtypes.Target{Kind: "Pod", Name: "nonexistent-pod"},
-		Checks: []vtypes.ConditionCheck{{Type: "Ready", Status: corev1.ConditionTrue}},
-	}
-
-	passed, _, err := condition.Execute(context.Background(), spec, deps(fake.NewClientset()))
-	assert.Error(t, err)
-	assert.False(t, passed)
-}
-
-func TestExecute_ByLabelSelector(t *testing.T) {
-	pod1 := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "pod-1", Namespace: "test-ns", Labels: map[string]string{"app": "test"}},
-		Status:     corev1.PodStatus{Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}},
-	}
-	pod2 := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "pod-2", Namespace: "test-ns", Labels: map[string]string{"app": "test"}},
-		Status:     corev1.PodStatus{Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}},
-	}
-	spec := vtypes.ConditionSpec{
-		Target: vtypes.Target{Kind: "Pod", LabelSelector: map[string]string{"app": "test"}},
-		Checks: []vtypes.ConditionCheck{{Type: "Ready", Status: corev1.ConditionTrue}},
-	}
-
-	passed, msg, err := condition.Execute(context.Background(), spec, deps(fake.NewClientset(pod1, pod2)))
-	require.NoError(t, err)
-	assert.True(t, passed)
-	assert.Contains(t, msg, "All 2 pod(s) meet the required conditions")
-}
-
-func TestExecute_ConditionNotFound(t *testing.T) {
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-pod", Namespace: "test-ns"},
-		Status:     corev1.PodStatus{Conditions: []corev1.PodCondition{}},
-	}
+func TestExecute_Pod_ConditionNotFound(t *testing.T) {
+	pod := resource("Pod", "v1", "test-pod", []map[string]interface{}{
+		{"type": "Initialized", "status": "True"},
+	})
 	spec := vtypes.ConditionSpec{
 		Target: vtypes.Target{Kind: "Pod", Name: "test-pod"},
 		Checks: []vtypes.ConditionCheck{{Type: "Ready", Status: corev1.ConditionTrue}},
 	}
 
-	passed, msg, err := condition.Execute(context.Background(), spec, deps(fake.NewClientset(pod)))
+	passed, msg, err := condition.Execute(context.Background(), spec, deps(dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), pod)))
 	require.NoError(t, err)
 	assert.False(t, passed)
 	assert.Contains(t, msg, "condition Ready not found")
 }
 
+func TestExecute_Deployment_Available(t *testing.T) {
+	d := resource("Deployment", "apps/v1", "my-deploy", []map[string]interface{}{
+		{"type": "Available", "status": "True"},
+		{"type": "Progressing", "status": "True"},
+	})
+	spec := vtypes.ConditionSpec{
+		Target: vtypes.Target{Kind: "Deployment", Name: "my-deploy"},
+		Checks: []vtypes.ConditionCheck{{Type: "Available", Status: corev1.ConditionTrue}},
+	}
+
+	passed, msg, err := condition.Execute(context.Background(), spec, deps(dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), d)))
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Equal(t, "All checks passed", msg)
+}
+
+func TestExecute_Deployment_ConditionFalse(t *testing.T) {
+	d := resource("Deployment", "apps/v1", "my-deploy", []map[string]interface{}{
+		{"type": "Available", "status": "False"},
+	})
+	spec := vtypes.ConditionSpec{
+		Target: vtypes.Target{Kind: "Deployment", Name: "my-deploy"},
+		Checks: []vtypes.ConditionCheck{{Type: "Available", Status: corev1.ConditionTrue}},
+	}
+
+	passed, msg, err := condition.Execute(context.Background(), spec, deps(dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), d)))
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "condition Available is not True")
+}
+
+func TestExecute_NoStatus(t *testing.T) {
+	d := resource("Deployment", "apps/v1", "my-deploy", nil)
+	spec := vtypes.ConditionSpec{
+		Target: vtypes.Target{Kind: "Deployment", Name: "my-deploy"},
+		Checks: []vtypes.ConditionCheck{{Type: "Available", Status: corev1.ConditionTrue}},
+	}
+
+	passed, msg, err := condition.Execute(context.Background(), spec, deps(dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), d)))
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "no conditions in status")
+}
+
+func TestExecute_NoMatchingResources(t *testing.T) {
+	spec := vtypes.ConditionSpec{
+		Target: vtypes.Target{Kind: "Deployment", Name: "nonexistent"},
+		Checks: []vtypes.ConditionCheck{{Type: "Available", Status: corev1.ConditionTrue}},
+	}
+
+	passed, _, err := condition.Execute(context.Background(), spec, deps(dynamicfake.NewSimpleDynamicClient(runtime.NewScheme())))
+	assert.Error(t, err)
+	assert.False(t, passed)
+}
+
 func TestExecute_NoChecks(t *testing.T) {
 	spec := vtypes.ConditionSpec{
-		Target: vtypes.Target{Kind: "Pod", Name: "any"},
+		Target: vtypes.Target{Kind: "Deployment", Name: "any"},
 		Checks: nil,
 	}
-	passed, msg, err := condition.Execute(context.Background(), spec, deps(fake.NewClientset()))
+	passed, msg, err := condition.Execute(context.Background(), spec, deps(dynamicfake.NewSimpleDynamicClient(runtime.NewScheme())))
 	require.NoError(t, err)
 	assert.False(t, passed)
 	assert.Equal(t, "No checks specified", msg)

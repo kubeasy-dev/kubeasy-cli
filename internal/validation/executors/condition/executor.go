@@ -1,5 +1,5 @@
 // Package condition implements the "condition" validation type.
-// It checks Kubernetes resource conditions (Ready, Available, etc.).
+// It checks .status.conditions on any Kubernetes resource (Pod, Deployment, StatefulSet, …).
 package condition
 
 import (
@@ -10,15 +10,19 @@ import (
 	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/validation/shared"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/validation/vtypes"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 )
 
 const (
 	errNoChecksSpecified = "No checks specified"
-	errNoMatchingPods    = "No matching pods found"
-	msgAllConditionsMet  = "All %d pod(s) meet the required conditions"
+	errNoMatchingObjects = "No matching resources found"
+	msgAllConditionsMet  = "All checks passed"
 )
 
-// Execute validates Kubernetes resource conditions for all matching pods.
+// Execute validates .status.conditions on any Kubernetes resource.
 func Execute(ctx context.Context, spec vtypes.ConditionSpec, deps shared.Deps) (bool, string, error) {
 	logger.Debug("Executing condition validation for %s", spec.Target.Kind)
 
@@ -26,41 +30,79 @@ func Execute(ctx context.Context, spec vtypes.ConditionSpec, deps shared.Deps) (
 		return false, errNoChecksSpecified, nil
 	}
 
-	pods, err := shared.GetTargetPods(ctx, deps, spec.Target)
+	gvr, err := shared.GetGVRForKind(spec.Target.Kind)
 	if err != nil {
 		return false, "", err
 	}
-	if len(pods) == 0 {
-		return false, errNoMatchingPods, nil
+
+	var objs []unstructured.Unstructured
+
+	switch {
+	case spec.Target.Name != "":
+		obj, err := deps.DynamicClient.Resource(gvr).Namespace(deps.Namespace).Get(ctx, spec.Target.Name, metav1.GetOptions{})
+		if err != nil {
+			return false, "", fmt.Errorf("failed to get %s %s: %w", spec.Target.Kind, spec.Target.Name, err)
+		}
+		objs = []unstructured.Unstructured{*obj}
+
+	case len(spec.Target.LabelSelector) > 0:
+		list, err := deps.DynamicClient.Resource(gvr).Namespace(deps.Namespace).List(ctx, metav1.ListOptions{
+			LabelSelector: labels.SelectorFromSet(spec.Target.LabelSelector).String(),
+		})
+		if err != nil {
+			return false, "", fmt.Errorf("failed to list %s: %w", spec.Target.Kind, err)
+		}
+		if len(list.Items) == 0 {
+			return false, errNoMatchingObjects, nil
+		}
+		objs = list.Items
+
+	default:
+		return false, "No target name or labelSelector specified", nil
 	}
 
 	allPassed := true
 	var messages []string
 
-	for _, pod := range pods {
+	for _, obj := range objs {
+		name := obj.GetName()
+		rawConditions, found, err := unstructured.NestedSlice(obj.Object, "status", "conditions")
+		if err != nil || !found {
+			allPassed = false
+			messages = append(messages, fmt.Sprintf("%s %s: no conditions in status", spec.Target.Kind, name))
+			continue
+		}
+
 		for _, check := range spec.Checks {
-			passed := false
 			conditionFound := false
-			for _, podCond := range pod.Status.Conditions {
-				if string(podCond.Type) == check.Type {
-					conditionFound = true
-					passed = podCond.Status == check.Status
-					break
+			passed := false
+			for _, raw := range rawConditions {
+				cond, ok := raw.(map[string]interface{})
+				if !ok {
+					continue
 				}
+				condType, _ := cond["type"].(string)
+				if condType != check.Type {
+					continue
+				}
+				conditionFound = true
+				condStatus, _ := cond["status"].(string)
+				passed = corev1.ConditionStatus(condStatus) == check.Status
+				break
 			}
 			if !conditionFound {
-				logger.Debug("Pod %s: condition type %s not found (available: %v)", pod.Name, check.Type, shared.GetPodConditionTypes(&pod))
+				logger.Debug("%s %s: condition %s not found", spec.Target.Kind, name, check.Type)
 				allPassed = false
-				messages = append(messages, fmt.Sprintf("Pod %s: condition %s not found", pod.Name, check.Type))
+				messages = append(messages, fmt.Sprintf("%s %s: condition %s not found", spec.Target.Kind, name, check.Type))
 			} else if !passed {
 				allPassed = false
-				messages = append(messages, fmt.Sprintf("Pod %s: condition %s is not %s", pod.Name, check.Type, check.Status))
+				messages = append(messages, fmt.Sprintf("%s %s: condition %s is not %s", spec.Target.Kind, name, check.Type, check.Status))
 			}
 		}
 	}
 
 	if allPassed {
-		return true, fmt.Sprintf(msgAllConditionsMet, len(pods)), nil
+		return true, msgAllConditionsMet, nil
 	}
 	return false, strings.Join(messages, "; "), nil
 }

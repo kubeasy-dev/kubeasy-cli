@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/fake"
@@ -63,16 +63,23 @@ func TestExecute_WrongSpecType(t *testing.T) {
 }
 
 func TestExecuteAll(t *testing.T) {
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-pod", Namespace: "test-ns"},
-		Status: corev1.PodStatus{
-			Phase: corev1.PodRunning,
-			Conditions: []corev1.PodCondition{
-				{Type: corev1.PodReady, Status: corev1.ConditionTrue},
+	// condition executor now uses the dynamic client for all resource types
+	pod := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "v1",
+		"kind":       "Pod",
+		"metadata":   map[string]interface{}{"name": "test-pod", "namespace": "test-ns"},
+		"status": map[string]interface{}{
+			"conditions": []interface{}{
+				map[string]interface{}{"type": "Ready", "status": "True"},
 			},
 		},
-	}
-	e := newTestExecutor(pod)
+	}}
+	e := validation.NewExecutor(
+		fake.NewClientset(),
+		dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), pod),
+		&rest.Config{},
+		"test-ns",
+	)
 
 	validations := []validation.Validation{
 		{

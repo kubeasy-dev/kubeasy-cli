@@ -1,0 +1,42 @@
+version: 2
+# GoReleaser config for nightly / pre-release builds.
+# Triggered by .github/workflows/prerelease.yml — NOT the official release flow.
+# Publishes a GitHub pre-release tagged "nightly"; skips NPM, Homebrew, Scoop, and R2.
+
+project_name: kubeasy-cli
+before:
+  hooks:
+    - sh -c 'echo nightly > .latest-version'
+release:
+  github:
+    owner: kubeasy-dev
+    name: kubeasy-cli
+  prerelease: true
+  replace_existing_artifacts: true
+  name_template: "Nightly ({{ .ShortCommit }})"
+builds:
+  - id: kubeasy-cli
+    main: ./main.go
+    binary: kubeasy
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - "-s -w -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.Version=nightly-{{.ShortCommit}}' -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.LogFilePath=/tmp/kubeasy-cli.log' -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.WebsiteURL=https://kubeasy.dev' -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.ExercicesRepoBranch=main'"
+    env:
+      - GOPRIVATE=github.com/kubeasy-dev/challenge-operator
+archives:
+  - id: archive
+    name_template: "{{ .ProjectName }}_{{ .Tag }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+      - "build/**"
+checksum:
+  name_template: "checksums.txt"
+changelog:
+  disable: true

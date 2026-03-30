@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'internal/validation/types.go'
+      - 'internal/validation/vtypes/types.go'
       - 'hack/generate-schema/**'
   workflow_dispatch:
 

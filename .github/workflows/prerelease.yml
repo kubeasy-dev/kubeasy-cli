@@ -1,0 +1,68 @@
+name: "Pre-release Build"
+
+on:
+  workflow_dispatch: {}
+  # Uncomment to enable automatic nightly builds at 2 AM UTC:
+  # schedule:
+  #   - cron: '0 2 * * *'
+
+# Minimal permissions at workflow level - each job specifies what it needs
+permissions: {}
+
+jobs:
+  prerelease:
+    name: Build and publish pre-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version: "1.26.1"
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Delete existing nightly release and tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete nightly --yes --cleanup-tag 2>/dev/null || true
+
+      - name: Create nightly tag on HEAD
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f nightly
+          git push origin nightly --force
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29 # v7.0.0
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --config .goreleaser-prerelease.yaml --clean --skip=validate --timeout=60m
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          echo "### ✅ Pre-release build published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** \`${SHORT_SHA}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Release:** [nightly](https://github.com/${{ github.repository }}/releases/tag/nightly)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Install with:" >> $GITHUB_STEP_SUMMARY
+          echo '```sh' >> $GITHUB_STEP_SUMMARY
+          echo "KUBEASY_VERSION=nightly curl -fsSL https://download.kubeasy.dev/install.sh | sh" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY

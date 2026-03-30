@@ -194,8 +194,8 @@ func parseArrayAccessor(accessor string, position int, originalPath string) (Pat
 	}, nil
 }
 
-// isValidFieldName checks if a string is a valid Go field name.
-// Must start with a letter, followed by letters or digits.
+// isValidFieldName checks if a string is a valid Kubernetes field name.
+// Must start with a letter, followed by letters, digits, or underscores.
 func isValidFieldName(name string) bool {
 	if name == "" {
 		return false

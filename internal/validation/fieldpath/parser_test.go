@@ -44,7 +44,7 @@ func TestParse_SimpleFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens, err := Parse(tt.path)
+			tokens, err := ParseStatus(tt.path)
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedTokens, tokens)
 		})
@@ -113,7 +113,7 @@ func TestParse_ArrayIndex(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens, err := Parse(tt.path)
+			tokens, err := ParseStatus(tt.path)
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedTokens, tokens)
 		})
@@ -169,7 +169,7 @@ func TestParse_ArrayFilter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens, err := Parse(tt.path)
+			tokens, err := ParseStatus(tt.path)
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedTokens, tokens)
 		})
@@ -209,7 +209,7 @@ func TestParse_ComplexPaths(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens, err := Parse(tt.path)
+			tokens, err := ParseStatus(tt.path)
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedTokens, tokens)
 		})
@@ -271,7 +271,7 @@ func TestParse_ErrorCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens, err := Parse(tt.path)
+			tokens, err := ParseStatus(tt.path)
 			assert.Error(t, err)
 			assert.Nil(t, tokens)
 			assert.Contains(t, err.Error(), tt.errContains)
@@ -305,7 +305,7 @@ func TestParse_AutoPrefixing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens, err := Parse(tt.path)
+			tokens, err := ParseStatus(tt.path)
 			require.NoError(t, err)
 			require.NotEmpty(t, tokens)
 			assert.Equal(t, tt.firstToken, tokens[0])
@@ -373,7 +373,7 @@ func TestIsValidFieldName(t *testing.T) {
 		{"field123ABC", true},
 		{"123field", false},
 		{"field-name", false},
-		{"field_name", false},
+		{"field_name", true},
 		{"field.name", false},
 		{"", false},
 		{"field name", false},
@@ -391,7 +391,7 @@ func TestParse_SecurityValidation(t *testing.T) {
 	t.Run("path too long", func(t *testing.T) {
 		// Create a path longer than MaxPathLength
 		longPath := strings.Repeat("a.", MaxPathLength/2+1)
-		tokens, err := Parse(longPath)
+		tokens, err := ParseStatus(longPath)
 		assert.Error(t, err)
 		assert.Nil(t, tokens)
 		assert.Contains(t, err.Error(), "exceeds maximum length")
@@ -400,14 +400,14 @@ func TestParse_SecurityValidation(t *testing.T) {
 	t.Run("path too deep", func(t *testing.T) {
 		// Create a path deeper than MaxPathDepth
 		deepPath := strings.Repeat("a.", MaxPathDepth+1)
-		tokens, err := Parse(deepPath)
+		tokens, err := ParseStatus(deepPath)
 		assert.Error(t, err)
 		assert.Nil(t, tokens)
 		assert.Contains(t, err.Error(), "exceeds maximum depth")
 	})
 
 	t.Run("mismatched brackets - unclosed", func(t *testing.T) {
-		tokens, err := Parse("field[0.nested")
+		tokens, err := ParseStatus("field[0.nested")
 		assert.Error(t, err)
 		assert.Nil(t, tokens)
 		assert.Contains(t, err.Error(), "mismatched brackets")
@@ -415,7 +415,7 @@ func TestParse_SecurityValidation(t *testing.T) {
 	})
 
 	t.Run("mismatched brackets - extra closing", func(t *testing.T) {
-		tokens, err := Parse("field].nested")
+		tokens, err := ParseStatus("field].nested")
 		assert.Error(t, err)
 		assert.Nil(t, tokens)
 		assert.Contains(t, err.Error(), "mismatched brackets")
@@ -426,7 +426,7 @@ func TestParse_SecurityValidation(t *testing.T) {
 		// Create a path just under the limits
 		path := strings.Repeat("a.", 10)
 		path = strings.TrimSuffix(path, ".")
-		tokens, err := Parse(path)
+		tokens, err := ParseStatus(path)
 		assert.NoError(t, err)
 		assert.NotNil(t, tokens)
 	})

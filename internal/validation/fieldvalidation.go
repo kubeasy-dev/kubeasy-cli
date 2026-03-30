@@ -60,7 +60,7 @@ func ValidateFieldPath(kind string, fieldPath string) error {
 	}
 
 	// Parse field path to tokens
-	tokens, err := fieldpath.Parse(fieldPath)
+	tokens, err := fieldpath.ParseStatus(fieldPath)
 	if err != nil {
 		return fmt.Errorf("invalid field path syntax: %w", err)
 	}

@@ -168,17 +168,27 @@ Handles direct deployment of infrastructure and challenges without ArgoCD.
   - `Parse(data)` - Parses YAML and validates specs
   - Security: URL validation prevents injection attacks
 
-- `executor.go` - Executes validations against Kubernetes cluster
+- `executor.go` - Thin router; dispatches to type-specific executor sub-packages
   - `NewExecutor(clientset, dynamicClient, restConfig, namespace)` - Creates executor
-  - `ExecuteAll(ctx, validations)` - Runs all validations sequentially
-  - `Execute(ctx, validation)` - Routes to type-specific executors
-  - Type-specific methods: `executeStatus`, `executeCondition`, `executeLog`, `executeEvent`, `executeConnectivity`
+  - `Execute(ctx, validation)` - Routes to `executors/<type>/executor.go`
+  - `ExecuteAll(ctx, validations)` - Runs all validations in parallel
+  - `ExecuteSequential(ctx, validations, failFast)` - Runs validations sequentially
 
-- `types.go` - Type definitions for validation configs
-  - `ValidationConfig` - Top-level config with validations array
-  - `Validation` - Single validation with key, type, and spec
-  - Spec types: `StatusSpec`, `ConditionSpec`, `LogSpec`, `EventSpec`, `ConnectivitySpec`
+- `types.go` - Re-exports all types and constants from `vtypes/` (type aliases for backward compat)
+
+- `vtypes/types.go` - Leaf package with all spec type definitions (no internal imports)
+  - All spec types: `StatusSpec`, `ConditionSpec`, `LogSpec`, `EventSpec`, `ConnectivitySpec`, `RbacSpec`, `SpecSpec`, `TriggeredSpec`, etc.
   - `Result` - Validation result with key, passed flag, and message
+  - `RegisteredTypes` - Drives Zod schema generation
+
+- `shared/` - Shared helpers used by multiple executor sub-packages
+  - `deps.go` - `Deps` struct (injected clients, namespace, probeMu)
+  - `gvr.go` - `GetGVRForKind` (kind → GroupVersionResource mapping)
+  - `pods.go` - `GetTargetPods`, `GetPodsForResource`
+  - `compare.go` - `CompareValues`, `CompareTypedValues`, `GetNestedInt64`
+
+- `executors/` - One sub-package per validation type, each with `Execute()` and tests
+  - `status/`, `condition/`, `log/`, `event/`, `rbac/`, `spec/`, `connectivity/`, `triggered/`
 
 #### `internal/kube/`
 
@@ -254,16 +264,26 @@ The CLI now uses a **self-contained validation executor** that loads validation 
 
 To add a new validation type, touch **exactly these locations** — nothing else:
 
-1. **`internal/validation/types.go`**
+1. **`internal/validation/vtypes/types.go`**
    - Add a `TypeXxx ValidationType = "xxx"` constant
    - Add the `XxxSpec` and optional `XxxCheck` structs
    - Add an entry to `RegisteredTypes` (drives Zod schema generation automatically)
 
-2. **`internal/validation/loader.go`** — add a `case TypeXxx:` in `parseSpec()` with field validation
+2. **`internal/validation/types.go`** — re-export the new constant and type alias (follow the existing pattern)
 
-3. **`internal/validation/executor.go`** — add a `case TypeXxx:` in `Execute()` + implement `executeXxx()`
+3. **`internal/validation/loader.go`** — add a `case TypeXxx:` in `parseSpec()` with field validation
 
-4. **Tests** — add parsing tests in `loader_test.go` and execution tests in `executor_test.go`
+4. **`internal/validation/executors/xxx/executor.go`** — create a new sub-package with:
+   ```go
+   package xxx
+   func Execute(ctx context.Context, spec vtypes.XxxSpec, deps shared.Deps) (bool, string, error)
+   ```
+
+5. **`internal/validation/executor.go`** — add a `case TypeXxx:` in `Execute()` that calls `xxx.Execute(ctx, s, e.deps)`
+
+6. **Tests**
+   - Parsing tests in `loader_test.go`
+   - Execution tests in `internal/validation/executors/xxx/executor_test.go`
 
 ### Zod Schema Generation
 

@@ -10,10 +10,10 @@ import (
 var (
 	// Regex patterns for parsing field path segments
 	// Matches: field, field[0], field[key=value], field[] (empty brackets caught later)
-	segmentPattern   = regexp.MustCompile(`^([a-zA-Z][a-zA-Z0-9]*)((?:\[[^\]]*\])*)$`)
+	segmentPattern   = regexp.MustCompile(`^([a-zA-Z][a-zA-Z0-9_]*)((?:\[[^\]]*\])*)$`)
 	arrayPattern     = regexp.MustCompile(`\[([^\]]*)\]`)
-	filterPattern    = regexp.MustCompile(`^([a-zA-Z][a-zA-Z0-9]*)=(.+)$`)
-	fieldNamePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]*$`)
+	filterPattern    = regexp.MustCompile(`^([a-zA-Z][a-zA-Z0-9_]*)=(.+)$`)
+	fieldNamePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]*$`)
 )
 
 const (
@@ -23,18 +23,16 @@ const (
 	MaxPathDepth = 50
 )
 
-// Parse parses a field path string into a sequence of tokens.
+// ParseStatus parses a status field path string into a sequence of tokens.
 //
-// The input path is automatically prefixed with "status." before parsing.
-// NOTE: This hardcoded prefix makes the parser specific to Kubernetes status fields.
-// This is intentional for the current use case (status validation), but limits reusability.
-// If you need to parse paths in other contexts, consider creating a separate function.
+// The input path is automatically prefixed with "status." before parsing —
+// callers provide paths relative to .status (e.g. "readyReplicas", not "status.readyReplicas").
 //
 // Examples:
 //   - "readyReplicas" -> []PathToken{FieldToken{Name: "status"}, FieldToken{Name: "readyReplicas"}}
 //   - "containerStatuses[0].restartCount" -> tokens for status, containerStatuses, [0], restartCount
 //   - "conditions[type=Ready].status" -> tokens for status, conditions, [type=Ready], status
-func Parse(path string) ([]PathToken, error) {
+func ParseStatus(path string) ([]PathToken, error) {
 	if path == "" {
 		return nil, fmt.Errorf("field path cannot be empty")
 	}
@@ -196,8 +194,8 @@ func parseArrayAccessor(accessor string, position int, originalPath string) (Pat
 	}, nil
 }
 
-// isValidFieldName checks if a string is a valid Go field name.
-// Must start with a letter, followed by letters or digits.
+// isValidFieldName checks if a string is a valid Kubernetes field name.
+// Must start with a letter, followed by letters, digits, or underscores.
 func isValidFieldName(name string) bool {
 	if name == "" {
 		return false

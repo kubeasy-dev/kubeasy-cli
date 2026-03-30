@@ -1,0 +1,403 @@
+// Package vtypes defines all validation spec types used by the validation system.
+// It is a leaf package with no internal imports, enabling executor sub-packages
+// to import it without creating circular dependencies.
+package vtypes
+
+import (
+	"time"
+
+	corev1 "k8s.io/api/core/v1"
+)
+
+// ValidationConfig represents the top-level structure of a challenge.yaml validation section
+// It contains all validations that must pass for a challenge to be considered complete
+type ValidationConfig struct {
+	// Validations is the list of all validation checks for a challenge
+	// Note: YAML key is "objectives" to match challenge.yaml format
+	Validations []Validation `yaml:"objectives" json:"objectives"`
+}
+
+// Validation represents a single validation definition with its type and specification
+// Each validation maps to one objective in the challenge
+type Validation struct {
+	// Key is the unique identifier for this validation, used to match backend objectives
+	// Convention: use kebab-case, e.g., "deployment-ready", "service-accessible"
+	Key string `yaml:"key" json:"key"`
+	// Title is the human-readable name displayed to users
+	Title string `yaml:"title" json:"title"`
+	// Description explains what this validation checks and hints at the solution
+	Description string `yaml:"description" json:"description"`
+	// Order determines the display sequence (lower numbers appear first)
+	Order int `yaml:"order" json:"order"`
+	// Type specifies which validation executor to use (status, condition, log, event, connectivity)
+	Type ValidationType `yaml:"type" json:"type"`
+	// Spec contains the type-specific configuration (parsed based on Type)
+	// Excluded from serialization - use RawSpec for marshaling
+	Spec interface{} `yaml:"-" json:"-"`
+	// RawSpec holds the unparsed spec before type-specific parsing
+	// Used for YAML parsing and JSON serialization of the original spec
+	RawSpec interface{} `yaml:"spec" json:"spec"`
+}
+
+// ValidationType represents the type of validation to execute
+// Each type has a corresponding spec structure and executor
+type ValidationType string
+
+const (
+	// ConnectivityModeExternal sends HTTP requests from the CLI host via net/http (no pod exec).
+	ConnectivityModeExternal = "external"
+	// ConnectivityModeInternal executes curl inside a source pod via SPDY exec (default).
+	ConnectivityModeInternal = "internal"
+)
+
+const (
+	// TypeStatus validates arbitrary status fields with operators
+	// Value: "status" - Use when checking numeric fields, string values, or any status field
+	TypeStatus ValidationType = "status"
+	// TypeCondition validates Kubernetes resource conditions (shorthand for common condition checks)
+	// Value: "condition" - Use when checking Ready, Available, Progressing conditions
+	TypeCondition ValidationType = "condition"
+	// TypeLog searches container logs for expected strings
+	// Value: "log" - Use when verifying application behavior, startup messages, or processed requests
+	TypeLog ValidationType = "log"
+	// TypeEvent validates that forbidden Kubernetes events are NOT present
+	// Value: "event" - Use when ensuring pods aren't crash-looping, OOMKilled, or failing to schedule
+	TypeEvent ValidationType = "event"
+	// TypeConnectivity tests HTTP connectivity between pods
+	// Value: "connectivity" - Use when verifying Services, NetworkPolicies, or inter-pod communication
+	TypeConnectivity ValidationType = "connectivity"
+	// TypeRbac validates ServiceAccount permissions using SubjectAccessReview
+	// Value: "rbac" - Use when verifying RBAC rules grant or deny specific actions
+	TypeRbac ValidationType = "rbac"
+	// TypeSpec validates resource manifest fields (spec, metadata, etc.)
+	// Value: "spec" - Use when verifying configuration was applied correctly (probes, limits, volumes, etc.)
+	TypeSpec ValidationType = "spec"
+	// TypeTriggered orchestrates a trigger action followed by a set of then validators
+	// Value: "triggered" - Use when validation requires a prior action (load, delete, rollout, scale, wait)
+	TypeTriggered ValidationType = "triggered"
+)
+
+// TriggerType represents the kind of action to perform before running then validators
+type TriggerType string
+
+const (
+	// TriggerTypeLoad generates HTTP traffic to trigger autoscaling or load-based behavior
+	TriggerTypeLoad TriggerType = "load"
+	// TriggerTypeWait is a no-op that simply sleeps for waitSeconds (useful for time-based events)
+	TriggerTypeWait TriggerType = "wait"
+	// TriggerTypeDelete deletes a Kubernetes resource (useful for testing persistence after restart)
+	TriggerTypeDelete TriggerType = "delete"
+	// TriggerTypeRollout patches a Deployment container image to trigger a rolling update
+	TriggerTypeRollout TriggerType = "rollout"
+	// TriggerTypeScale patches the replica count of a resource (useful for PDB, StatefulSet tests)
+	TriggerTypeScale TriggerType = "scale"
+)
+
+// TriggerConfig defines the action to perform before running then validators
+type TriggerConfig struct {
+	// Type is the kind of trigger action to execute
+	Type TriggerType `yaml:"type" json:"type"`
+
+	// URL is the HTTP endpoint to send load to (load trigger only)
+	URL string `yaml:"url,omitempty" json:"url,omitempty"`
+	// RequestsPerSecond controls the load rate (load trigger only, default: 10)
+	RequestsPerSecond int `yaml:"requestsPerSecond,omitempty" json:"requestsPerSecond,omitempty"`
+	// DurationSeconds is how long to send load (load trigger only, default: 10)
+	DurationSeconds int `yaml:"durationSeconds,omitempty" json:"durationSeconds,omitempty"`
+	// SourcePod specifies a pod to exec curl from for load generation (load trigger only).
+	// When nil, requests are sent from the CLI host via net/http.
+	SourcePod *SourcePod `yaml:"sourcePod,omitempty" json:"sourcePod,omitempty"`
+
+	// Target identifies the Kubernetes resource to act on (delete, rollout, scale triggers)
+	Target *Target `yaml:"target,omitempty" json:"target,omitempty"`
+
+	// Image is the container image to set during a rollout (rollout trigger only)
+	Image string `yaml:"image,omitempty" json:"image,omitempty"`
+	// Container is the container name to update during a rollout (rollout trigger only).
+	// Defaults to the first container if not specified.
+	Container string `yaml:"container,omitempty" json:"container,omitempty"`
+
+	// Replicas is the target replica count (scale trigger only)
+	Replicas *int32 `yaml:"replicas,omitempty" json:"replicas,omitempty"`
+
+	// WaitSeconds is how long to sleep (wait trigger only)
+	WaitSeconds int `yaml:"waitSeconds,omitempty" json:"waitSeconds,omitempty"`
+}
+
+// TriggeredSpec orchestrates a trigger action followed by a set of then validators.
+// Pure orchestrator — delegates all validation logic to existing executors.
+type TriggeredSpec struct {
+	// Trigger defines the action to perform before validating
+	Trigger TriggerConfig `yaml:"trigger" json:"trigger"`
+	// WaitAfterSeconds is how long to wait after the trigger before running then validators
+	WaitAfterSeconds int `yaml:"waitAfterSeconds" json:"waitAfterSeconds"`
+	// Then lists the validators to run after the trigger + wait.
+	// All validators must pass for the triggered validation to succeed.
+	Then []Validation `yaml:"then" json:"then"`
+}
+
+// Target identifies a Kubernetes resource to validate
+// Use either Name for exact match or LabelSelector for multiple resources
+type Target struct {
+	// Kind is the Kubernetes resource type to target
+	// Common values: Deployment, Pod, Service, StatefulSet, Job, ConfigMap, Secret, DaemonSet
+	Kind string `yaml:"kind" json:"kind"`
+	// Name matches a specific resource by exact name
+	// If both Name and LabelSelector are provided, Name takes precedence
+	Name string `yaml:"name,omitempty" json:"name,omitempty"`
+	// LabelSelector matches resources by labels, e.g., {"app": "nginx", "tier": "frontend"}
+	// For single-resource validations, the first matching resource is used
+	LabelSelector map[string]string `yaml:"labelSelector,omitempty" json:"labelSelector,omitempty"`
+}
+
+// StatusSpec validates arbitrary status fields using operators
+// Use when: checking numeric fields, string values, or any status field
+// Note: Field paths are relative to status (no "status." prefix needed)
+type StatusSpec struct {
+	// Target specifies which Kubernetes resource to check
+	Target Target `yaml:"target" json:"target"`
+	// Checks lists all field validations that must pass
+	Checks []StatusCheck `yaml:"checks" json:"checks"`
+}
+
+// StatusCheck defines a field-based status validation
+// Compares a resource status field value against an expected value using an operator
+type StatusCheck struct {
+	// Field is the path to the status field to check (relative to status)
+	// Examples: "readyReplicas", "containerStatuses[0].restartCount", "conditions[type=Ready].status"
+	// Array indexing: [0], [1], etc.
+	// Array filtering: [key=value] to find element where field equals value
+	Field string `yaml:"field" json:"field"`
+	// Operator is the comparison operator to use
+	// Supported: "==" (equal), "!=" (not equal), ">" (greater than),
+	// "<" (less than), ">=" (greater or equal), "<=" (less or equal)
+	Operator string `yaml:"operator" json:"operator"`
+	// Value is the expected value to compare against
+	// Supports: string, int64, bool, float64
+	Value interface{} `yaml:"value" json:"value"`
+}
+
+// ConditionSpec validates Kubernetes resource conditions (shorthand)
+// Use when: checking standard Kubernetes conditions like Ready, Available, Progressing
+// This is a convenient shorthand for the most common validation pattern
+type ConditionSpec struct {
+	// Target specifies which Kubernetes resource to check
+	Target Target `yaml:"target" json:"target"`
+	// Checks lists the condition checks that must ALL pass
+	Checks []ConditionCheck `yaml:"checks" json:"checks"`
+}
+
+// ConditionCheck defines a single condition check
+// Maps to Kubernetes status.conditions[] entries
+type ConditionCheck struct {
+	// Type is the condition type to check
+	// Deployment: "Available", "Progressing", "ReplicaFailure"
+	// Pod: "Ready", "ContainersReady", "Initialized", "PodScheduled"
+	// StatefulSet: "Ready"
+	// Job: "Complete", "Failed"
+	Type string `yaml:"type" json:"type"`
+	// Status is the expected condition status
+	// Values: "True", "False", "Unknown"
+	Status corev1.ConditionStatus `yaml:"status" json:"status"`
+}
+
+// LogSpec searches container logs for expected strings
+// Use when: verifying application behavior, startup completion, or processed requests
+type LogSpec struct {
+	// Target specifies which Pod(s) to check logs from
+	Target Target `yaml:"target" json:"target"`
+	// Container specifies which container's logs to check (optional if pod has single container)
+	// Required for multi-container pods, e.g., "nginx", "sidecar", "init-container"
+	Container string `yaml:"container,omitempty" json:"container,omitempty"`
+	// ExpectedStrings lists strings that must ALL appear in the logs
+	// Tips: use unique strings, avoid timestamps, consider log format
+	// Examples: "Server started", "Connected to database", "HTTP/1.1 200"
+	ExpectedStrings []string `yaml:"expectedStrings" json:"expectedStrings"`
+	// SinceSeconds limits log search to recent entries (optional)
+	// Useful for avoiding false positives from old logs, e.g., 300 for last 5 minutes
+	SinceSeconds int `yaml:"sinceSeconds,omitempty" json:"sinceSeconds,omitempty"`
+}
+
+// EventSpec checks for absence of problematic Kubernetes events
+// Use when: ensuring pods aren't crash-looping or failing to pull images
+type EventSpec struct {
+	// Target specifies which resource's events to check
+	Target Target `yaml:"target" json:"target"`
+	// ForbiddenReasons lists event reasons that should NOT be present
+	// Common values: CrashLoopBackOff, ImagePullBackOff, OOMKilled, Error, BackOff,
+	// FailedScheduling, FailedMount, Unhealthy, Evicted, NodeNotReady
+	ForbiddenReasons []string `yaml:"forbiddenReasons" json:"forbiddenReasons"`
+	// SinceSeconds limits the time window for event checking (optional).
+	// Events older than this are ignored, e.g., 600 for last 10 minutes.
+	// When omitted (0) in YAML: the loader applies DefaultEventSinceSeconds (300s).
+	// When explicitly set to 0 in Go code: no time filter is applied (all events checked).
+	SinceSeconds int `yaml:"sinceSeconds,omitempty" json:"sinceSeconds,omitempty"`
+}
+
+// ConnectivitySpec tests HTTP connectivity between pods in the cluster
+// Use when: verifying Services work, NetworkPolicies allow traffic, or inter-pod communication
+type ConnectivitySpec struct {
+	// Mode controls how connectivity checks are executed.
+	// "internal" (default, empty string): existing pod exec via curl (SPDY)
+	// "external": CLI host sends HTTP request via net/http — no pod exec
+	// When absent, defaults to internal behavior for full backwards compatibility.
+	Mode string `yaml:"mode,omitempty" json:"mode,omitempty"`
+	// SourcePod specifies which pod to execute curl/wget commands from
+	// The pod must have curl or wget installed
+	// Security note: ensure source pods are trusted as they execute HTTP requests
+	SourcePod SourcePod `yaml:"sourcePod" json:"sourcePod"`
+	// Targets lists all connectivity checks to perform from the source pod
+	Targets []ConnectivityCheck `yaml:"targets" json:"targets"`
+}
+
+// SourcePod identifies the pod from which connectivity checks are executed
+// Use either Name or LabelSelector to identify the pod, or leave both empty to
+// use a CLI-managed probe pod deployed into the challenge namespace.
+type SourcePod struct {
+	// Name matches a specific pod by exact name (mutually exclusive with LabelSelector)
+	Name string `yaml:"name,omitempty" json:"name,omitempty"`
+	// LabelSelector matches pods by labels, uses first matching pod
+	// Example: {"app": "curl-client"} or {"role": "tester"}
+	LabelSelector map[string]string `yaml:"labelSelector,omitempty" json:"labelSelector,omitempty"`
+	// Namespace is the namespace for the source pod.
+	// For probe mode (no Name/LabelSelector): probe pod is created here (defaults to challenge namespace).
+	// For existing pod lookup (Name or LabelSelector set): executor queries this namespace instead of e.namespace.
+	Namespace string `yaml:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ConnectivityCheck represents a single HTTP connectivity test
+// Executes an HTTP request from source pod and validates the response code
+type ConnectivityCheck struct {
+	// URL is the HTTP endpoint to test from the source pod
+	// Format: http://service-name:port/path or http://pod-ip:port/path
+	// Examples: "http://nginx-service:80/health", "http://api:8080/ready"
+	// For cross-namespace: "http://service-name.namespace.svc.cluster.local:port"
+	URL string `yaml:"url" json:"url"`
+	// ExpectedStatusCode is the HTTP status code that indicates success
+	// Common values: 200 (OK), 201 (Created), 204 (No Content), 301/302 (Redirects)
+	// Use 0 to verify connection failed (timeout or refused, useful for NetworkPolicy tests)
+	ExpectedStatusCode int `yaml:"expectedStatusCode" json:"expectedStatusCode"`
+	// TimeoutSeconds is the maximum time to wait for a response (optional).
+	// Default: 5 seconds (DefaultConnectivityTimeoutSeconds). Increase for slow services.
+	TimeoutSeconds int `yaml:"timeoutSeconds,omitempty" json:"timeoutSeconds,omitempty"`
+	// HostHeader overrides the HTTP Host header sent with the request.
+	// Only used when Mode is "external". Absent: Host is derived from URL automatically.
+	// Use when URL is a direct IP but Ingress routes by hostname.
+	HostHeader string `yaml:"hostHeader,omitempty" json:"hostHeader,omitempty"`
+	// TLS configures TLS validation behaviour for this external connectivity check.
+	// Optional — nil means no explicit TLS checks (Go default TLS verification applies).
+	// Only meaningful when Mode is "external" and URL scheme is https://.
+	TLS *TLSConfig `yaml:"tls,omitempty" json:"tls,omitempty"`
+}
+
+// TLSConfig controls TLS validation behaviour for a single external connectivity check.
+// Optional — omitting it leaves Go's default TLS verification in place.
+// InsecureSkipVerify takes priority over ValidateExpiry and ValidateSANs when true.
+type TLSConfig struct {
+	// InsecureSkipVerify skips ALL certificate checks (CA trust, expiry, SANs).
+	// Primary use: cert-manager self-signed certs in Kind clusters.
+	InsecureSkipVerify bool `yaml:"insecureSkipVerify,omitempty" json:"insecureSkipVerify,omitempty"`
+
+	// ValidateExpiry explicitly checks cert NotAfter > now with a friendly error message.
+	// Only active when InsecureSkipVerify is false.
+	ValidateExpiry bool `yaml:"validateExpiry,omitempty" json:"validateExpiry,omitempty"`
+
+	// ValidateSANs explicitly checks that the request hostname appears in cert DNSNames.
+	// Uses HostHeader for SAN matching when set (virtual-host routing pattern).
+	// Only active when InsecureSkipVerify is false.
+	ValidateSANs bool `yaml:"validateSANs,omitempty" json:"validateSANs,omitempty"`
+}
+
+// RbacSpec validates ServiceAccount permissions using SubjectAccessReview
+// Use when: verifying that a ServiceAccount has exactly the right permissions (not too broad, not too narrow)
+type RbacSpec struct {
+	// ServiceAccount is the name of the ServiceAccount to check permissions for
+	ServiceAccount string `yaml:"serviceAccount" json:"serviceAccount"`
+	// Namespace is the namespace of the ServiceAccount
+	Namespace string `yaml:"namespace" json:"namespace"`
+	// Checks lists all permission checks that must pass
+	Checks []RbacCheck `yaml:"checks" json:"checks"`
+}
+
+// RbacCheck defines a single RBAC permission check using SubjectAccessReview
+type RbacCheck struct {
+	// Verb is the Kubernetes API verb to check
+	// Supported: get, list, watch, create, update, patch, delete, deletecollection
+	Verb string `yaml:"verb" json:"verb"`
+	// Resource is the Kubernetes resource type to check (e.g., pods, configmaps, secrets)
+	Resource string `yaml:"resource" json:"resource"`
+	// Subresource is an optional Kubernetes subresource to check (e.g., exec, log, portforward)
+	// Example: resource: pods, subresource: exec checks pods/exec permission
+	Subresource string `yaml:"subresource,omitempty" json:"subresource,omitempty"`
+	// Namespace overrides the check namespace for cross-namespace testing
+	// If empty, uses the ServiceAccount's namespace from RbacSpec
+	Namespace string `yaml:"namespace,omitempty" json:"namespace,omitempty"`
+	// Allowed specifies whether the action should be permitted (true) or denied (false)
+	// Use allowed: false for anti-bypass checks (e.g., verifying cluster-admin was not granted)
+	// NOTE: Go's zero value for bool is false. Always set this field explicitly — omitting it
+	// silently creates an anti-bypass check, which will pass if the SA has no permissions (default).
+	Allowed bool `yaml:"allowed" json:"allowed"`
+}
+
+// SpecSpec validates resource manifest fields using path-based checks
+// Use when: verifying that configuration was applied (health probes, resource limits, volume mounts, etc.)
+// Works with any Kubernetes resource kind via the dynamic client
+type SpecSpec struct {
+	// Target specifies which Kubernetes resource to check
+	Target Target `yaml:"target" json:"target"`
+	// Checks lists all field checks that must pass
+	Checks []SpecCheck `yaml:"checks" json:"checks"`
+}
+
+// SpecCheck defines a single manifest field check
+// Exactly one of Exists, Value, or Contains must be set
+type SpecCheck struct {
+	// Path is the dot-separated field path from the root of the resource
+	// Supports array index: "spec.template.spec.containers[0].livenessProbe"
+	// Supports array filter: "spec.template.spec.containers[name=app].resources"
+	Path string `yaml:"path" json:"path"`
+	// Exists checks whether the field is present (true) or absent (false)
+	// When true: fails if the field is missing
+	// When false: fails if the field is present
+	Exists *bool `yaml:"exists,omitempty" json:"exists,omitempty"`
+	// Value checks that the field equals the given value (deep equality)
+	// Supports strings, integers, booleans
+	Value interface{} `yaml:"value,omitempty" json:"value,omitempty"`
+	// Contains checks that the field (a list) contains at least one element matching the given sub-structure
+	// Example: check that spec.template.spec.volumes contains a volume with a specific claimName
+	Contains interface{} `yaml:"contains,omitempty" json:"contains,omitempty"`
+}
+
+// TypeRegistration associates a ValidationType with its empty spec struct for schema generation.
+type TypeRegistration struct {
+	Type     ValidationType
+	Spec     interface{}
+	SpecName string // Go type name, used to derive the Zod schema name (e.g. "StatusSpec" → "StatusSpecSchema")
+}
+
+// RegisteredTypes lists all validation types in display order.
+// Add new types here to automatically include them in the generated Zod schema.
+var RegisteredTypes = []TypeRegistration{
+	{TypeStatus, StatusSpec{}, "StatusSpec"},
+	{TypeCondition, ConditionSpec{}, "ConditionSpec"},
+	{TypeLog, LogSpec{}, "LogSpec"},
+	{TypeEvent, EventSpec{}, "EventSpec"},
+	{TypeConnectivity, ConnectivitySpec{}, "ConnectivitySpec"},
+	{TypeRbac, RbacSpec{}, "RbacSpec"},
+	{TypeSpec, SpecSpec{}, "SpecSpec"},
+	{TypeTriggered, TriggeredSpec{}, "TriggeredSpec"},
+}
+
+// Result represents the outcome of a single validation execution
+// Returned by the executor and sent to the backend API
+// Note: No YAML tags as this type is only used for executor output, never parsed from challenge.yaml
+type Result struct {
+	// Key matches the validation key for backend correlation
+	Key string `json:"key"`
+	// Passed indicates whether the validation succeeded
+	Passed bool `json:"passed"`
+	// Message provides details about the result (success info or failure reason)
+	Message string `json:"message"`
+	// Duration is the time taken to execute this validation
+	Duration time.Duration `json:"-"`
+}

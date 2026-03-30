@@ -128,9 +128,9 @@ func Resolve(obj map[string]interface{}, tokens []PathToken) (interface{}, bool,
 }
 
 // Get is a convenience function that parses a path and resolves it in one call.
-// It automatically prefixes the path with "status." as per the Parse function.
+// It automatically prefixes the path with "status." as per the ParseStatus function.
 func Get(obj map[string]interface{}, path string) (interface{}, bool, error) {
-	tokens, err := Parse(path)
+	tokens, err := ParseStatus(path)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to parse path: %w", err)
 	}

@@ -20,6 +20,8 @@ func GetGVRForKind(kind string) (schema.GroupVersionResource, error) {
 		return schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "replicasets"}, nil
 	case "job":
 		return schema.GroupVersionResource{Group: "batch", Version: "v1", Resource: "jobs"}, nil
+	case "cronjob":
+		return schema.GroupVersionResource{Group: "batch", Version: "v1", Resource: "cronjobs"}, nil
 	case "pod":
 		return schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}, nil
 	case "service":

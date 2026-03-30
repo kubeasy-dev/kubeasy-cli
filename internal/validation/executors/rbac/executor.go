@@ -45,7 +45,7 @@ func Execute(ctx context.Context, spec vtypes.RbacSpec, deps shared.Deps) (bool,
 
 		result, err := deps.Clientset.AuthorizationV1().SubjectAccessReviews().Create(ctx, sar, metav1.CreateOptions{})
 		if err != nil {
-			return false, "", fmt.Errorf("check %d: SubjectAccessReview failed: %w", i, err)
+			return false, "", fmt.Errorf("check %d: SubjectAccessReview failed: %w", i+1, err)
 		}
 
 		if result.Status.Allowed != check.Allowed {
@@ -57,7 +57,7 @@ func Execute(ctx context.Context, spec vtypes.RbacSpec, deps shared.Deps) (bool,
 			}
 			return false, fmt.Sprintf(
 				"check %d: %s %s in namespace %q: expected %s but was %s",
-				i, check.Verb, check.Resource, checkNS, expected, actual,
+				i+1, check.Verb, check.Resource, checkNS, expected, actual,
 			), nil
 		}
 	}

@@ -69,5 +69,5 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Install with:" >> $GITHUB_STEP_SUMMARY
           echo '```sh' >> $GITHUB_STEP_SUMMARY
-          echo "KUBEASY_VERSION=nightly curl -fsSL https://download.kubeasy.dev/install.sh | sh" >> $GITHUB_STEP_SUMMARY
+          echo "curl -fsSL https://download.kubeasy.dev/install.sh | KUBEASY_VERSION=nightly sh" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY

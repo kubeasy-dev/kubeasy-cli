@@ -86,39 +86,18 @@ func TestExecute_Previous_NoError(t *testing.T) {
 	assert.Contains(t, msg, "Missing strings in logs")
 }
 
-func TestExecute_MatchMode_AnyOf_Passes(t *testing.T) {
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-pod", Namespace: "test-ns"},
-		Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}}},
-	}
-	spec := vtypes.LogSpec{
-		Target: vtypes.Target{Kind: "Pod", Name: "test-pod"},
-		// The fake clientset returns empty logs, so neither string will be found —
-		// both branches (found / not found) are tested by other tests.
-		// To test "anyOf passes", we use an empty expectedStrings list (no iteration → no match found).
-		// Instead, verify the anyOf branch is reached with a non-empty list that the fake returns empty for.
-		ExpectedStrings: []string{"Server started", "Listening on port"},
-		MatchMode:       vtypes.MatchModeAnyOf,
-	}
-
-	// Fake returns empty logs → none found → should fail with "None of the expected strings"
-	passed, msg, err := executorlog.Execute(context.Background(), spec, deps(fake.NewClientset(pod)))
-	require.NoError(t, err)
-	assert.False(t, passed)
-	assert.Contains(t, msg, "None of the expected strings found in logs")
-}
-
-func TestExecute_MatchMode_AnyOf_Fails(t *testing.T) {
+func TestExecute_MatchMode_AnyOf_NoneFound(t *testing.T) {
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-pod", Namespace: "test-ns"},
 		Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}}},
 	}
 	spec := vtypes.LogSpec{
 		Target:          vtypes.Target{Kind: "Pod", Name: "test-pod"},
-		ExpectedStrings: []string{"nope-1", "nope-2"},
+		ExpectedStrings: []string{"Server started", "Listening on port"},
 		MatchMode:       vtypes.MatchModeAnyOf,
 	}
 
+	// Fake returns empty logs → none of the strings found → fails
 	passed, msg, err := executorlog.Execute(context.Background(), spec, deps(fake.NewClientset(pod)))
 	require.NoError(t, err)
 	assert.False(t, passed)

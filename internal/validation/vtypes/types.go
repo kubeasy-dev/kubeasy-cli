@@ -227,7 +227,9 @@ type LogSpec struct {
 	// Useful for avoiding false positives from old logs, e.g., 300 for last 5 minutes
 	SinceSeconds int `yaml:"sinceSeconds,omitempty" json:"sinceSeconds,omitempty"`
 	// Previous fetches logs from the previously terminated container instance
-	// Equivalent to kubectl logs --previous; useful for completed Jobs and init containers
+	// Equivalent to kubectl logs --previous; useful for completed Jobs and init containers.
+	// Note: the Kubernetes API ignores sinceSeconds for previous-container logs.
+	// When previous is true, set sinceSeconds: 0 in the spec to avoid silent truncation.
 	Previous bool `yaml:"previous,omitempty" json:"previous,omitempty"`
 	// MatchMode controls how expectedStrings are evaluated
 	// "allOf" (default): all strings must appear in the logs (backward compatible)

@@ -175,6 +175,52 @@ objectives:
 		require.True(t, ok)
 		assert.Equal(t, DefaultEventSinceSeconds, spec.SinceSeconds, "should apply default")
 	})
+
+	t.Run("with requiredReasons", func(t *testing.T) {
+		yaml := `
+objectives:
+  - key: hpa-scaled
+    type: event
+    spec:
+      target:
+        kind: HorizontalPodAutoscaler
+        name: my-hpa
+      forbiddenReasons:
+        - FailedGetScale
+      requiredReasons:
+        - SuccessfulRescale
+      sinceSeconds: 300
+`
+
+		config, err := Parse([]byte(yaml))
+		require.NoError(t, err)
+
+		spec, ok := config.Validations[0].Spec.(EventSpec)
+		require.True(t, ok)
+		assert.Equal(t, 300, spec.SinceSeconds)
+		assert.Contains(t, spec.ForbiddenReasons, "FailedGetScale")
+		assert.Contains(t, spec.RequiredReasons, "SuccessfulRescale")
+	})
+
+	t.Run("without requiredReasons is backward compatible", func(t *testing.T) {
+		yaml := `
+objectives:
+  - key: no-crashes
+    type: event
+    spec:
+      target:
+        name: my-pod
+      forbiddenReasons:
+        - OOMKilled
+`
+
+		config, err := Parse([]byte(yaml))
+		require.NoError(t, err)
+
+		spec, ok := config.Validations[0].Spec.(EventSpec)
+		require.True(t, ok)
+		assert.Empty(t, spec.RequiredReasons)
+	})
 }
 
 // TestParse_StatusValidationMultipleChecks tests parsing status validation with multiple checks

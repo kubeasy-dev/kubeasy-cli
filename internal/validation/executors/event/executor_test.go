@@ -92,3 +92,97 @@ func TestExecute_OldEventsIgnored(t *testing.T) {
 	assert.True(t, passed)
 	assert.Equal(t, "No forbidden events found", msg)
 }
+
+func TestExecute_RequiredReasonPresent(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pod", Namespace: "test-ns", UID: "uid"},
+	}
+	ev := &corev1.Event{
+		ObjectMeta:     metav1.ObjectMeta{Name: "rescale-event", Namespace: "test-ns"},
+		InvolvedObject: corev1.ObjectReference{Kind: "Pod", Name: "test-pod"},
+		Reason:         "SuccessfulRescale",
+		LastTimestamp:  metav1.Now(),
+		EventTime:      metav1.NowMicro(),
+	}
+	spec := vtypes.EventSpec{
+		Target:           vtypes.Target{Kind: "Pod", Name: "test-pod"},
+		ForbiddenReasons: []string{"FailedGetScale"},
+		RequiredReasons:  []string{"SuccessfulRescale"},
+		SinceSeconds:     300,
+	}
+
+	passed, msg, err := event.Execute(context.Background(), spec, deps(fake.NewClientset(pod, ev)))
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Contains(t, msg, "No forbidden events found")
+	assert.Contains(t, msg, "SuccessfulRescale")
+}
+
+func TestExecute_RequiredReasonMissing(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pod", Namespace: "test-ns", UID: "uid"},
+	}
+	spec := vtypes.EventSpec{
+		Target:          vtypes.Target{Kind: "Pod", Name: "test-pod"},
+		RequiredReasons: []string{"SuccessfulRescale"},
+		SinceSeconds:    300,
+	}
+
+	passed, msg, err := event.Execute(context.Background(), spec, deps(fake.NewClientset(pod)))
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "Required events not found")
+	assert.Contains(t, msg, "SuccessfulRescale")
+}
+
+func TestExecute_RequiredReasonOldEventIgnored(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pod", Namespace: "test-ns", UID: "uid"},
+	}
+	// Event is 1 hour old — outside the 5-minute window
+	oldTime := metav1.NewTime(metav1.Now().Add(-3600 * 1e9))
+	ev := &corev1.Event{
+		ObjectMeta:     metav1.ObjectMeta{Name: "old-rescale", Namespace: "test-ns"},
+		InvolvedObject: corev1.ObjectReference{Kind: "Pod", Name: "test-pod"},
+		Reason:         "SuccessfulRescale",
+		LastTimestamp:  oldTime,
+	}
+	spec := vtypes.EventSpec{
+		Target:          vtypes.Target{Kind: "Pod", Name: "test-pod"},
+		RequiredReasons: []string{"SuccessfulRescale"},
+		SinceSeconds:    300,
+	}
+
+	passed, msg, err := event.Execute(context.Background(), spec, deps(fake.NewClientset(pod, ev)))
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "Required events not found")
+	assert.Contains(t, msg, "SuccessfulRescale")
+}
+
+func TestExecute_BothForbiddenAndRequiredFail(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pod", Namespace: "test-ns", UID: "uid"},
+	}
+	ev := &corev1.Event{
+		ObjectMeta:     metav1.ObjectMeta{Name: "oom-event", Namespace: "test-ns"},
+		InvolvedObject: corev1.ObjectReference{Kind: "Pod", Name: "test-pod"},
+		Reason:         "OOMKilled",
+		LastTimestamp:  metav1.Now(),
+		EventTime:      metav1.NowMicro(),
+	}
+	spec := vtypes.EventSpec{
+		Target:           vtypes.Target{Kind: "Pod", Name: "test-pod"},
+		ForbiddenReasons: []string{"OOMKilled"},
+		RequiredReasons:  []string{"SuccessfulRescale"},
+		SinceSeconds:     300,
+	}
+
+	passed, msg, err := event.Execute(context.Background(), spec, deps(fake.NewClientset(pod, ev)))
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "Forbidden events detected")
+	assert.Contains(t, msg, "OOMKilled")
+	assert.Contains(t, msg, "Required events not found")
+	assert.Contains(t, msg, "SuccessfulRescale")
+}

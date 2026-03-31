@@ -218,8 +218,8 @@ type LogSpec struct {
 	SinceSeconds int `yaml:"sinceSeconds,omitempty" json:"sinceSeconds,omitempty"`
 }
 
-// EventSpec checks for absence of problematic Kubernetes events
-// Use when: ensuring pods aren't crash-looping or failing to pull images
+// EventSpec checks Kubernetes events for a target resource.
+// Use when: ensuring pods aren't crash-looping, or asserting that a desired event occurred (e.g., SuccessfulRescale).
 type EventSpec struct {
 	// Target specifies which resource's events to check
 	Target Target `yaml:"target" json:"target"`
@@ -227,6 +227,10 @@ type EventSpec struct {
 	// Common values: CrashLoopBackOff, ImagePullBackOff, OOMKilled, Error, BackOff,
 	// FailedScheduling, FailedMount, Unhealthy, Evicted, NodeNotReady
 	ForbiddenReasons []string `yaml:"forbiddenReasons" json:"forbiddenReasons"`
+	// RequiredReasons lists event reasons that MUST be present within the time window.
+	// Use to assert that a desired event occurred (e.g., SuccessfulRescale, ScalingReplicaSet, SuccessfulCreate).
+	// Optional — omitting it preserves existing behavior (only forbidden checks run).
+	RequiredReasons []string `yaml:"requiredReasons,omitempty" json:"requiredReasons,omitempty"`
 	// SinceSeconds limits the time window for event checking (optional).
 	// Events older than this are ignored, e.g., 600 for last 10 minutes.
 	// When omitted (0) in YAML: the loader applies DefaultEventSinceSeconds (300s).

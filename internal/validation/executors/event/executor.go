@@ -1,10 +1,12 @@
 // Package event implements the "event" validation type.
-// It checks for forbidden Kubernetes events (OOMKilled, Evicted, etc.).
+// It checks for forbidden Kubernetes events (OOMKilled, Evicted, etc.) and optionally
+// asserts that required events (SuccessfulRescale, ScalingReplicaSet, etc.) are present.
 package event
 
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
@@ -18,7 +20,8 @@ const (
 	msgNoForbiddenEvents = "No forbidden events found"
 )
 
-// Execute checks that no forbidden events exist for the target pods.
+// Execute checks that no forbidden events exist for the target pods and that all
+// required events are present within the time window.
 func Execute(ctx context.Context, spec vtypes.EventSpec, deps shared.Deps) (bool, string, error) {
 	logger.Debug("Executing event validation")
 
@@ -35,7 +38,6 @@ func Execute(ctx context.Context, spec vtypes.EventSpec, deps shared.Deps) (bool
 		return false, "", fmt.Errorf("failed to list events: %w", err)
 	}
 
-	var forbiddenFound []string
 	podNames := make(map[string]bool)
 	for _, pod := range pods {
 		podNames[pod.Name] = true
@@ -49,6 +51,9 @@ func Execute(ctx context.Context, spec vtypes.EventSpec, deps shared.Deps) (bool
 		sinceTime = time.Now().Add(-time.Duration(spec.SinceSeconds) * time.Second)
 	}
 
+	var forbiddenFound []string
+	foundReasons := make(map[string]bool)
+
 	for _, event := range events.Items {
 		if event.InvolvedObject.Kind != "Pod" || !podNames[event.InvolvedObject.Name] {
 			continue
@@ -58,6 +63,9 @@ func Execute(ctx context.Context, spec vtypes.EventSpec, deps shared.Deps) (bool
 			continue
 		}
 
+		// Track all reasons seen in the time window for required-reasons check
+		foundReasons[event.Reason] = true
+
 		for _, forbidden := range spec.ForbiddenReasons {
 			if event.Reason == forbidden {
 				forbiddenFound = append(forbiddenFound, fmt.Sprintf("%s on %s", event.Reason, event.InvolvedObject.Name))
@@ -65,8 +73,33 @@ func Execute(ctx context.Context, spec vtypes.EventSpec, deps shared.Deps) (bool
 		}
 	}
 
-	if len(forbiddenFound) == 0 {
-		return true, msgNoForbiddenEvents, nil
+	// Check required reasons
+	var missingReasons []string
+	for _, required := range spec.RequiredReasons {
+		if !foundReasons[required] {
+			missingReasons = append(missingReasons, required)
+		}
 	}
-	return false, fmt.Sprintf("Forbidden events detected: %v", forbiddenFound), nil
+
+	// Build result
+	var messages []string
+	passed := true
+
+	if len(forbiddenFound) > 0 {
+		passed = false
+		messages = append(messages, fmt.Sprintf("Forbidden events detected: %v", forbiddenFound))
+	}
+	if len(missingReasons) > 0 {
+		passed = false
+		messages = append(messages, fmt.Sprintf("Required events not found: %v", missingReasons))
+	}
+
+	if !passed {
+		return false, strings.Join(messages, "; "), nil
+	}
+
+	if len(spec.RequiredReasons) > 0 {
+		return true, fmt.Sprintf("No forbidden events found; all required events present: %v", spec.RequiredReasons), nil
+	}
+	return true, msgNoForbiddenEvents, nil
 }

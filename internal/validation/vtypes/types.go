@@ -201,6 +201,16 @@ type ConditionCheck struct {
 	Status corev1.ConditionStatus `yaml:"status" json:"status"`
 }
 
+// MatchMode controls how expectedStrings are evaluated in a log validation
+type MatchMode string
+
+const (
+	// MatchModeAllOf requires all expected strings to appear in the logs (default, backward compatible)
+	MatchModeAllOf MatchMode = "allOf"
+	// MatchModeAnyOf requires at least one expected string to appear in the logs
+	MatchModeAnyOf MatchMode = "anyOf"
+)
+
 // LogSpec searches container logs for expected strings
 // Use when: verifying application behavior, startup completion, or processed requests
 type LogSpec struct {
@@ -209,13 +219,20 @@ type LogSpec struct {
 	// Container specifies which container's logs to check (optional if pod has single container)
 	// Required for multi-container pods, e.g., "nginx", "sidecar", "init-container"
 	Container string `yaml:"container,omitempty" json:"container,omitempty"`
-	// ExpectedStrings lists strings that must ALL appear in the logs
+	// ExpectedStrings lists strings to search for in the logs
 	// Tips: use unique strings, avoid timestamps, consider log format
 	// Examples: "Server started", "Connected to database", "HTTP/1.1 200"
 	ExpectedStrings []string `yaml:"expectedStrings" json:"expectedStrings"`
 	// SinceSeconds limits log search to recent entries (optional)
 	// Useful for avoiding false positives from old logs, e.g., 300 for last 5 minutes
 	SinceSeconds int `yaml:"sinceSeconds,omitempty" json:"sinceSeconds,omitempty"`
+	// Previous fetches logs from the previously terminated container instance
+	// Equivalent to kubectl logs --previous; useful for completed Jobs and init containers
+	Previous bool `yaml:"previous,omitempty" json:"previous,omitempty"`
+	// MatchMode controls how expectedStrings are evaluated
+	// "allOf" (default): all strings must appear in the logs (backward compatible)
+	// "anyOf": at least one string must appear in the logs
+	MatchMode MatchMode `yaml:"matchMode,omitempty" json:"matchMode,omitempty"`
 }
 
 // EventSpec checks for absence of problematic Kubernetes events

@@ -218,6 +218,9 @@ func parseSpec(v *Validation) error {
 		if spec.SinceSeconds == 0 {
 			spec.SinceSeconds = DefaultLogSinceSeconds
 		}
+		if spec.MatchMode != "" && spec.MatchMode != MatchModeAllOf && spec.MatchMode != MatchModeAnyOf {
+			return fmt.Errorf("log spec: matchMode must be %q or %q, got %q", MatchModeAllOf, MatchModeAnyOf, spec.MatchMode)
+		}
 		v.Spec = spec
 
 	case TypeEvent:

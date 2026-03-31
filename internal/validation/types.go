@@ -17,6 +17,7 @@ type (
 	ConditionSpec     = vtypes.ConditionSpec
 	ConditionCheck    = vtypes.ConditionCheck
 	LogSpec           = vtypes.LogSpec
+	MatchMode         = vtypes.MatchMode
 	EventSpec         = vtypes.EventSpec
 	ConnectivitySpec  = vtypes.ConnectivitySpec
 	SourcePod         = vtypes.SourcePod
@@ -48,6 +49,12 @@ const (
 const (
 	ConnectivityModeExternal = vtypes.ConnectivityModeExternal
 	ConnectivityModeInternal = vtypes.ConnectivityModeInternal
+)
+
+// MatchMode constants for log validation.
+const (
+	MatchModeAllOf = vtypes.MatchModeAllOf
+	MatchModeAnyOf = vtypes.MatchModeAnyOf
 )
 
 // Trigger type constants.

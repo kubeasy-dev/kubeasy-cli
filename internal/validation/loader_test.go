@@ -127,6 +127,88 @@ objectives:
 		require.True(t, ok)
 		assert.Equal(t, DefaultLogSinceSeconds, spec.SinceSeconds, "should apply default")
 	})
+
+	t.Run("with previous true", func(t *testing.T) {
+		yaml := `
+objectives:
+  - key: log-check
+    type: log
+    spec:
+      target:
+        name: job-pod
+      expectedStrings:
+        - "Migration complete!"
+      previous: true
+`
+
+		config, err := Parse([]byte(yaml))
+		require.NoError(t, err)
+
+		spec, ok := config.Validations[0].Spec.(LogSpec)
+		require.True(t, ok)
+		assert.True(t, spec.Previous)
+	})
+
+	t.Run("with matchMode allOf", func(t *testing.T) {
+		yaml := `
+objectives:
+  - key: log-check
+    type: log
+    spec:
+      target:
+        name: my-pod
+      expectedStrings:
+        - "Started"
+      matchMode: allOf
+`
+
+		config, err := Parse([]byte(yaml))
+		require.NoError(t, err)
+
+		spec, ok := config.Validations[0].Spec.(LogSpec)
+		require.True(t, ok)
+		assert.Equal(t, MatchModeAllOf, spec.MatchMode)
+	})
+
+	t.Run("with matchMode anyOf", func(t *testing.T) {
+		yaml := `
+objectives:
+  - key: log-check
+    type: log
+    spec:
+      target:
+        name: my-pod
+      expectedStrings:
+        - "Server started"
+        - "Listening on port"
+      matchMode: anyOf
+`
+
+		config, err := Parse([]byte(yaml))
+		require.NoError(t, err)
+
+		spec, ok := config.Validations[0].Spec.(LogSpec)
+		require.True(t, ok)
+		assert.Equal(t, MatchModeAnyOf, spec.MatchMode)
+	})
+
+	t.Run("with invalid matchMode", func(t *testing.T) {
+		yaml := `
+objectives:
+  - key: log-check
+    type: log
+    spec:
+      target:
+        name: my-pod
+      expectedStrings:
+        - "Started"
+      matchMode: noneOf
+`
+
+		_, err := Parse([]byte(yaml))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "matchMode")
+	})
 }
 
 // TestParse_EventValidation tests parsing of event validation with defaults

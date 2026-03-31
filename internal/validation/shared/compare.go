@@ -2,6 +2,7 @@ package shared
 
 import (
 	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -59,9 +60,25 @@ func GetPodConditionTypes(pod *corev1.Pod) []string {
 
 // CompareTypedValues compares two values using the specified operator.
 // Supports string, int64, float64, and bool types.
+// The "in" operator checks if actual matches any element in a []interface{} list (string coercion).
+// The "contains" operator checks if the actual string contains the expected substring.
 func CompareTypedValues(actual interface{}, operator string, expected interface{}) (bool, error) {
 	if actual == nil {
 		return false, fmt.Errorf("actual value is nil")
+	}
+
+	if operator == "in" {
+		list, ok := expected.([]interface{})
+		if !ok {
+			return false, fmt.Errorf("operator 'in' requires a list value, got %T", expected)
+		}
+		actualStr := fmt.Sprintf("%v", actual)
+		for _, item := range list {
+			if actualStr == fmt.Sprintf("%v", item) {
+				return true, nil
+			}
+		}
+		return false, nil
 	}
 
 	switch actualVal := actual.(type) {
@@ -99,8 +116,10 @@ func compareStrings(actual, operator, expected string) (bool, error) {
 		return actual == expected, nil
 	case "!=":
 		return actual != expected, nil
+	case "contains":
+		return strings.Contains(actual, expected), nil
 	default:
-		return false, fmt.Errorf("operator %s not supported for strings (use == or !=)", operator)
+		return false, fmt.Errorf("operator %s not supported for strings (use ==, !=, contains)", operator)
 	}
 }
 

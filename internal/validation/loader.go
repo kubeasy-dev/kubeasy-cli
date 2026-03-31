@@ -165,7 +165,7 @@ func parseSpec(v *Validation) error {
 				return fmt.Errorf("check %d: value is required", i)
 			}
 			// Validate operator
-			validOperators := []string{"==", "!=", ">", "<", ">=", "<="}
+			validOperators := []string{"==", "!=", ">", "<", ">=", "<=", "in", "contains"}
 			if !containsString(validOperators, check.Operator) {
 				return fmt.Errorf("check %d: invalid operator %s (valid: %v)", i, check.Operator, validOperators)
 			}

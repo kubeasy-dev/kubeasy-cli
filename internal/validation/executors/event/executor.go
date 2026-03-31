@@ -20,27 +20,54 @@ const (
 	msgNoForbiddenEvents = "No forbidden events found"
 )
 
-// Execute checks that no forbidden events exist for the target pods and that all
+// Execute checks that no forbidden events exist for the target resource and that all
 // required events are present within the time window.
+//
+// When the target kind is "Pod" (or unset), events are matched via pod name lookup
+// (supporting label selectors). For other resource kinds (e.g. HorizontalPodAutoscaler,
+// Deployment), events are matched directly by InvolvedObject.Kind and Name.
 func Execute(ctx context.Context, spec vtypes.EventSpec, deps shared.Deps) (bool, string, error) {
 	logger.Debug("Executing event validation")
 
-	pods, err := shared.GetTargetPods(ctx, deps, spec.Target)
-	if err != nil {
-		return false, "", err
+	// Determine target kind; default to Pod for backward compatibility.
+	targetKind := spec.Target.Kind
+	if targetKind == "" {
+		targetKind = "Pod"
 	}
-	if len(pods) == 0 {
-		return false, errNoMatchingPods, nil
+
+	// matchEvent returns true when the event belongs to the target resource.
+	var matchEvent func(involvedKind, involvedName string) bool
+
+	if targetKind == "Pod" {
+		// Pod targets: resolve pods (supports label selectors) and match by name.
+		pods, err := shared.GetTargetPods(ctx, deps, spec.Target)
+		if err != nil {
+			return false, "", err
+		}
+		if len(pods) == 0 {
+			return false, errNoMatchingPods, nil
+		}
+		podNames := make(map[string]bool, len(pods))
+		for _, pod := range pods {
+			podNames[pod.Name] = true
+		}
+		matchEvent = func(involvedKind, involvedName string) bool {
+			return involvedKind == "Pod" && podNames[involvedName]
+		}
+	} else {
+		// Non-pod targets (HPA, Deployment, …): match events directly by kind + name.
+		targetName := spec.Target.Name
+		matchEvent = func(involvedKind, involvedName string) bool {
+			if involvedKind != targetKind {
+				return false
+			}
+			return targetName == "" || involvedName == targetName
+		}
 	}
 
 	events, err := deps.Clientset.CoreV1().Events(deps.Namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return false, "", fmt.Errorf("failed to list events: %w", err)
-	}
-
-	podNames := make(map[string]bool)
-	for _, pod := range pods {
-		podNames[pod.Name] = true
 	}
 
 	// sinceSeconds==0 means "no time filter" — check all events regardless of age.
@@ -55,7 +82,7 @@ func Execute(ctx context.Context, spec vtypes.EventSpec, deps shared.Deps) (bool
 	foundReasons := make(map[string]bool)
 
 	for _, event := range events.Items {
-		if event.InvolvedObject.Kind != "Pod" || !podNames[event.InvolvedObject.Name] {
+		if !matchEvent(event.InvolvedObject.Kind, event.InvolvedObject.Name) {
 			continue
 		}
 
@@ -63,7 +90,7 @@ func Execute(ctx context.Context, spec vtypes.EventSpec, deps shared.Deps) (bool
 			continue
 		}
 
-		// Track all reasons seen in the time window for required-reasons check
+		// Track all reasons seen in the time window for required-reasons check.
 		foundReasons[event.Reason] = true
 
 		for _, forbidden := range spec.ForbiddenReasons {
@@ -73,7 +100,7 @@ func Execute(ctx context.Context, spec vtypes.EventSpec, deps shared.Deps) (bool
 		}
 	}
 
-	// Check required reasons
+	// Check required reasons.
 	var missingReasons []string
 	for _, required := range spec.RequiredReasons {
 		if !foundReasons[required] {
@@ -81,7 +108,7 @@ func Execute(ctx context.Context, spec vtypes.EventSpec, deps shared.Deps) (bool
 		}
 	}
 
-	// Build result
+	// Build result.
 	var messages []string
 	passed := true
 

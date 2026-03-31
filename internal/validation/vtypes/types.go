@@ -60,8 +60,8 @@ const (
 	// TypeLog searches container logs for expected strings
 	// Value: "log" - Use when verifying application behavior, startup messages, or processed requests
 	TypeLog ValidationType = "log"
-	// TypeEvent validates that forbidden Kubernetes events are NOT present
-	// Value: "event" - Use when ensuring pods aren't crash-looping, OOMKilled, or failing to schedule
+	// TypeEvent validates Kubernetes events: asserts forbidden events are absent and/or required events are present
+	// Value: "event" - Use when ensuring pods aren't crash-looping, or when asserting a desired event occurred (e.g., SuccessfulRescale)
 	TypeEvent ValidationType = "event"
 	// TypeConnectivity tests HTTP connectivity between pods
 	// Value: "connectivity" - Use when verifying Services, NetworkPolicies, or inter-pod communication

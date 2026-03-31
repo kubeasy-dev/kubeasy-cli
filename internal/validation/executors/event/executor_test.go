@@ -186,3 +186,65 @@ func TestExecute_BothForbiddenAndRequiredFail(t *testing.T) {
 	assert.Contains(t, msg, "Required events not found")
 	assert.Contains(t, msg, "SuccessfulRescale")
 }
+
+func TestExecute_NonPodTarget_RequiredReasonPresent(t *testing.T) {
+	// SuccessfulRescale events have InvolvedObject.Kind = "HorizontalPodAutoscaler", not "Pod".
+	// This test ensures non-pod targets are matched by kind+name, not via pod lookup.
+	ev := &corev1.Event{
+		ObjectMeta:     metav1.ObjectMeta{Name: "rescale-event", Namespace: "test-ns"},
+		InvolvedObject: corev1.ObjectReference{Kind: "HorizontalPodAutoscaler", Name: "my-hpa"},
+		Reason:         "SuccessfulRescale",
+		LastTimestamp:  metav1.Now(),
+		EventTime:      metav1.NowMicro(),
+	}
+	spec := vtypes.EventSpec{
+		Target:          vtypes.Target{Kind: "HorizontalPodAutoscaler", Name: "my-hpa"},
+		RequiredReasons: []string{"SuccessfulRescale"},
+		SinceSeconds:    300,
+	}
+
+	passed, msg, err := event.Execute(context.Background(), spec, deps(fake.NewClientset(ev)))
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Contains(t, msg, "SuccessfulRescale")
+}
+
+func TestExecute_NonPodTarget_RequiredReasonMissing(t *testing.T) {
+	// No SuccessfulRescale event exists for the HPA — should fail.
+	spec := vtypes.EventSpec{
+		Target:          vtypes.Target{Kind: "HorizontalPodAutoscaler", Name: "my-hpa"},
+		RequiredReasons: []string{"SuccessfulRescale"},
+		SinceSeconds:    300,
+	}
+
+	passed, msg, err := event.Execute(context.Background(), spec, deps(fake.NewClientset()))
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "Required events not found")
+	assert.Contains(t, msg, "SuccessfulRescale")
+}
+
+func TestExecute_NonPodTarget_ForbiddenAndRequiredReasons(t *testing.T) {
+	// HPA has a FailedGetScale event (forbidden) but no SuccessfulRescale (required).
+	ev := &corev1.Event{
+		ObjectMeta:     metav1.ObjectMeta{Name: "fail-event", Namespace: "test-ns"},
+		InvolvedObject: corev1.ObjectReference{Kind: "HorizontalPodAutoscaler", Name: "my-hpa"},
+		Reason:         "FailedGetScale",
+		LastTimestamp:  metav1.Now(),
+		EventTime:      metav1.NowMicro(),
+	}
+	spec := vtypes.EventSpec{
+		Target:           vtypes.Target{Kind: "HorizontalPodAutoscaler", Name: "my-hpa"},
+		ForbiddenReasons: []string{"FailedGetScale"},
+		RequiredReasons:  []string{"SuccessfulRescale"},
+		SinceSeconds:     300,
+	}
+
+	passed, msg, err := event.Execute(context.Background(), spec, deps(fake.NewClientset(ev)))
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "Forbidden events detected")
+	assert.Contains(t, msg, "FailedGetScale")
+	assert.Contains(t, msg, "Required events not found")
+	assert.Contains(t, msg, "SuccessfulRescale")
+}

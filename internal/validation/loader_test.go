@@ -221,6 +221,21 @@ objectives:
 		require.True(t, ok)
 		assert.Empty(t, spec.RequiredReasons)
 	})
+
+	t.Run("empty forbiddenReasons and no requiredReasons is rejected", func(t *testing.T) {
+		yaml := `
+objectives:
+  - key: no-reasons
+    type: event
+    spec:
+      target:
+        name: my-pod
+`
+
+		_, err := Parse([]byte(yaml))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "forbiddenReasons or requiredReasons")
+	})
 }
 
 // TestParse_StatusValidationMultipleChecks tests parsing status validation with multiple checks

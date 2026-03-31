@@ -110,3 +110,55 @@ func TestExecute_FieldNotFound(t *testing.T) {
 	assert.False(t, passed)
 	assert.Contains(t, msg, "not found")
 }
+
+func TestExecute_InOperator_Passes(t *testing.T) {
+	d := deployment("test-deployment", "test-ns", map[string]interface{}{"phase": "Succeeded"})
+	spec := vtypes.StatusSpec{
+		Target: vtypes.Target{Kind: "Deployment", Name: "test-deployment"},
+		Checks: []vtypes.StatusCheck{{Field: "phase", Operator: "in", Value: []interface{}{"Running", "Succeeded"}}},
+	}
+
+	passed, msg, err := status.Execute(context.Background(), spec, deps(dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), d)))
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Equal(t, "All status checks passed", msg)
+}
+
+func TestExecute_InOperator_Fails(t *testing.T) {
+	d := deployment("test-deployment", "test-ns", map[string]interface{}{"phase": "Failed"})
+	spec := vtypes.StatusSpec{
+		Target: vtypes.Target{Kind: "Deployment", Name: "test-deployment"},
+		Checks: []vtypes.StatusCheck{{Field: "phase", Operator: "in", Value: []interface{}{"Running", "Succeeded"}}},
+	}
+
+	passed, msg, err := status.Execute(context.Background(), spec, deps(dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), d)))
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "got Failed")
+}
+
+func TestExecute_ContainsOperator_Passes(t *testing.T) {
+	d := deployment("test-deployment", "test-ns", map[string]interface{}{"message": "deployment completed successfully"})
+	spec := vtypes.StatusSpec{
+		Target: vtypes.Target{Kind: "Deployment", Name: "test-deployment"},
+		Checks: []vtypes.StatusCheck{{Field: "message", Operator: "contains", Value: "successfully"}},
+	}
+
+	passed, msg, err := status.Execute(context.Background(), spec, deps(dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), d)))
+	require.NoError(t, err)
+	assert.True(t, passed)
+	assert.Equal(t, "All status checks passed", msg)
+}
+
+func TestExecute_ContainsOperator_Fails(t *testing.T) {
+	d := deployment("test-deployment", "test-ns", map[string]interface{}{"message": "deployment is progressing"})
+	spec := vtypes.StatusSpec{
+		Target: vtypes.Target{Kind: "Deployment", Name: "test-deployment"},
+		Checks: []vtypes.StatusCheck{{Field: "message", Operator: "contains", Value: "successfully"}},
+	}
+
+	passed, msg, err := status.Execute(context.Background(), spec, deps(dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), d)))
+	require.NoError(t, err)
+	assert.False(t, passed)
+	assert.Contains(t, msg, "message")
+}

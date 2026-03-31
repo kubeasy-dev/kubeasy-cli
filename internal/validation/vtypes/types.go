@@ -170,10 +170,11 @@ type StatusCheck struct {
 	Field string `yaml:"field" json:"field"`
 	// Operator is the comparison operator to use
 	// Supported: "==" (equal), "!=" (not equal), ">" (greater than),
-	// "<" (less than), ">=" (greater or equal), "<=" (less or equal)
+	// "<" (less than), ">=" (greater or equal), "<=" (less or equal),
+	// "in" (value matches any element in list), "contains" (substring match on strings)
 	Operator string `yaml:"operator" json:"operator"`
 	// Value is the expected value to compare against
-	// Supports: string, int64, bool, float64
+	// Supports: string, int64, bool, float64, or []interface{} for the "in" operator
 	Value interface{} `yaml:"value" json:"value"`
 }
 

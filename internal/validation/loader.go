@@ -228,6 +228,9 @@ func parseSpec(v *Validation) error {
 		if err := validateTarget(spec.Target); err != nil {
 			return err
 		}
+		if len(spec.ForbiddenReasons) == 0 && len(spec.RequiredReasons) == 0 {
+			return fmt.Errorf("event validation must specify at least one of forbiddenReasons or requiredReasons")
+		}
 		// Apply default sinceSeconds if not specified
 		if spec.SinceSeconds == 0 {
 			spec.SinceSeconds = DefaultEventSinceSeconds

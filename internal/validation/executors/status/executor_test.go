@@ -134,7 +134,7 @@ func TestExecute_InOperator_Fails(t *testing.T) {
 	passed, msg, err := status.Execute(context.Background(), spec, deps(dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), d)))
 	require.NoError(t, err)
 	assert.False(t, passed)
-	assert.Contains(t, msg, "phase")
+	assert.Contains(t, msg, "got Failed")
 }
 
 func TestExecute_ContainsOperator_Passes(t *testing.T) {

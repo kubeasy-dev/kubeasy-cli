@@ -169,6 +169,8 @@ func compareNumeric(actual float64, operator string, expected interface{}) (bool
 		return actual >= expectedFloat, nil
 	case "<=":
 		return actual <= expectedFloat, nil
+	case "contains":
+		return false, fmt.Errorf("operator 'contains' is not supported for numeric types (use ==, !=, >, <, >=, <=)")
 	default:
 		return false, fmt.Errorf("unknown operator: %s", operator)
 	}

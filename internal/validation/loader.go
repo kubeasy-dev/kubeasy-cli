@@ -169,6 +169,21 @@ func parseSpec(v *Validation) error {
 			if !containsString(validOperators, check.Operator) {
 				return fmt.Errorf("check %d: invalid operator %s (valid: %v)", i, check.Operator, validOperators)
 			}
+			// Validate operator-specific value types
+			if check.Operator == "in" {
+				list, ok := check.Value.([]interface{})
+				if !ok {
+					return fmt.Errorf("check %d: operator 'in' requires a list value, got %T", i, check.Value)
+				}
+				if len(list) == 0 {
+					return fmt.Errorf("check %d: operator 'in' requires a non-empty list", i)
+				}
+			}
+			if check.Operator == "contains" {
+				if _, ok := check.Value.(string); !ok {
+					return fmt.Errorf("check %d: operator 'contains' requires a string value, got %T", i, check.Value)
+				}
+			}
 			// Validate field path exists in Kind's Status using reflection.
 			// Only validate for supported kinds (skip for custom resources).
 			// Note: This validates that the field EXISTS in the Go type definition,

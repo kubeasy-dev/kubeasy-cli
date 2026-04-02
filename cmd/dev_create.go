@@ -11,6 +11,7 @@ import (
 	"text/template"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/api"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/devutils"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/ui"
@@ -72,6 +73,7 @@ type: "{{.Type}}"
 theme: "{{.Theme}}"
 difficulty: "{{.Difficulty}}"
 estimatedTime: {{.EstimatedTime}}
+minRequiredVersion: "{{.MinRequiredVersion}}"
 
 # TODO: Describe the symptoms the user will observe (NOT the root cause).
 # Example: "A web application deployed in the cluster is not responding to requests.
@@ -341,17 +343,19 @@ In non-interactive mode, use flags: --name, --type, --theme, --difficulty.`,
 		// Generate challenge.yaml from template
 		var buf bytes.Buffer
 		err := challengeYAMLTemplate.Execute(&buf, struct {
-			Title         string
-			Type          string
-			Theme         string
-			Difficulty    string
-			EstimatedTime int
+			Title              string
+			Type               string
+			Theme              string
+			Difficulty         string
+			EstimatedTime      int
+			MinRequiredVersion string
 		}{
-			Title:         name,
-			Type:          challengeType,
-			Theme:         theme,
-			Difficulty:    difficulty,
-			EstimatedTime: estimatedTime,
+			Title:              name,
+			Type:               challengeType,
+			Theme:              theme,
+			Difficulty:         difficulty,
+			EstimatedTime:      estimatedTime,
+			MinRequiredVersion: constants.Version,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to generate challenge.yaml: %w", err)

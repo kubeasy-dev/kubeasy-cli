@@ -112,6 +112,46 @@ func LoadForChallenge(slug string) (*ValidationConfig, error) {
 	return loadFromURL(url)
 }
 
+// ParseChallengeYaml parses the full challenge.yaml into a ChallengeYamlSpec.
+func ParseChallengeYaml(data []byte) (*ChallengeYamlSpec, error) {
+	var spec ChallengeYamlSpec
+	if err := yaml.Unmarshal(data, &spec); err != nil {
+		return nil, fmt.Errorf("failed to parse challenge.yaml: %w", err)
+	}
+	return &spec, nil
+}
+
+// LoadChallengeYamlForChallenge loads the full ChallengeYamlSpec for a given challenge slug.
+// It tries a local file first (for development), then falls back to GitHub.
+func LoadChallengeYamlForChallenge(slug string) (*ChallengeYamlSpec, error) {
+	if localPath := FindLocalChallengeFile(slug); localPath != "" {
+		data, err := os.ReadFile(localPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read file: %w", err)
+		}
+		return ParseChallengeYaml(data)
+	}
+
+	// Fall back to GitHub
+	url := fmt.Sprintf("%s/%s/challenge.yaml", ChallengesRepoBaseURL, slug)
+	if !strings.HasPrefix(url, ChallengesRepoBaseURL) {
+		return nil, fmt.Errorf("invalid URL: must be from %s", ChallengesRepoBaseURL)
+	}
+	resp, err := http.Get(url) //nolint:gosec // URL validated against ChallengesRepoBaseURL
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch challenge.yaml: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to fetch challenge.yaml: HTTP %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+	return ParseChallengeYaml(data)
+}
+
 // Parse parses validation config from YAML data
 func Parse(data []byte) (*ValidationConfig, error) {
 	var config ValidationConfig

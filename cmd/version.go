@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/semver"
 	"github.com/spf13/cobra"
 )
 
@@ -21,7 +22,7 @@ var versionCmd = &cobra.Command{
 		fmt.Printf("kubeasy-cli %s\n", current)
 		fmt.Printf("Go %s - %s/%s\n", runtime.Version(), runtime.GOOS, runtime.GOARCH)
 
-		if isPreRelease(current) {
+		if semver.IsPreRelease(current) {
 			fmt.Printf("Pre-release build (%s), skipping update check.\n", current)
 			return
 		}
@@ -34,10 +35,10 @@ var versionCmd = &cobra.Command{
 		}
 
 		// Compare semantic versions (normalize leading 'v')
-		curNorm := normalizeSemver(current)
-		latNorm := normalizeSemver(latest)
+		curNorm := semver.Normalize(current)
+		latNorm := semver.Normalize(latest)
 
-		switch compareSemver(curNorm, latNorm) {
+		switch semver.Compare(curNorm, latNorm) {
 		case -1:
 			fmt.Printf("A new version is available: %s (you have %s)\n", latest, current)
 			fmt.Println("Download it from:")
@@ -83,55 +84,4 @@ func fetchLatestVersion() (string, error) {
 		return "", fmt.Errorf("empty version response")
 	}
 	return version, nil
-}
-
-// normalizeSemver trims a leading 'v' and strips pre-release/build metadata for comparison.
-func normalizeSemver(v string) string {
-	v = strings.TrimSpace(v)
-	v = strings.TrimPrefix(v, "v")
-	// Drop pre-release/build metadata for simple compare
-	if i := strings.IndexAny(v, "-+"); i >= 0 {
-		v = v[:i]
-	}
-	return v
-}
-
-// compareSemver compares two semantic versions (major.minor.patch). Returns -1 if a<b, 0 if equal, 1 if a>b.
-func compareSemver(a, b string) int {
-	as := splitToInt3(a)
-	bs := splitToInt3(b)
-	for i := 0; i < 3; i++ {
-		if as[i] < bs[i] {
-			return -1
-		}
-		if as[i] > bs[i] {
-			return 1
-		}
-	}
-	return 0
-}
-
-// isPreRelease returns true for non-semver version strings like "dev" or "nightly-abc1234".
-// These start with a non-digit character after stripping a leading 'v'.
-// Legitimate semver pre-releases like "2.7.0-rc.1" start with a digit and return false.
-func isPreRelease(v string) bool {
-	v = strings.TrimSpace(strings.TrimPrefix(v, "v"))
-	return len(v) == 0 || v[0] < '0' || v[0] > '9'
-}
-
-func splitToInt3(v string) [3]int {
-	var out [3]int
-	parts := strings.Split(v, ".")
-	for i := 0; i < len(parts) && i < 3; i++ {
-		// lightweight atoi
-		n := 0
-		for _, ch := range parts[i] {
-			if ch < '0' || ch > '9' {
-				break
-			}
-			n = n*10 + int(ch-'0')
-		}
-		out[i] = n // #nosec G602 - i is bounded by loop condition i < 3
-	}
-	return out
 }

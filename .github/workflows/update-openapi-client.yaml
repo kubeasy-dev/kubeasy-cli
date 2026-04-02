@@ -23,25 +23,7 @@ jobs:
 
       - name: Write OpenAPI spec
         run: |
-          if [ -n "${{ github.event.client_payload.spec_base64 }}" ]; then
-            SOURCE_SHA="${{ github.event.client_payload.source_sha }}"
-            if [ -z "$SOURCE_SHA" ]; then
-              echo "::error::source_sha is missing from payload"
-              exit 1
-            fi
-
-            echo "${{ github.event.client_payload.spec_base64 }}" | base64 -d | head -c 5M > openapi.json.tmp
-
-            if ! jq empty openapi.json.tmp 2>/dev/null; then
-              echo "::error::Decoded payload is not valid JSON"
-              rm -f openapi.json.tmp
-              exit 1
-            fi
-
-            mv openapi.json.tmp openapi.json
-          else
-            echo "No spec in payload, using existing openapi.json"
-          fi
+          curl -sSL https://raw.githubusercontent.com/kubeasy-dev/monorepo/main/apps/api/openapi.json -o openapi.json
 
       - name: Generate API client
         run: |

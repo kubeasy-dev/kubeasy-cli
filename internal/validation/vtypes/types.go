@@ -399,6 +399,35 @@ type TypeRegistration struct {
 	SpecName string // Go type name, used to derive the Zod schema name (e.g. "StatusSpec" → "StatusSpecSchema")
 }
 
+// ChallengeDifficultyValues is the list of valid difficulty levels.
+// Drives both lint validation and the generated Zod schema — add new values here only.
+var ChallengeDifficultyValues = []string{"easy", "medium", "hard"}
+
+// ChallengeTypeValues is the list of valid challenge types.
+// Drives both lint validation and the generated Zod schema — add new values here only.
+var ChallengeTypeValues = []string{"fix", "build", "migrate"}
+
+// ChallengeYamlSpec represents the full structure of a challenge.yaml file.
+// This is the single source of truth for challenge file format validation.
+//
+// Convention:
+//   - Fields without omitempty are required — lint and Zod will enforce them.
+//   - Fields with omitempty are optional.
+//   - Adding a required field here automatically enforces it in `kubeasy dev lint`
+//     and includes it in the generated Zod schema (objectives.ts → openapi-sync.json).
+//   - Objectives are validated separately via validation.Parse.
+type ChallengeYamlSpec struct {
+	Title              string       `yaml:"title"`
+	Description        string       `yaml:"description"`
+	Theme              string       `yaml:"theme"`
+	Difficulty         string       `yaml:"difficulty"`
+	Type               string       `yaml:"type"`
+	EstimatedTime      int          `yaml:"estimatedTime"`
+	InitialSituation   string       `yaml:"initialSituation"`
+	MinRequiredVersion string       `yaml:"minRequiredVersion,omitempty"`
+	Objectives         []Validation `yaml:"objectives"`
+}
+
 // RegisteredTypes lists all validation types in display order.
 // Add new types here to automatically include them in the generated Zod schema.
 var RegisteredTypes = []TypeRegistration{

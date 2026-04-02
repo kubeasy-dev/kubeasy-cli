@@ -69,3 +69,12 @@ const (
 // RegisteredTypes lists all validation types for schema generation.
 // Adding a new type: add it to vtypes.RegisteredTypes in vtypes/types.go.
 var RegisteredTypes = vtypes.RegisteredTypes
+
+// ChallengeYamlSpec is the single source of truth for the challenge.yaml file format.
+type ChallengeYamlSpec = vtypes.ChallengeYamlSpec
+
+// ChallengeDifficultyValues and ChallengeTypeValues drive lint validation and Zod schema generation.
+var (
+	ChallengeDifficultyValues = vtypes.ChallengeDifficultyValues
+	ChallengeTypeValues       = vtypes.ChallengeTypeValues
+)

@@ -68,5 +68,44 @@ export type Objective = z.infer<typeof ObjectiveSchema>;
 		strings.Join(unionMembers, ",\n"),
 	)
 
+	// Build ChallengeYamlSchema from ChallengeDifficultyValues and ChallengeTypeValues
+	diffValues := make([]string, len(validation.ChallengeDifficultyValues))
+	for i, v := range validation.ChallengeDifficultyValues {
+		diffValues[i] = fmt.Sprintf("%q", v)
+	}
+	typeValues := make([]string, len(validation.ChallengeTypeValues))
+	for i, v := range validation.ChallengeTypeValues {
+		typeValues[i] = fmt.Sprintf("%q", v)
+	}
+
+	output += fmt.Sprintf(`
+export const challengeYamlDifficultyValues = [%s] as const;
+export const ChallengeYamlDifficultySchema = z.enum(challengeYamlDifficultyValues);
+export type ChallengeYamlDifficulty = z.infer<typeof ChallengeYamlDifficultySchema>;
+
+export const challengeYamlTypeValues = [%s] as const;
+export const ChallengeYamlTypeSchema = z.enum(challengeYamlTypeValues);
+export type ChallengeYamlType = z.infer<typeof ChallengeYamlTypeSchema>;
+
+// ChallengeYamlSchema is the single source of truth for the challenge.yaml file format.
+// Generated from ChallengeYamlSpec in github.com/kubeasy-dev/kubeasy-cli/internal/validation/vtypes.
+// Required fields map to non-omitempty struct fields; optional fields map to omitempty fields.
+export const ChallengeYamlSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().min(1),
+  theme: z.string().min(1),
+  difficulty: ChallengeYamlDifficultySchema,
+  type: ChallengeYamlTypeSchema.default("fix"),
+  estimatedTime: z.number().int().positive(),
+  initialSituation: z.string().min(1),
+  minRequiredVersion: z.string().optional(),
+  objectives: z.array(ObjectiveSchema).default([]),
+});
+export type ChallengeYaml = z.infer<typeof ChallengeYamlSchema>;
+`,
+		strings.Join(diffValues, ", "),
+		strings.Join(typeValues, ", "),
+	)
+
 	fmt.Print(output)
 }

@@ -287,9 +287,27 @@ To add a new validation type, touch **exactly these locations** — nothing else
 
 ### Zod Schema Generation
 
-The CI workflow `generate-zod-schema.yaml` runs `go run hack/generate-schema/main.go` on every push to `main` and opens a PR in the `website` repo to update `schemas/challengeObjectives.ts`.
+`hack/generate-schema/main.go` generates `packages/api-schemas/src/objectives.ts` in the monorepo.
+It is triggered by `generate-zod-schema.yaml` on every push to `main` that touches `vtypes/types.go`.
 
-**No changes to `hack/generate-schema/main.go` are needed** — it reads `validation.RegisteredTypes` automatically. Adding the entry to `RegisteredTypes` is sufficient for the new type to appear in the generated TypeScript schema.
+The generated file contains **two families of schemas**, both driven by `vtypes/types.go`:
+
+**Objective/validation specs** — driven by `RegisteredTypes`:
+- One Zod schema per spec type (`StatusSpecSchema`, `LogSpecSchema`, etc.)
+- `ObjectiveTypeSchema` enum (all registered type names)
+- `ObjectiveSpecSchema` union (all registered spec schemas)
+- `ObjectiveSchema` (key, title, description, order, type, spec)
+
+**Challenge YAML format** — driven by `ChallengeYamlSpec` + `ChallengeDifficultyValues` + `ChallengeTypeValues`:
+- `ChallengeYamlDifficultySchema`, `ChallengeYamlTypeSchema` enums
+- `ChallengeYamlSchema` (full challenge.yaml structure)
+
+`challengeSyncSchema` in `apps/api/src/schemas/sync.ts` is **derived** from `ChallengeYamlSchema`:
+```ts
+ChallengeYamlSchema.omit({ minRequiredVersion: true }).extend({ slug: z.string() })
+```
+
+**No changes to `hack/generate-schema/main.go` are needed** when adding a new validation type — it reads `RegisteredTypes` automatically. Adding the entry to `RegisteredTypes` is sufficient.
 
 ## Important Implementation Details
 

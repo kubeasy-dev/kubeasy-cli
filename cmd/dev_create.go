@@ -14,11 +14,12 @@ import (
 	"github.com/kubeasy-dev/kubeasy-cli/internal/devutils"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/ui"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/validation"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
 
-var defaultChallengeTypes = devutils.ValidTypes
+var defaultChallengeTypes = validation.ChallengeTypeValues
 
 var defaultChallengeThemes = []string{
 	"ingress-tls",
@@ -32,7 +33,7 @@ var defaultChallengeThemes = []string{
 	"volumes-secrets",
 }
 
-var defaultChallengeDifficulties = devutils.ValidDifficulties
+var defaultChallengeDifficulties = validation.ChallengeDifficultyValues
 
 // fetchMetadata fetches challenge types, themes, and difficulties from the API.
 // Falls back to hardcoded defaults when the API is unreachable.

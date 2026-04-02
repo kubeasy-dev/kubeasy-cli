@@ -89,14 +89,14 @@ func Login(ctx context.Context) (*LoginResponse, error) {
 	return result, nil
 }
 
-// GetChallengeBySlug fetches a challenge by its slug
+// GetChallengeBySlug fetches a challenge by its slug via GET /api/cli/challenge/:slug
 func GetChallengeBySlug(ctx context.Context, slug string) (*ChallengeEntity, error) {
 	client, err := NewAuthenticatedClient()
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.GetChallengeWithResponse(ctx, slug)
+	resp, err := client.CliGetChallengeWithResponse(ctx, slug)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
@@ -125,14 +125,14 @@ func GetChallengeBySlug(ctx context.Context, slug string) (*ChallengeEntity, err
 	return challenge, nil
 }
 
-// GetChallengeStatus fetches the user's progress status for a challenge
+// GetChallengeStatus fetches the user's progress status via GET /api/cli/challenge/:slug/status
 func GetChallengeStatus(ctx context.Context, slug string) (*ChallengeStatusResponse, error) {
 	client, err := NewAuthenticatedClient()
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.GetChallengeStatusWithResponse(ctx, slug)
+	resp, err := client.CliGetChallengeStatusWithResponse(ctx, slug)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
@@ -153,14 +153,14 @@ func GetChallengeStatus(ctx context.Context, slug string) (*ChallengeStatusRespo
 	return status, nil
 }
 
-// StartChallengeWithResponse starts a challenge for the user and returns the full response
+// StartChallengeWithResponse starts a challenge via POST /api/cli/challenge/:slug/start
 func StartChallengeWithResponse(ctx context.Context, slug string) (*ChallengeStartResponse, error) {
 	client, err := NewAuthenticatedClient()
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.StartChallengeWithResponse(ctx, slug)
+	resp, err := client.CliStartChallengeWithResponse(ctx, slug)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
@@ -181,7 +181,7 @@ func StartChallengeWithResponse(ctx context.Context, slug string) (*ChallengeSta
 	return result, nil
 }
 
-// SubmitChallenge submits a challenge with validation results
+// SubmitChallenge submits a challenge via POST /api/cli/challenge/:slug/submit
 func SubmitChallenge(ctx context.Context, slug string, req ChallengeSubmitRequest) (*ChallengeSubmitResponse, error) {
 	client, err := NewAuthenticatedClient()
 	if err != nil {
@@ -200,7 +200,7 @@ func SubmitChallenge(ctx context.Context, slug string, req ChallengeSubmitReques
 		results[i].Message = r.Message
 	}
 
-	resp, err := client.SubmitChallengeWithResponse(ctx, slug, apigen.SubmitChallengeJSONRequestBody{
+	resp, err := client.CliSubmitChallengeLegacyWithResponse(ctx, slug, apigen.CliSubmitChallengeLegacyJSONRequestBody{
 		Results: results,
 	})
 	if err != nil {
@@ -227,14 +227,14 @@ func SubmitChallenge(ctx context.Context, slug string, req ChallengeSubmitReques
 	return nil, parseErrorResponse(resp.HTTPResponse, resp.Body)
 }
 
-// ResetChallenge resets the user's progress for a challenge
+// ResetChallenge resets the user's progress via POST /api/cli/challenge/:slug/reset
 func ResetChallenge(ctx context.Context, slug string) (*ChallengeResetResponse, error) {
 	client, err := NewAuthenticatedClient()
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.ResetChallengeWithResponse(ctx, slug)
+	resp, err := client.CliResetChallengeWithResponse(ctx, slug)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}

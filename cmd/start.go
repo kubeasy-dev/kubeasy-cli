@@ -8,7 +8,9 @@ import (
 	"github.com/kubeasy-dev/kubeasy-cli/internal/deployer"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/kube"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/semver"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/ui"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/validation"
 	"github.com/spf13/cobra"
 )
 
@@ -63,6 +65,11 @@ var startChallengeCmd = &cobra.Command{
 			ui.Warning("Challenge already started")
 			ui.Info(fmt.Sprintf("Continue the challenge or reset it with 'kubeasy challenge reset %s'", challengeSlug))
 			return nil // Not an error, just already started
+		}
+
+		// Check minimum required CLI version
+		if err := checkMinRequiredVersion(challengeSlug); err != nil {
+			return err
 		}
 
 		// Setup environment - use context from command
@@ -126,6 +133,40 @@ var startChallengeCmd = &cobra.Command{
 		ui.Info("You can now start working on the challenge!")
 		return nil
 	},
+}
+
+// checkMinRequiredVersion loads challenge.yaml for the given slug and verifies
+// the running CLI version meets the minRequiredVersion constraint.
+// It is a no-op when the field is absent or the CLI is a pre-release build.
+func checkMinRequiredVersion(slug string) error {
+	spec, err := validation.LoadChallengeYamlForChallenge(slug)
+	if err != nil {
+		// Non-fatal: if challenge.yaml is unavailable we cannot block the user.
+		logger.Debug("Could not load challenge.yaml for version check: %v", err)
+		return nil
+	}
+
+	required := spec.MinRequiredVersion
+	if required == "" {
+		return nil
+	}
+
+	current := constants.Version
+	if semver.IsPreRelease(current) {
+		logger.Debug("Pre-release CLI build (%s), skipping minRequiredVersion check", current)
+		return nil
+	}
+
+	curNorm := semver.Normalize(current)
+	reqNorm := semver.Normalize(required)
+	if semver.Compare(curNorm, reqNorm) < 0 {
+		return fmt.Errorf(
+			"this challenge requires kubeasy-cli >= %s (you have %s)\nPlease update: %s/kubeasy-cli/releases/latest",
+			required, current, constants.GithubRootURL,
+		)
+	}
+
+	return nil
 }
 
 func init() {

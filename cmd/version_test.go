@@ -1,6 +1,10 @@
 package cmd
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/kubeasy-dev/kubeasy-cli/internal/semver"
+)
 
 func TestIsPreRelease(t *testing.T) {
 	tests := []struct {
@@ -19,8 +23,8 @@ func TestIsPreRelease(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.version, func(t *testing.T) {
-			if got := isPreRelease(tt.version); got != tt.want {
-				t.Errorf("isPreRelease(%q) = %v, want %v", tt.version, got, tt.want)
+			if got := semver.IsPreRelease(tt.version); got != tt.want {
+				t.Errorf("semver.IsPreRelease(%q) = %v, want %v", tt.version, got, tt.want)
 			}
 		})
 	}

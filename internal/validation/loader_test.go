@@ -2016,3 +2016,74 @@ objectives:
 		})
 	}
 }
+
+// TestParseChallengeYaml covers the full ChallengeYamlSpec parsing.
+func TestParseChallengeYaml(t *testing.T) {
+	t.Run("parses all top-level fields", func(t *testing.T) {
+		data := []byte(`
+title: "Pod Evicted"
+type: fix
+theme: resources-scaling
+difficulty: easy
+estimatedTime: 15
+initialSituation: "A pod is running."
+description: "The pod keeps crashing."
+minRequiredVersion: "2.3.0"
+objectives: []
+`)
+		spec, err := ParseChallengeYaml(data)
+		require.NoError(t, err)
+		assert.Equal(t, "Pod Evicted", spec.Title)
+		assert.Equal(t, "fix", spec.Type)
+		assert.Equal(t, "easy", spec.Difficulty)
+		assert.Equal(t, 15, spec.EstimatedTime)
+		assert.Equal(t, "2.3.0", spec.MinRequiredVersion)
+	})
+
+	t.Run("minRequiredVersion absent — empty string", func(t *testing.T) {
+		data := []byte(`
+title: "Test"
+type: fix
+theme: networking
+difficulty: easy
+estimatedTime: 30
+initialSituation: "."
+description: "."
+objectives: []
+`)
+		spec, err := ParseChallengeYaml(data)
+		require.NoError(t, err)
+		assert.Empty(t, spec.MinRequiredVersion)
+	})
+
+	t.Run("invalid YAML returns error", func(t *testing.T) {
+		_, err := ParseChallengeYaml([]byte(":\tinvalid"))
+		require.Error(t, err)
+	})
+}
+
+// TestLoadChallengeYamlForChallenge_LocalFile verifies local-file lookup via KUBEASY_LOCAL_CHALLENGES_DIR.
+func TestLoadChallengeYamlForChallenge_LocalFile(t *testing.T) {
+	dir := t.TempDir()
+	slug := "test-challenge"
+	challengeDir := filepath.Join(dir, slug)
+	require.NoError(t, os.MkdirAll(challengeDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(challengeDir, "challenge.yaml"), []byte(`
+title: "Test"
+type: fix
+theme: networking
+difficulty: easy
+estimatedTime: 10
+initialSituation: "."
+description: "."
+minRequiredVersion: "1.5.0"
+objectives: []
+`), 0o600))
+
+	t.Setenv("KUBEASY_LOCAL_CHALLENGES_DIR", dir)
+
+	spec, err := LoadChallengeYamlForChallenge(slug)
+	require.NoError(t, err)
+	assert.Equal(t, "Test", spec.Title)
+	assert.Equal(t, "1.5.0", spec.MinRequiredVersion)
+}

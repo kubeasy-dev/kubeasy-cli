@@ -139,14 +139,18 @@ func TestGetChallengeBySlug_Success(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		response := ChallengeEntity{
-			ID:               123,
-			Slug:             "pod-evicted",
-			Title:            "Pod Evicted",
-			Description:      "Fix a pod that keeps getting evicted",
-			Difficulty:       "easy",
-			Theme:            "resources-scaling",
-			InitialSituation: "A pod is being evicted",
+		response := struct {
+			Challenge ChallengeEntity `json:"challenge"`
+		}{
+			Challenge: ChallengeEntity{
+				ID:               123,
+				Slug:             "pod-evicted",
+				Title:            "Pod Evicted",
+				Description:      "Fix a pod that keeps getting evicted",
+				Difficulty:       "easy",
+				Theme:            "resources-scaling",
+				InitialSituation: "A pod is being evicted",
+			},
 		}
 		_ = json.NewEncoder(w).Encode(response)
 	})
@@ -449,14 +453,18 @@ func TestGetChallengeBySlug_ReturnsExpectedID(t *testing.T) {
 	server := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		response := ChallengeEntity{
-			ID:               456,
-			Slug:             "test",
-			Title:            "Test",
-			Description:      "Test challenge",
-			Difficulty:       "easy",
-			Theme:            "testing",
-			InitialSituation: "Test",
+		response := struct {
+			Challenge ChallengeEntity `json:"challenge"`
+		}{
+			Challenge: ChallengeEntity{
+				ID:               456,
+				Slug:             "test",
+				Title:            "Test",
+				Description:      "Test challenge",
+				Difficulty:       "easy",
+				Theme:            "testing",
+				InitialSituation: "Test",
+			},
 		}
 		_ = json.NewEncoder(w).Encode(response)
 	})

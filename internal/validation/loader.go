@@ -73,29 +73,36 @@ func FindLocalChallengeFile(slug string) string {
 	return ""
 }
 
-// loadFromURL loads validations from a remote URL (internal use only)
-// URL must be from ChallengesRepoBaseURL for security
-func loadFromURL(url string) (*ValidationConfig, error) {
-	// Validate URL starts with trusted base URL
+// httpFetchRaw fetches the content at url, which must start with ChallengesRepoBaseURL.
+func httpFetchRaw(url string) ([]byte, error) {
 	if !strings.HasPrefix(url, ChallengesRepoBaseURL) {
 		return nil, fmt.Errorf("invalid URL: must be from %s", ChallengesRepoBaseURL)
 	}
 
-	resp, err := http.Get(url) //nolint:gosec // URL validated against ChallengesRepoBaseURL
+	resp, err := http.Get(url) //nolint:gosec // URL validated against ChallengesRepoBaseURL above
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch validations: %w", err)
+		return nil, fmt.Errorf("failed to fetch: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to fetch validations: HTTP %d", resp.StatusCode)
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
+	return data, nil
+}
 
+// loadFromURL loads validations from a remote URL (internal use only)
+// URL must be from ChallengesRepoBaseURL for security
+func loadFromURL(url string) (*ValidationConfig, error) {
+	data, err := httpFetchRaw(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch validations: %w", err)
+	}
 	return Parse(data)
 }
 
@@ -134,20 +141,9 @@ func LoadChallengeYamlForChallenge(slug string) (*ChallengeYamlSpec, error) {
 
 	// Fall back to GitHub
 	url := fmt.Sprintf("%s/%s/challenge.yaml", ChallengesRepoBaseURL, slug)
-	if !strings.HasPrefix(url, ChallengesRepoBaseURL) {
-		return nil, fmt.Errorf("invalid URL: must be from %s", ChallengesRepoBaseURL)
-	}
-	resp, err := http.Get(url) //nolint:gosec // URL validated against ChallengesRepoBaseURL
+	data, err := httpFetchRaw(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch challenge.yaml: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to fetch challenge.yaml: HTTP %d", resp.StatusCode)
-	}
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 	return ParseChallengeYaml(data)
 }

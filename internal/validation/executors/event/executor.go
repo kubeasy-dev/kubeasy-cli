@@ -18,12 +18,13 @@ import (
 const (
 	errNoMatchingPods    = "No matching pods found"
 	msgNoForbiddenEvents = "No forbidden events found"
+	kindPod              = "Pod"
 )
 
 // Execute checks that no forbidden events exist for the target resource and that all
 // required events are present within the time window.
 //
-// When the target kind is "Pod" (or unset), events are matched via pod name lookup
+// When the target kind is kindPod (or unset), events are matched via pod name lookup
 // (supporting label selectors). For other resource kinds (e.g. HorizontalPodAutoscaler,
 // Deployment), events are matched directly by InvolvedObject.Kind and Name.
 func Execute(ctx context.Context, spec vtypes.EventSpec, deps shared.Deps) (bool, string, error) {
@@ -32,13 +33,13 @@ func Execute(ctx context.Context, spec vtypes.EventSpec, deps shared.Deps) (bool
 	// Determine target kind; default to Pod for backward compatibility.
 	targetKind := spec.Target.Kind
 	if targetKind == "" {
-		targetKind = "Pod"
+		targetKind = kindPod
 	}
 
 	// matchEvent returns true when the event belongs to the target resource.
 	var matchEvent func(involvedKind, involvedName string) bool
 
-	if targetKind == "Pod" {
+	if targetKind == kindPod {
 		// Pod targets: resolve pods (supports label selectors) and match by name.
 		pods, err := shared.GetTargetPods(ctx, deps, spec.Target)
 		if err != nil {
@@ -52,7 +53,7 @@ func Execute(ctx context.Context, spec vtypes.EventSpec, deps shared.Deps) (bool
 			podNames[pod.Name] = true
 		}
 		matchEvent = func(involvedKind, involvedName string) bool {
-			return involvedKind == "Pod" && podNames[involvedName]
+			return involvedKind == kindPod && podNames[involvedName]
 		}
 	} else {
 		// Non-pod targets (HPA, Deployment, …): match events directly by kind + name.

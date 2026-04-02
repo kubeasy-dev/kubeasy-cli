@@ -6,11 +6,27 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
+	"time"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/apigen"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 )
+
+func timeToStringPtr(t *time.Time) *string {
+	if t == nil {
+		return nil
+	}
+	s := t.Format(time.RFC3339)
+	return &s
+}
+
+func timeToString(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	return t.Format(time.RFC3339)
+}
 
 // parseErrorResponse extracts an error message from a generated response.
 func parseErrorResponse(resp *http.Response, body []byte) error {
@@ -93,14 +109,18 @@ func GetChallengeBySlug(ctx context.Context, slug string) (*ChallengeEntity, err
 		return nil, parseErrorResponse(resp.HTTPResponse, resp.Body)
 	}
 
+	if resp.JSON200.Challenge == nil {
+		return nil, fmt.Errorf("challenge '%s' not found", slug)
+	}
+	c := resp.JSON200.Challenge
 	challenge := &ChallengeEntity{
-		ID:               resp.JSON200.Id,
-		Title:            resp.JSON200.Title,
-		Slug:             resp.JSON200.Slug,
-		Description:      resp.JSON200.Description,
-		Difficulty:       string(resp.JSON200.Difficulty),
-		Theme:            resp.JSON200.Theme,
-		InitialSituation: resp.JSON200.InitialSituation,
+		ID:               c.Id,
+		Title:            c.Title,
+		Slug:             c.Slug,
+		Description:      c.Description,
+		Difficulty:       string(c.Difficulty),
+		Theme:            c.Theme,
+		InitialSituation: c.InitialSituation,
 	}
 	return challenge, nil
 }
@@ -127,8 +147,8 @@ func GetChallengeStatus(ctx context.Context, slug string) (*ChallengeStatusRespo
 
 	status := &ChallengeStatusResponse{
 		Status:      string(resp.JSON200.Status),
-		StartedAt:   resp.JSON200.StartedAt,
-		CompletedAt: resp.JSON200.CompletedAt,
+		StartedAt:   timeToStringPtr(resp.JSON200.StartedAt),
+		CompletedAt: timeToStringPtr(resp.JSON200.CompletedAt),
 	}
 	return status, nil
 }
@@ -155,7 +175,7 @@ func StartChallengeWithResponse(ctx context.Context, slug string) (*ChallengeSta
 
 	result := &ChallengeStartResponse{
 		Status:    string(resp.JSON200.Status),
-		StartedAt: resp.JSON200.StartedAt,
+		StartedAt: timeToString(resp.JSON200.StartedAt),
 		Message:   resp.JSON200.Message,
 	}
 	return result, nil
@@ -267,8 +287,8 @@ func GetTypes(ctx context.Context) ([]string, error) {
 		return nil, parseErrorResponse(resp.HTTPResponse, resp.Body)
 	}
 
-	slugs := make([]string, len(resp.JSON200.Types))
-	for i, t := range resp.JSON200.Types {
+	slugs := make([]string, len(*resp.JSON200))
+	for i, t := range *resp.JSON200 {
 		slugs[i] = t.Slug
 	}
 	return slugs, nil
@@ -290,32 +310,14 @@ func GetThemes(ctx context.Context) ([]string, error) {
 		return nil, parseErrorResponse(resp.HTTPResponse, resp.Body)
 	}
 
-	slugs := make([]string, len(resp.JSON200.Themes))
-	for i, t := range resp.JSON200.Themes {
+	slugs := make([]string, len(*resp.JSON200))
+	for i, t := range *resp.JSON200 {
 		slugs[i] = t.Slug
 	}
 	return slugs, nil
 }
 
-// GetDifficulties fetches challenge difficulties from the public API.
-func GetDifficulties(ctx context.Context) ([]string, error) {
-	client, err := NewPublicClient()
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := client.GetDifficultiesWithResponse(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch challenge difficulties: %w", err)
-	}
-
-	if resp.JSON200 == nil {
-		return nil, parseErrorResponse(resp.HTTPResponse, resp.Body)
-	}
-
-	difficulties := make([]string, len(resp.JSON200.Difficulties))
-	for i, d := range resp.JSON200.Difficulties {
-		difficulties[i] = string(d)
-	}
-	return difficulties, nil
+// GetDifficulties is no longer available as a dedicated endpoint.
+func GetDifficulties(_ context.Context) ([]string, error) {
+	return nil, fmt.Errorf("difficulties endpoint removed")
 }

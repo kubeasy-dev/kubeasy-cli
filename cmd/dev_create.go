@@ -11,8 +11,10 @@ import (
 	"text/template"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/api"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/devutils"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/semver"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/ui"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/validation"
 	"github.com/spf13/cobra"
@@ -72,6 +74,9 @@ type: "{{.Type}}"
 theme: "{{.Theme}}"
 difficulty: "{{.Difficulty}}"
 estimatedTime: {{.EstimatedTime}}
+{{- if .MinRequiredVersion}}
+minRequiredVersion: "{{.MinRequiredVersion}}"
+{{- end}}
 
 # TODO: Describe the symptoms the user will observe (NOT the root cause).
 # Example: "A web application deployed in the cluster is not responding to requests.
@@ -341,17 +346,19 @@ In non-interactive mode, use flags: --name, --type, --theme, --difficulty.`,
 		// Generate challenge.yaml from template
 		var buf bytes.Buffer
 		err := challengeYAMLTemplate.Execute(&buf, struct {
-			Title         string
-			Type          string
-			Theme         string
-			Difficulty    string
-			EstimatedTime int
+			Title              string
+			Type               string
+			Theme              string
+			Difficulty         string
+			EstimatedTime      int
+			MinRequiredVersion string
 		}{
-			Title:         name,
-			Type:          challengeType,
-			Theme:         theme,
-			Difficulty:    difficulty,
-			EstimatedTime: estimatedTime,
+			Title:              name,
+			Type:               challengeType,
+			Theme:              theme,
+			Difficulty:         difficulty,
+			EstimatedTime:      estimatedTime,
+			MinRequiredVersion: minRequiredVersionForCreate(),
 		})
 		if err != nil {
 			return fmt.Errorf("failed to generate challenge.yaml: %w", err)
@@ -420,6 +427,16 @@ In non-interactive mode, use flags: --name, --type, --theme, --difficulty.`,
 		success = true
 		return nil
 	},
+}
+
+// minRequiredVersionForCreate returns the CLI version to embed in newly created
+// challenge.yaml files. Returns empty string for pre-release builds so that
+// challenge authors don't accidentally pin to a meaningless dev version.
+func minRequiredVersionForCreate() string {
+	if semver.IsPreRelease(constants.Version) {
+		return ""
+	}
+	return constants.Version
 }
 
 func init() {

@@ -49,7 +49,7 @@ const maxAuditEvents = 500
 // empty slice is returned without error. The result is capped at 500 events
 // (most recent wins when the buffer overflows).
 func ReadAndFilter(logPath, namespace string, since time.Time) ([]AuditEvent, error) {
-	f, err := os.Open(logPath) //nolint:gosec // logPath is derived from constants, not user input
+	f, err := os.Open(logPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil

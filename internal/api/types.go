@@ -6,7 +6,7 @@
 
 package api
 
-import "github.com/kubeasy-dev/kubeasy-cli/internal/audit"
+import "time"
 
 // UserResponse represents the response from GET /api/cli/user
 type UserResponse struct {
@@ -53,10 +53,23 @@ type ObjectiveResult struct {
 	Message      *string `json:"message,omitempty"` // CRD status message or error
 }
 
+// SubmitAuditEvent is the audit event payload sent alongside validation results.
+// Fields are a subset of the Kubernetes audit event — enough for session replay and coaching.
+type SubmitAuditEvent struct {
+	Timestamp    time.Time `json:"timestamp"`
+	Verb         string    `json:"verb"`
+	Resource     string    `json:"resource"`
+	Subresource  string    `json:"subresource,omitempty"`
+	Name         string    `json:"name,omitempty"`
+	Namespace    string    `json:"namespace,omitempty"`
+	UserAgent    string    `json:"userAgent,omitempty"`
+	ResponseCode int       `json:"responseCode,omitempty"`
+}
+
 // ChallengeSubmitRequest represents the request body for POST /api/cli/challenge/[slug]/submit
 type ChallengeSubmitRequest struct {
 	Results     []ObjectiveResult  `json:"results"`
-	AuditEvents []audit.AuditEvent `json:"auditEvents,omitempty"`
+	AuditEvents []SubmitAuditEvent `json:"auditEvents,omitempty"`
 }
 
 // ChallengeSubmitResponse is a union type that can be either success or failure.

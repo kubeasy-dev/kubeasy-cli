@@ -22,7 +22,7 @@ func SaveTimestamp(slug string) error {
 		return fmt.Errorf("failed to create state dir: %w", err)
 	}
 	ts := time.Now().UTC().Format(time.RFC3339)
-	return os.WriteFile(filepath.Join(dir, "timestamp"), []byte(ts), 0o640)
+	return os.WriteFile(filepath.Join(dir, "timestamp"), []byte(ts), 0o600)
 }
 
 // LoadTimestamp reads the saved timestamp for the challenge.

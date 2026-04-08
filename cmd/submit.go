@@ -131,6 +131,9 @@ Make sure you have completed the challenge before submitting.`,
 			validation.TypeLog:          "Log Validation",
 			validation.TypeEvent:        "Event Validation",
 			validation.TypeConnectivity: "Connectivity Validation",
+			validation.TypeRbac:         "RBAC Validation",
+			validation.TypeSpec:         "Spec Validation",
+			validation.TypeTriggered:    "Triggered Validation",
 		}
 
 		for valType, typeRes := range typeResults {
@@ -162,20 +165,36 @@ Make sure you have completed the challenge before submitting.`,
 		} else {
 			since = ts
 		}
-		auditEvents, err := audit.ReadAndFilter(audit.GetAuditLogPath(), namespace, since)
+		rawAuditEvents, err := audit.ReadAndFilter(audit.GetAuditLogPath(), namespace, since)
 		if err != nil {
 			logger.Debug("Could not read audit log: %v", err)
-			auditEvents = nil
+		}
+		// Convert audit.AuditEvent → api.SubmitAuditEvent to keep the api package
+		// free of dependencies on internal implementation packages.
+		submitAuditEvents := make([]api.SubmitAuditEvent, len(rawAuditEvents))
+		for i, e := range rawAuditEvents {
+			submitAuditEvents[i] = api.SubmitAuditEvent{
+				Timestamp:    e.Timestamp,
+				Verb:         e.Verb,
+				Resource:     e.Resource,
+				Subresource:  e.Subresource,
+				Name:         e.Name,
+				Namespace:    e.Namespace,
+				UserAgent:    e.UserAgent,
+				ResponseCode: e.ResponseCode,
+			}
 		}
 
-		submitReq := api.ChallengeSubmitRequest{Results: apiResults, AuditEvents: auditEvents}
+		submitReq := api.ChallengeSubmitRequest{Results: apiResults, AuditEvents: submitAuditEvents}
 		submitResult, err := api.SubmitChallenge(cmd.Context(), challengeSlug, submitReq)
 		if err != nil {
 			ui.Error("Failed to submit results")
 			return fmt.Errorf("failed to submit results: %w", err)
 		}
 
-		// Advance the audit window so the next submit only sees new events.
+		// Advance the audit window unconditionally (even on 422 / partial failure).
+		// This is deliberate: re-sending events from a failed window on retry would
+		// cause the backend to receive duplicates. Each submit window is self-contained.
 		if saveErr := audit.SaveTimestamp(challengeSlug); saveErr != nil {
 			logger.Debug("Could not save audit timestamp: %v", saveErr)
 		}

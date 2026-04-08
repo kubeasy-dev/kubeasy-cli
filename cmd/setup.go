@@ -89,7 +89,7 @@ func createClusterWithConfig() error {
 	// Write audit policy before creating cluster — the ExtraMount host path must exist.
 	if err := audit.EnsureAuditPolicy(); err != nil {
 		logger.Debug("Could not write audit policy: %v", err)
-		// Non-fatal — Kind will report a bind-mount error at creation time if the path is missing.
+		ui.Warning("Could not write audit policy file — audit logging may not be available (check permissions on " + audit.GetAuditDir() + ")")
 	}
 
 	// Write config before creating cluster so it is available for future checks.

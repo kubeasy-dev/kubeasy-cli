@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 
@@ -82,10 +83,16 @@ func GetAuditLogPath() string {
 }
 
 // EnsureAuditPolicy creates the audit directory and writes the policy file.
-// It is idempotent — safe to call on every setup.
+// It is idempotent: if the file already contains the expected policy it is not
+// rewritten, so any deliberate local modifications are preserved.
 func EnsureAuditPolicy() error {
 	if err := os.MkdirAll(GetAuditDir(), 0o750); err != nil {
 		return err
 	}
-	return os.WriteFile(GetAuditPolicyPath(), []byte(AuditPolicyYAML), 0o640)
+	policyPath := GetAuditPolicyPath()
+	existing, err := os.ReadFile(policyPath)
+	if err == nil && bytes.Equal(existing, []byte(AuditPolicyYAML)) {
+		return nil // already up-to-date, leave any local edits untouched
+	}
+	return os.WriteFile(policyPath, []byte(AuditPolicyYAML), 0o600)
 }

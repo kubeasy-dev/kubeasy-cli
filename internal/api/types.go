@@ -6,6 +6,8 @@
 
 package api
 
+import "github.com/kubeasy-dev/kubeasy-cli/internal/audit"
+
 // UserResponse represents the response from GET /api/cli/user
 type UserResponse struct {
 	FirstName string  `json:"firstName"`
@@ -53,7 +55,8 @@ type ObjectiveResult struct {
 
 // ChallengeSubmitRequest represents the request body for POST /api/cli/challenge/[slug]/submit
 type ChallengeSubmitRequest struct {
-	Results []ObjectiveResult `json:"results"`
+	Results     []ObjectiveResult  `json:"results"`
+	AuditEvents []audit.AuditEvent `json:"auditEvents,omitempty"`
 }
 
 // ChallengeSubmitResponse is a union type that can be either success or failure.

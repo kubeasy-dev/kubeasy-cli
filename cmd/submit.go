@@ -2,9 +2,12 @@ package cmd
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/api"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/audit"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/kube"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/ui"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/validation"
 	"github.com/spf13/cobra"
@@ -152,11 +155,29 @@ Make sure you have completed the challenge before submitting.`,
 		// Display overall result
 		ui.Section("Submission Result")
 
-		submitReq := api.ChallengeSubmitRequest{Results: apiResults}
+		// Collect audit events recorded since the challenge was started.
+		var since time.Time
+		if ts, err := audit.LoadTimestamp(challengeSlug); err != nil {
+			logger.Debug("No audit timestamp for %s, using zero time: %v", challengeSlug, err)
+		} else {
+			since = ts
+		}
+		auditEvents, err := audit.ReadAndFilter(audit.GetAuditLogPath(), namespace, since)
+		if err != nil {
+			logger.Debug("Could not read audit log: %v", err)
+			auditEvents = nil
+		}
+
+		submitReq := api.ChallengeSubmitRequest{Results: apiResults, AuditEvents: auditEvents}
 		submitResult, err := api.SubmitChallenge(cmd.Context(), challengeSlug, submitReq)
 		if err != nil {
 			ui.Error("Failed to submit results")
 			return fmt.Errorf("failed to submit results: %w", err)
+		}
+
+		// Advance the audit window so the next submit only sees new events.
+		if saveErr := audit.SaveTimestamp(challengeSlug); saveErr != nil {
+			logger.Debug("Could not save audit timestamp: %v", saveErr)
 		}
 
 		if allPassed && submitResult.Success {

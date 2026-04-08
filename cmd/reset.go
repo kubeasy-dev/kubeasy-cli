@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/api"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/audit"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -52,6 +54,10 @@ var resetChallengeCmd = &cobra.Command{
 		if err != nil {
 			ui.Error("Failed to reset challenge progress")
 			return fmt.Errorf("failed to reset challenge progress: %w", err)
+		}
+
+		if err := audit.ClearState(challengeSlug); err != nil {
+			logger.Debug("Could not clear audit state: %v", err)
 		}
 
 		ui.Println()

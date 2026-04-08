@@ -2,9 +2,12 @@ package cmd
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/api"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/audit"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/kube"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/ui"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/validation"
 	"github.com/spf13/cobra"
@@ -128,6 +131,9 @@ Make sure you have completed the challenge before submitting.`,
 			validation.TypeLog:          "Log Validation",
 			validation.TypeEvent:        "Event Validation",
 			validation.TypeConnectivity: "Connectivity Validation",
+			validation.TypeRbac:         "RBAC Validation",
+			validation.TypeSpec:         "Spec Validation",
+			validation.TypeTriggered:    "Triggered Validation",
 		}
 
 		for valType, typeRes := range typeResults {
@@ -152,11 +158,45 @@ Make sure you have completed the challenge before submitting.`,
 		// Display overall result
 		ui.Section("Submission Result")
 
-		submitReq := api.ChallengeSubmitRequest{Results: apiResults}
+		// Collect audit events recorded since the challenge was started.
+		var since time.Time
+		if ts, err := audit.LoadTimestamp(challengeSlug); err != nil {
+			logger.Debug("No audit timestamp for %s, using zero time: %v", challengeSlug, err)
+		} else {
+			since = ts
+		}
+		rawAuditEvents, err := audit.ReadAndFilter(audit.GetAuditLogPath(), namespace, since)
+		if err != nil {
+			logger.Debug("Could not read audit log: %v", err)
+		}
+		// Convert audit.AuditEvent → api.SubmitAuditEvent to keep the api package
+		// free of dependencies on internal implementation packages.
+		submitAuditEvents := make([]api.SubmitAuditEvent, len(rawAuditEvents))
+		for i, e := range rawAuditEvents {
+			submitAuditEvents[i] = api.SubmitAuditEvent{
+				Timestamp:    e.Timestamp,
+				Verb:         e.Verb,
+				Resource:     e.Resource,
+				Subresource:  e.Subresource,
+				Name:         e.Name,
+				Namespace:    e.Namespace,
+				UserAgent:    e.UserAgent,
+				ResponseCode: e.ResponseCode,
+			}
+		}
+
+		submitReq := api.ChallengeSubmitRequest{Results: apiResults, AuditEvents: submitAuditEvents}
 		submitResult, err := api.SubmitChallenge(cmd.Context(), challengeSlug, submitReq)
 		if err != nil {
 			ui.Error("Failed to submit results")
 			return fmt.Errorf("failed to submit results: %w", err)
+		}
+
+		// Advance the audit window unconditionally (even on 422 / partial failure).
+		// This is deliberate: re-sending events from a failed window on retry would
+		// cause the backend to receive duplicates. Each submit window is self-contained.
+		if saveErr := audit.SaveTimestamp(challengeSlug); saveErr != nil {
+			logger.Debug("Could not save audit timestamp: %v", saveErr)
 		}
 
 		if allPassed && submitResult.Success {

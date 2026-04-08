@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -181,28 +182,21 @@ func StartChallengeWithResponse(ctx context.Context, slug string) (*ChallengeSta
 	return result, nil
 }
 
-// SubmitChallenge submits a challenge via POST /api/cli/challenge/:slug/submit
+// SubmitChallenge submits a challenge via POST /api/cli/challenge/:slug/submit.
+// It uses raw JSON marshaling so that extra fields (e.g. auditEvents) are forwarded
+// without requiring regeneration of the OpenAPI client.
 func SubmitChallenge(ctx context.Context, slug string, req ChallengeSubmitRequest) (*ChallengeSubmitResponse, error) {
 	client, err := NewAuthenticatedClient()
 	if err != nil {
 		return nil, err
 	}
 
-	// Convert ObjectiveResult to the generated request body type
-	results := make([]struct {
-		Message      *string `json:"message,omitempty"`
-		ObjectiveKey string  `json:"objectiveKey"`
-		Passed       bool    `json:"passed"`
-	}, len(req.Results))
-	for i, r := range req.Results {
-		results[i].ObjectiveKey = r.ObjectiveKey
-		results[i].Passed = r.Passed
-		results[i].Message = r.Message
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	resp, err := client.CliSubmitChallengeLegacyWithResponse(ctx, slug, apigen.CliSubmitChallengeLegacyJSONRequestBody{
-		Results: results,
-	})
+	resp, err := client.CliSubmitChallengeLegacyWithBodyWithResponse(ctx, slug, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}

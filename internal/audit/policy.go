@@ -61,7 +61,6 @@ rules:
       - patch
       - delete
       - deletecollection
-      - apply
 
   # Default: ignore everything else
   - level: None
@@ -83,8 +82,7 @@ func GetAuditLogPath() string {
 }
 
 // EnsureAuditPolicy creates the audit directory and writes the policy file.
-// It is idempotent: if the file already contains the expected policy it is not
-// rewritten, so any deliberate local modifications are preserved.
+// It is idempotent: if the file already matches the embedded policy it is not rewritten.
 func EnsureAuditPolicy() error {
 	if err := os.MkdirAll(GetAuditDir(), 0o750); err != nil {
 		return err

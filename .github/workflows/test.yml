@@ -16,7 +16,7 @@ on:
       - 'test/**'
       - go.mod
       - go.sum
-      - 'Taskfile.yml'
+      - 'mise.toml'
 
 
 permissions:
@@ -34,18 +34,20 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
-        with:
-          go-version: "1.26.1"
-          cache: true
-          cache-dependency-path: go.sum
+      - name: Set up tools
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4
 
-      - name: Install Task
-        uses: go-task/setup-task@3be4020d41929789a01026e0e427a4321ce0ad44 # v2.0.0
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-
 
       - name: Run unit tests
-        run: task test:unit
+        run: mise run test:unit
 
       - name: Upload unit test coverage
         uses: codecov/codecov-action@1af58845a975a7985b0beb0cbe6fbbb71a41dbad # v5.5.3
@@ -64,18 +66,20 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
-        with:
-          go-version: "1.26.1"
-          cache: true
-          cache-dependency-path: go.sum
+      - name: Set up tools
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4
 
-      - name: Install Task
-        uses: go-task/setup-task@3be4020d41929789a01026e0e427a4321ce0ad44 # v2.0.0
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-
 
       - name: Run integration tests
-        run: task test:integration
+        run: mise run test:integration
 
       - name: Check coverage file has data
         id: check-coverage
@@ -106,18 +110,20 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
-        with:
-          go-version: "1.26.1"
-          cache: true
-          cache-dependency-path: go.sum
+      - name: Set up tools
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4
 
-      - name: Install Task
-        uses: go-task/setup-task@3be4020d41929789a01026e0e427a4321ce0ad44 # v2.0.0
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-
 
       - name: Run e2e tests
-        run: task test:e2e
+        run: mise run test:e2e
         timeout-minutes: 15
 
   test-summary:

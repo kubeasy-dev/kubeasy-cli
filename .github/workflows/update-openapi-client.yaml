@@ -14,12 +14,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+      - name: Set up tools
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
         with:
-          go-version-file: go.mod
-          cache: true
-          cache-dependency-path: go.sum
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-
 
       - name: Write OpenAPI spec
         run: |
@@ -54,10 +59,7 @@ jobs:
           EOF
 
       - name: Generate API client
-        run: |
-          go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.5.1
-          mkdir -p internal/apigen
-          oapi-codegen --config oapi-codegen.yaml openapi.json
+        run: mise run generate:api
 
       - name: Build and test generated code
         run: |

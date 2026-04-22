@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/api"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/audit"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/deployer"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/kube"
@@ -122,6 +123,10 @@ var startChallengeCmd = &cobra.Command{
 		if err != nil {
 			ui.Error("Failed to start challenge")
 			return fmt.Errorf("failed to start challenge: %w", err)
+		}
+
+		if err := audit.SaveTimestamp(challengeSlug); err != nil {
+			logger.Debug("Could not save start timestamp: %v", err)
 		}
 
 		ui.Println()

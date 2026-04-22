@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/api"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/audit"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/deployer"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/keystore"
@@ -32,7 +33,8 @@ func checkClusterExists() (bool, error) {
 	return clusterExists, nil
 }
 
-// kindClusterConfig returns the Kind cluster configuration with extraPortMappings for nginx-ingress.
+// kindClusterConfig returns the Kind cluster configuration with extraPortMappings for nginx-ingress
+// and ExtraMounts + KubeadmConfigPatches to enable API server audit logging.
 func kindClusterConfig() *kindv1alpha4.Cluster {
 	return &kindv1alpha4.Cluster{
 		TypeMeta: kindv1alpha4.TypeMeta{
@@ -46,6 +48,35 @@ func kindClusterConfig() *kindv1alpha4.Cluster {
 					{ContainerPort: 80, HostPort: 8080, Protocol: kindv1alpha4.PortMappingProtocolTCP},
 					{ContainerPort: 443, HostPort: 8443, Protocol: kindv1alpha4.PortMappingProtocolTCP},
 				},
+				ExtraMounts: []kindv1alpha4.Mount{
+					{
+						HostPath:      audit.GetAuditPolicyPath(),
+						ContainerPath: "/etc/kubernetes/audit-policy.yaml",
+						Readonly:      true,
+					},
+					{
+						HostPath:      audit.GetAuditDir(),
+						ContainerPath: "/var/log/kubernetes/audit",
+						Readonly:      false,
+					},
+				},
+				KubeadmConfigPatches: []string{`kind: ClusterConfiguration
+apiServer:
+  extraArgs:
+    audit-policy-file: /etc/kubernetes/audit-policy.yaml
+    audit-log-path: /var/log/kubernetes/audit/audit.log
+    audit-log-maxsize: "50"
+    audit-log-maxbackup: "1"
+  extraVolumes:
+    - name: audit-policy
+      hostPath: /etc/kubernetes/audit-policy.yaml
+      mountPath: /etc/kubernetes/audit-policy.yaml
+      readOnly: true
+    - name: audit-logs
+      hostPath: /var/log/kubernetes/audit
+      mountPath: /var/log/kubernetes/audit
+      readOnly: false
+`},
 			},
 		},
 	}
@@ -54,6 +85,12 @@ func kindClusterConfig() *kindv1alpha4.Cluster {
 // createClusterWithConfig writes the Kind config and creates the cluster with port mappings.
 func createClusterWithConfig() error {
 	cfg := kindClusterConfig()
+
+	// Write audit policy before creating cluster — the ExtraMount host path must exist.
+	if err := audit.EnsureAuditPolicy(); err != nil {
+		logger.Debug("Could not write audit policy: %v", err)
+		ui.Warning("Could not write audit policy file — audit logging may not be available (check permissions on " + audit.GetAuditDir() + ")")
+	}
 
 	// Write config before creating cluster so it is available for future checks.
 	if err := deployer.WriteKindConfig(cfg); err != nil {

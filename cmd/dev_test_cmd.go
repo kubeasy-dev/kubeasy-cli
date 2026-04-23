@@ -46,25 +46,33 @@ Use --json for structured JSON output (useful for CI).`,
 			return err
 		}
 
-		// Resolve local challenge directory
-		challengeDir, err := devutils.ResolveLocalChallengeDir(challengeSlug, devTestDir)
-		if err != nil {
-			if !opts.JSONOutput {
-				ui.Error("Failed to find challenge directory")
+		// Resolve filesystem dir if --dir provided; otherwise use registry mode.
+		challengeDir := ""
+		if devTestDir != "" {
+			dir, err := devutils.ResolveLocalChallengeDir(challengeSlug, devTestDir)
+			if err != nil {
+				if !opts.JSONOutput {
+					ui.Error("Failed to find challenge directory")
+				}
+				return err
 			}
-			return err
+			challengeDir = dir
 		}
 
 		// Apply
 		ui.Section(fmt.Sprintf("Applying Dev Challenge: %s", challengeSlug))
-		ui.Info(fmt.Sprintf("Using challenge directory: %s", challengeDir))
+		if challengeDir != "" {
+			ui.Info(fmt.Sprintf("Using local directory: %s", challengeDir))
+		} else {
+			ui.Info(fmt.Sprintf("Using registry: %s", devRegistryURL))
+		}
 
-		if err := runDevApply(cmd, challengeSlug, challengeDir, devTestClean); err != nil {
+		if _, err := runDevApply(cmd, challengeSlug, challengeDir, devRegistryURL, devTestClean); err != nil {
 			return err
 		}
 
 		ui.Println()
-		ui.Success(fmt.Sprintf("Challenge '%s' deployed from local files!", challengeSlug))
+		ui.Success(fmt.Sprintf("Challenge '%s' deployed!", challengeSlug))
 		ui.Println()
 
 		// Validate
@@ -79,11 +87,11 @@ Use --json for structured JSON output (useful for CI).`,
 		if devTestWatch {
 			header := fmt.Sprintf("Validating Dev Challenge: %s (watch mode)", challengeSlug)
 			return devutils.TickerWatchLoop(cmd.Context(), devTestWatchInterval, header, func() {
-				runDevValidate(cmd, challengeSlug, challengeDir, opts) //nolint:errcheck
+				runDevValidate(cmd, challengeSlug, challengeDir, devRegistryURL, opts) //nolint:errcheck
 			})
 		}
 
-		allPassed, err := runDevValidate(cmd, challengeSlug, challengeDir, opts)
+		allPassed, err := runDevValidate(cmd, challengeSlug, challengeDir, devRegistryURL, opts)
 		if err != nil {
 			return err
 		}
@@ -98,7 +106,7 @@ Use --json for structured JSON output (useful for CI).`,
 
 func init() {
 	devCmd.AddCommand(devTestCmd)
-	devTestCmd.Flags().StringVar(&devTestDir, "dir", "", "Path to challenge directory (default: auto-detect)")
+	devTestCmd.Flags().StringVar(&devTestDir, "dir", "", "Read from local directory instead of registry")
 	devTestCmd.Flags().BoolVar(&devTestClean, "clean", false, "Delete existing resources before applying")
 	devTestCmd.Flags().BoolVarP(&devTestWatch, "watch", "w", false, "Continuously re-run validations at the given interval after apply (see --watch-interval)")
 	devTestCmd.Flags().DurationVarP(&devTestWatchInterval, "watch-interval", "i", 5*time.Second, "Interval between watch re-runs (e.g. 10s, 1m)")

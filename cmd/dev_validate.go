@@ -24,7 +24,9 @@ var devValidateCmd = &cobra.Command{
 This is the dev equivalent of 'kubeasy challenge submit' but does not send
 results to the Kubeasy API. No login required.
 
-Use --watch to continuously re-run validations at the given interval (see --watch-interval).
+By default, loads the challenge YAML from the local registry (http://localhost:8080).
+Use --dir to read from a local directory instead.
+Use --watch to continuously re-run validations at the given interval.
 Use --fail-fast to stop at the first validation failure.
 Use --json for structured JSON output (useful for CI).`,
 	Args:          cobra.ExactArgs(1),
@@ -41,7 +43,6 @@ Use --json for structured JSON output (useful for CI).`,
 			ui.Section(fmt.Sprintf("Validating Dev Challenge: %s", challengeSlug))
 		}
 
-		// Validate slug format
 		if err := validateChallengeSlug(challengeSlug); err != nil {
 			if !opts.JSONOutput {
 				ui.Error("Invalid challenge slug")
@@ -49,13 +50,17 @@ Use --json for structured JSON output (useful for CI).`,
 			return err
 		}
 
-		// Resolve local challenge directory
-		challengeDir, err := devutils.ResolveLocalChallengeDir(challengeSlug, devValidateDir)
-		if err != nil {
-			if !opts.JSONOutput {
-				ui.Error("Failed to find challenge directory")
+		// Resolve filesystem dir if --dir provided; otherwise use registry mode.
+		challengeDir := ""
+		if devValidateDir != "" {
+			dir, err := devutils.ResolveLocalChallengeDir(challengeSlug, devValidateDir)
+			if err != nil {
+				if !opts.JSONOutput {
+					ui.Error("Failed to find challenge directory")
+				}
+				return err
 			}
-			return err
+			challengeDir = dir
 		}
 
 		if devValidateWatch && devValidateWatchInterval <= 0 {
@@ -65,11 +70,11 @@ Use --json for structured JSON output (useful for CI).`,
 		if devValidateWatch {
 			header := fmt.Sprintf("Validating Dev Challenge: %s (watch mode)", challengeSlug)
 			return devutils.TickerWatchLoop(cmd.Context(), devValidateWatchInterval, header, func() {
-				runDevValidate(cmd, challengeSlug, challengeDir, opts) //nolint:errcheck
+				runDevValidate(cmd, challengeSlug, challengeDir, devRegistryURL, opts) //nolint:errcheck
 			})
 		}
 
-		allPassed, err := runDevValidate(cmd, challengeSlug, challengeDir, opts)
+		allPassed, err := runDevValidate(cmd, challengeSlug, challengeDir, devRegistryURL, opts)
 		if err != nil {
 			return err
 		}
@@ -84,7 +89,7 @@ Use --json for structured JSON output (useful for CI).`,
 
 func init() {
 	devCmd.AddCommand(devValidateCmd)
-	devValidateCmd.Flags().StringVar(&devValidateDir, "dir", "", "Path to challenge directory (default: auto-detect)")
+	devValidateCmd.Flags().StringVar(&devValidateDir, "dir", "", "Read from local directory instead of registry")
 	devValidateCmd.Flags().BoolVarP(&devValidateWatch, "watch", "w", false, "Continuously re-run validations at the given interval (see --watch-interval)")
 	devValidateCmd.Flags().DurationVarP(&devValidateWatchInterval, "watch-interval", "i", 5*time.Second, "Interval between watch re-runs (e.g. 10s, 1m)")
 	devValidateCmd.Flags().BoolVar(&devValidateFailFast, "fail-fast", false, "Stop at the first validation failure")

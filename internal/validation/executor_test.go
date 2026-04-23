@@ -7,7 +7,6 @@ import (
 	"github.com/kubeasy-dev/kubeasy-cli/internal/validation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
@@ -88,7 +87,7 @@ func TestExecuteAll(t *testing.T) {
 			Spec: validation.ConditionSpec{
 				Target: validation.Target{Kind: "Pod", Name: "test-pod"},
 				Checks: []validation.ConditionCheck{
-					{Type: "Ready", Status: corev1.ConditionTrue},
+					{Type: "Ready", Status: "True"},
 				},
 			},
 		},

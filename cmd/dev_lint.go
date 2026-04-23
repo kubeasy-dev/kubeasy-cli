@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"io"
+	"net/http"
 	"path/filepath"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/devutils"
@@ -16,45 +18,70 @@ var devLintCmd = &cobra.Command{
 	Short: "Validate challenge.yaml structure without a cluster",
 	Long: `Validates the structure and content of a challenge.yaml file.
 Checks required fields, valid values, objective structure, and manifests directory.
-No Kubernetes cluster is needed.`,
+No Kubernetes cluster is needed.
+
+When a slug is given and --dir is not set, fetches challenge.yaml from the local
+registry (http://localhost:8080 by default). Use --dir to read from a local path instead.`,
 	Args:          cobra.MaximumNArgs(1),
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var challengeDir string
+		ui.Section("Linting Challenge")
 
-		if len(args) > 0 {
+		var issues []devutils.LintIssue
+		var err error
+
+		if devLintDir != "" || len(args) == 0 {
+			// Filesystem mode: --dir flag provided, or no slug given (lint current directory).
+			var challengeDir string
+			if devLintDir != "" {
+				challengeDir, err = filepath.Abs(devLintDir)
+				if err != nil {
+					return fmt.Errorf("failed to resolve path: %w", err)
+				}
+			} else {
+				challengeDir, err = devutils.ResolveLocalChallengeDir("", "")
+				if err != nil {
+					ui.Error("Failed to find challenge directory. Use a slug or --dir to specify.")
+					return err
+				}
+			}
+
+			challengeYAML := filepath.Join(challengeDir, "challenge.yaml")
+			ui.Info(fmt.Sprintf("File: %s", challengeYAML))
+			ui.Println()
+
+			issues, err = devutils.LintChallengeFile(challengeYAML)
+		} else {
+			// Registry mode: fetch YAML from local registry.
 			slug := args[0]
-			if err := validateChallengeSlug(slug); err != nil {
+			if err = validateChallengeSlug(slug); err != nil {
 				ui.Error("Invalid challenge slug")
 				return err
 			}
-			dir, err := devutils.ResolveLocalChallengeDir(slug, devLintDir)
-			if err != nil {
-				ui.Error("Failed to find challenge directory")
-				return err
+
+			url := fmt.Sprintf("%s/challenges/%s/yaml", devRegistryURL, slug)
+			ui.Info(fmt.Sprintf("Fetching: %s", url))
+			ui.Println()
+
+			resp, httpErr := http.Get(url) //nolint:noctx,gosec
+			if httpErr != nil {
+				ui.Error(fmt.Sprintf("Failed to reach registry: %v", httpErr))
+				return httpErr
 			}
-			challengeDir = dir
-		} else if devLintDir != "" {
-			absDir, err := filepath.Abs(devLintDir)
-			if err != nil {
-				return fmt.Errorf("failed to resolve path: %w", err)
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				return fmt.Errorf("registry returned HTTP %d for challenge %q", resp.StatusCode, slug)
 			}
-			challengeDir = absDir
-		} else {
-			// Try current directory
-			absDir, err := filepath.Abs(".")
-			if err != nil {
-				return fmt.Errorf("failed to resolve path: %w", err)
+
+			data, readErr := io.ReadAll(resp.Body)
+			if readErr != nil {
+				return fmt.Errorf("failed to read response: %w", readErr)
 			}
-			challengeDir = absDir
+
+			issues, err = devutils.LintChallengeData(data)
 		}
 
-		challengeYAML := filepath.Join(challengeDir, "challenge.yaml")
-		ui.Section("Linting Challenge")
-		ui.Info(fmt.Sprintf("File: %s", challengeYAML))
-		ui.Println()
-
-		issues, err := devutils.LintChallengeFile(challengeYAML)
 		if err != nil {
 			ui.Error(fmt.Sprintf("Failed to lint: %v", err))
 			return err
@@ -73,8 +100,7 @@ No Kubernetes cluster is needed.`,
 
 		ui.Println()
 		if hasErrors {
-			errCount := 0
-			warnCount := 0
+			errCount, warnCount := 0, 0
 			for _, issue := range issues {
 				if issue.Severity == devutils.SeverityError {
 					errCount++
@@ -86,9 +112,8 @@ No Kubernetes cluster is needed.`,
 			return fmt.Errorf("lint failed with %d error(s)", errCount)
 		}
 
-		warnCount := len(issues)
-		if warnCount > 0 {
-			ui.Warning(fmt.Sprintf("Found %d warning(s), no errors", warnCount))
+		if len(issues) > 0 {
+			ui.Warning(fmt.Sprintf("Found %d warning(s), no errors", len(issues)))
 		} else {
 			ui.Success("No issues found!")
 		}
@@ -99,5 +124,5 @@ No Kubernetes cluster is needed.`,
 
 func init() {
 	devCmd.AddCommand(devLintCmd)
-	devLintCmd.Flags().StringVar(&devLintDir, "dir", "", "Path to challenge directory (default: auto-detect)")
+	devLintCmd.Flags().StringVar(&devLintDir, "dir", "", "Read from local directory instead of registry")
 }

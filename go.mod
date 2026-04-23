@@ -5,7 +5,7 @@ go 1.25.4
 require (
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
-	github.com/hypersequent/zen v0.0.0-20250923135653-056103bb12ce
+	github.com/kubeasy-dev/registry v0.2.1
 	github.com/oapi-codegen/runtime v1.3.0
 	github.com/pterm/pterm v0.12.83
 	github.com/spf13/cobra v1.10.2

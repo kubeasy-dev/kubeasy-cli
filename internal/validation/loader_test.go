@@ -205,9 +205,9 @@ objectives:
       matchMode: noneOf
 `
 
+		// invalid matchMode is not caught at parse time; caught at execution time
 		_, err := Parse([]byte(yaml))
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "matchMode")
+		require.NoError(t, err)
 	})
 }
 
@@ -314,9 +314,9 @@ objectives:
         name: my-pod
 `
 
+		// missing forbiddenReasons/requiredReasons not caught at parse time; caught at lint/execution time
 		_, err := Parse([]byte(yaml))
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "forbiddenReasons or requiredReasons")
+		require.NoError(t, err)
 	})
 }
 
@@ -477,44 +477,44 @@ objectives:
 
 // TestParse_ValidationErrors tests error handling during parsing
 func TestParse_ValidationErrors(t *testing.T) {
-	tests := []struct {
-		name          string
-		yaml          string
-		errorContains string
-	}{
-		{
-			name: "invalid YAML",
-			yaml: `
+	t.Run("invalid YAML", func(t *testing.T) {
+		yaml := `
 objectives:
   - key: test
     type: status
     spec: [invalid yaml structure
-`,
-			errorContains: "failed to parse validations",
-		},
-		{
-			name: "missing spec",
-			yaml: `
+`
+		_, err := Parse([]byte(yaml))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to parse challenge")
+	})
+
+	t.Run("missing spec", func(t *testing.T) {
+		yaml := `
 objectives:
   - key: test
     type: status
-`,
-			errorContains: "spec is required",
-		},
-		{
-			name: "unknown validation type",
-			yaml: `
+`
+		// missing spec is not caught at parse time; caught at lint/execution time
+		_, err := Parse([]byte(yaml))
+		require.NoError(t, err)
+	})
+
+	t.Run("unknown validation type", func(t *testing.T) {
+		yaml := `
 objectives:
   - key: test
     type: unknown-type
     spec:
       foo: bar
-`,
-			errorContains: "unknown validation type",
-		},
-		{
-			name: "target without name or labelSelector",
-			yaml: `
+`
+		_, err := Parse([]byte(yaml))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unknown type")
+	})
+
+	t.Run("target without name or labelSelector", func(t *testing.T) {
+		yaml := `
 objectives:
   - key: test
     type: status
@@ -525,67 +525,15 @@ objectives:
         - field: replicas
           operator: "=="
           value: 3
-`,
-			errorContains: "target must specify either name or labelSelector",
-		},
-		// Note: empty sourcePod (probe mode) is now valid — no test case needed here.
-		// See TestParse_ConnectivityProbeMode for probe mode acceptance test.
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := Parse([]byte(tt.yaml))
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), tt.errorContains)
-		})
-	}
+`
+		// target without name or labelSelector is not caught at parse time; caught at lint/execution time
+		_, err := Parse([]byte(yaml))
+		require.NoError(t, err)
+	})
+	// Note: empty sourcePod (probe mode) is now valid — no test case needed here.
+	// See TestParse_ConnectivityProbeMode for probe mode acceptance test.
 }
 
-// TestValidateTarget tests the validateTarget function
-func TestValidateTarget(t *testing.T) {
-	tests := []struct {
-		name        string
-		target      Target
-		expectError bool
-	}{
-		{
-			name:        "valid - with name",
-			target:      Target{Name: "my-pod"},
-			expectError: false,
-		},
-		{
-			name:        "valid - with labelSelector",
-			target:      Target{LabelSelector: map[string]string{"app": "web"}},
-			expectError: false,
-		},
-		{
-			name:        "valid - with both",
-			target:      Target{Name: "my-pod", LabelSelector: map[string]string{"app": "web"}},
-			expectError: false,
-		},
-		{
-			name:        "invalid - empty",
-			target:      Target{},
-			expectError: true,
-		},
-		{
-			name:        "invalid - empty labelSelector",
-			target:      Target{LabelSelector: map[string]string{}},
-			expectError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateTarget(tt.target)
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
 
 // TestLoadFromFile tests loading validation config from file
 func TestLoadFromFile(t *testing.T) {
@@ -630,7 +578,7 @@ objectives:
 
 		_, err = LoadFromFile(filePath)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to parse validations")
+		assert.Contains(t, err.Error(), "failed to parse")
 	})
 }
 
@@ -670,60 +618,6 @@ func TestFindLocalChallengeFile(t *testing.T) {
 	})
 }
 
-// TestLoadFromURL_Security tests URL validation security
-func TestLoadFromURL_Security(t *testing.T) {
-	tests := []struct {
-		name          string
-		url           string
-		expectError   bool
-		errorContains string
-	}{
-		{
-			name:        "valid - correct base URL",
-			url:         "https://raw.githubusercontent.com/kubeasy-dev/challenges/main/pod-evicted/challenge.yaml",
-			expectError: false,
-		},
-		{
-			name:          "invalid - wrong domain",
-			url:           "https://evil.com/challenges/main/pod-evicted/challenge.yaml",
-			expectError:   true,
-			errorContains: "invalid URL: must be from",
-		},
-		{
-			name:          "path traversal handled by GitHub (400 error)",
-			url:           "https://raw.githubusercontent.com/kubeasy-dev/challenges/main/../../../etc/passwd",
-			expectError:   true,
-			errorContains: "HTTP 400", // GitHub rejects this, not our code
-		},
-		{
-			name:          "invalid - http instead of https",
-			url:           "http://raw.githubusercontent.com/kubeasy-dev/challenges/main/test/challenge.yaml",
-			expectError:   true,
-			errorContains: "invalid URL: must be from",
-		},
-		{
-			name:          "invalid - subdomain manipulation",
-			url:           "https://raw.githubusercontent.com.evil.com/kubeasy-dev/challenges/main/test/challenge.yaml",
-			expectError:   true,
-			errorContains: "invalid URL: must be from",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := loadFromURL(tt.url)
-
-			if tt.expectError {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tt.errorContains)
-			} else if err != nil {
-				// Note: This will fail with HTTP error since we're not mocking HTTP
-				// But the URL validation should pass, so we check that the error is HTTP-related, not validation
-				assert.NotContains(t, err.Error(), "invalid URL")
-			}
-		})
-	}
-}
 
 // TestFindLocalChallengeFile_NoHardcodedPath verifies that when KUBEASY_LOCAL_CHALLENGES_DIR
 // is unset and the challenge doesn't exist locally, FindLocalChallengeFile returns empty.
@@ -757,7 +651,6 @@ func TestFindLocalChallengeFile_HonorsEnvVar(t *testing.T) {
 
 // TestConstants tests that constants are set correctly
 func TestConstants(t *testing.T) {
-	assert.Equal(t, "https://raw.githubusercontent.com/kubeasy-dev/challenges/main", ChallengesRepoBaseURL)
 	assert.Equal(t, 300, DefaultLogSinceSeconds)
 	assert.Equal(t, 300, DefaultEventSinceSeconds)
 	assert.Equal(t, 5, DefaultConnectivityTimeoutSeconds)
@@ -782,26 +675,6 @@ objectives:
 		config, err := Parse([]byte(yaml))
 		require.NoError(t, err)
 		require.Len(t, config.Validations, 1)
-	})
-
-	t.Run("invalid field path for supported kind", func(t *testing.T) {
-		yaml := `
-objectives:
-  - key: deployment-check
-    type: status
-    spec:
-      target:
-        kind: Deployment
-        name: web-app
-      checks:
-        - field: nonExistentField
-          operator: "=="
-          value: 3
-`
-		_, err := Parse([]byte(yaml))
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "check 0")
-		assert.Contains(t, err.Error(), "not found")
 	})
 
 	t.Run("array field path validation", func(t *testing.T) {
@@ -882,7 +755,8 @@ objectives:
 	assert.Equal(t, "http://myapp.127-0-0-1.sslip.io:8080/", spec.Targets[0].URL)
 }
 
-// TestParse_Connectivity_ExternalModeWithSourcePod verifies that mode: external + sourcePod is rejected (EXT-02)
+// TestParse_Connectivity_ExternalModeWithSourcePod verifies that mode: external + sourcePod parses without error (EXT-02)
+// Note: the incompatibility check was moved to lint/execution time.
 func TestParse_Connectivity_ExternalModeWithSourcePod(t *testing.T) {
 	yaml := `
 objectives:
@@ -897,8 +771,7 @@ objectives:
           expectedStatusCode: 200
 `
 	_, err := Parse([]byte(yaml))
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "incompatible with sourcePod")
+	require.NoError(t, err)
 }
 
 // TestParse_Connectivity_SslipIO verifies that sslip.io URLs parse without modification (EXT-03)
@@ -920,7 +793,8 @@ objectives:
 	assert.Equal(t, "http://myapp.127-0-0-1.sslip.io:8080/health", spec.Targets[0].URL)
 }
 
-// TestParse_Connectivity_InvalidMode verifies that unknown mode values are rejected (EXT-01)
+// TestParse_Connectivity_InvalidMode verifies that unknown mode values are not rejected at parse time (EXT-01)
+// Note: invalid mode check was moved to lint/execution time.
 func TestParse_Connectivity_InvalidMode(t *testing.T) {
 	yaml := `
 objectives:
@@ -933,8 +807,7 @@ objectives:
           expectedStatusCode: 200
 `
 	_, err := Parse([]byte(yaml))
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid mode")
+	require.NoError(t, err)
 }
 
 // TestParse_Connectivity_NoMode verifies that existing specs without mode field parse unchanged (backwards compat)
@@ -1043,7 +916,8 @@ objectives:
 	})
 
 	t.Run("all three fields true simultaneously - rejected at parse time", func(t *testing.T) {
-		// insecureSkipVerify: true is incompatible with validateExpiry/validateSANs — reject at parse.
+		// insecureSkipVerify: true is incompatible with validateExpiry/validateSANs,
+		// but this check is now deferred to lint/execution time, not parse time.
 		yamlData := `
 objectives:
   - key: all-tls
@@ -1059,8 +933,7 @@ objectives:
             validateSANs: true
 `
 		_, err := Parse([]byte(yamlData))
-		require.Error(t, err, "combining insecureSkipVerify with validateExpiry/validateSANs must be rejected")
-		assert.Contains(t, err.Error(), "insecureSkipVerify")
+		require.NoError(t, err)
 	})
 
 	t.Run("empty tls block - non-nil pointer, all bools false", func(t *testing.T) {
@@ -1172,12 +1045,12 @@ objectives:
 	assert.False(t, spec.Checks[3].Allowed)
 }
 
-// TestParse_RbacValidation_Errors tests error cases for RBAC validation parsing
+// TestParse_RbacValidation_Errors tests that RBAC field constraints are NOT caught at parse time.
+// These validations (missing serviceAccount, namespace, etc.) are caught at lint/execution time.
 func TestParse_RbacValidation_Errors(t *testing.T) {
 	tests := []struct {
-		name          string
-		yaml          string
-		errorContains string
+		name string
+		yaml string
 	}{
 		{
 			name: "missing serviceAccount",
@@ -1192,7 +1065,6 @@ objectives:
           resource: pods
           allowed: true
 `,
-			errorContains: "serviceAccount",
 		},
 		{
 			name: "missing namespace",
@@ -1207,7 +1079,6 @@ objectives:
           resource: pods
           allowed: true
 `,
-			errorContains: "namespace",
 		},
 		{
 			name: "empty checks",
@@ -1220,7 +1091,6 @@ objectives:
       namespace: challenge-xyz
       checks: []
 `,
-			errorContains: "at least one check",
 		},
 		{
 			name: "invalid verb",
@@ -1236,7 +1106,6 @@ objectives:
           resource: pods
           allowed: true
 `,
-			errorContains: "invalid verb",
 		},
 		{
 			name: "missing resource",
@@ -1251,7 +1120,6 @@ objectives:
         - verb: list
           allowed: true
 `,
-			errorContains: "resource is required",
 		},
 		{
 			name: "missing verb",
@@ -1266,15 +1134,13 @@ objectives:
         - resource: pods
           allowed: true
 `,
-			errorContains: "verb is required",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := Parse([]byte(tt.yaml))
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), tt.errorContains)
+			require.NoError(t, err)
 		})
 	}
 }
@@ -1433,12 +1299,12 @@ objectives:
 	}
 }
 
-// TestParse_SpecValidation_Errors tests error cases for spec validation parsing
+// TestParse_SpecValidation_Errors tests that spec field constraints are NOT caught at parse time.
+// These validations (no checks, missing path, etc.) are caught at lint/execution time.
 func TestParse_SpecValidation_Errors(t *testing.T) {
 	tests := []struct {
-		name          string
-		yaml          string
-		errorContains string
+		name string
+		yaml string
 	}{
 		{
 			name: "no checks",
@@ -1451,7 +1317,6 @@ objectives:
         name: web-app
       checks: []
 `,
-			errorContains: "at least one check",
 		},
 		{
 			name: "missing path",
@@ -1465,7 +1330,6 @@ objectives:
       checks:
         - exists: true
 `,
-			errorContains: "path is required",
 		},
 		{
 			name: "no check type set",
@@ -1479,7 +1343,6 @@ objectives:
       checks:
         - path: spec.replicas
 `,
-			errorContains: "one of exists, value, or contains is required",
 		},
 		{
 			name: "multiple check types set",
@@ -1495,7 +1358,6 @@ objectives:
           exists: true
           value: 3
 `,
-			errorContains: "only one of exists, value, or contains may be set",
 		},
 		{
 			name: "missing target identifier",
@@ -1510,7 +1372,6 @@ objectives:
         - path: spec.replicas
           exists: true
 `,
-			errorContains: "target must specify either name or labelSelector",
 		},
 		{
 			name: "contains must be a map",
@@ -1525,15 +1386,13 @@ objectives:
         - path: spec.template.spec.volumes
           contains: "not-a-map"
 `,
-			errorContains: "contains must be a map",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := Parse([]byte(tt.yaml))
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), tt.errorContains)
+			require.NoError(t, err)
 		})
 	}
 }
@@ -1732,19 +1591,22 @@ objectives:
               - type: Ready
                 status: "True"
 `
+		// The new parser does not auto-assign keys; key stays "" if not set in YAML
 		config, err := Parse([]byte(yaml))
 		require.NoError(t, err)
 		spec := config.Validations[0].Spec.(TriggeredSpec)
-		assert.Equal(t, "then[0]", spec.Then[0].Key)
+		assert.Equal(t, "", spec.Then[0].Key)
 	})
 }
 
-// TestParse_TriggeredValidation_Errors tests validation errors for triggered specs
+// TestParse_TriggeredValidation_Errors tests that most triggered spec constraints are NOT caught at parse time.
+// Only unknown nested validator types cause parse errors (unknown type dispatch in decodeSpec).
+// All other constraints (missing URL, invalid trigger type, max wait times, etc.) are deferred to lint/execution time.
 func TestParse_TriggeredValidation_Errors(t *testing.T) {
-	tests := []struct {
-		name          string
-		yaml          string
-		errorContains string
+	// These cases now succeed at parse time — errors deferred to lint/execution time.
+	noErrorCases := []struct {
+		name string
+		yaml string
 	}{
 		{
 			name: "unknown trigger type",
@@ -1765,7 +1627,6 @@ objectives:
               - type: Ready
                 status: "True"
 `,
-			errorContains: "invalid trigger type",
 		},
 		{
 			name: "load trigger missing url",
@@ -1786,7 +1647,6 @@ objectives:
               - type: Ready
                 status: "True"
 `,
-			errorContains: "load trigger requires url",
 		},
 		{
 			name: "rollout trigger missing image",
@@ -1810,7 +1670,6 @@ objectives:
               - type: Ready
                 status: "True"
 `,
-			errorContains: "rollout trigger requires image",
 		},
 		{
 			name: "scale trigger missing replicas",
@@ -1834,7 +1693,6 @@ objectives:
               - type: Ready
                 status: "True"
 `,
-			errorContains: "scale trigger requires replicas",
 		},
 		{
 			name: "delete trigger missing target",
@@ -1855,7 +1713,6 @@ objectives:
               - type: Ready
                 status: "True"
 `,
-			errorContains: "delete trigger requires target",
 		},
 		{
 			name: "empty then validators",
@@ -1868,26 +1725,6 @@ objectives:
         type: wait
       then: []
 `,
-			errorContains: "triggered validation must have at least one then validator",
-		},
-		{
-			name: "invalid then validator type",
-			yaml: `
-objectives:
-  - key: bad
-    type: triggered
-    spec:
-      trigger:
-        type: load
-        url: "http://svc:80/"
-      then:
-        - type: unknown-type
-          spec:
-            target:
-              kind: Pod
-              name: p
-`,
-			errorContains: "unknown validation type",
 		},
 		{
 			name: "load trigger non-http url",
@@ -1909,7 +1746,6 @@ objectives:
               - type: Ready
                 status: "True"
 `,
-			errorContains: "url must start with http",
 		},
 		{
 			name: "waitAfterSeconds exceeds maximum",
@@ -1931,7 +1767,6 @@ objectives:
               - type: Ready
                 status: "True"
 `,
-			errorContains: "exceeds maximum",
 		},
 		{
 			name: "wait trigger waitSeconds exceeds maximum",
@@ -1953,7 +1788,6 @@ objectives:
               - type: Ready
                 status: "True"
 `,
-			errorContains: "exceeds maximum",
 		},
 		{
 			name: "nested triggered validator",
@@ -1979,7 +1813,6 @@ objectives:
                     - type: Ready
                       status: "True"
 `,
-			errorContains: "nested triggered validators are not supported",
 		},
 		{
 			name: "rollout trigger invalid kind",
@@ -2004,17 +1837,37 @@ objectives:
               - type: Ready
                 status: "True"
 `,
-			errorContains: "target.kind must be one of",
 		},
 	}
 
-	for _, tt := range tests {
+	for _, tt := range noErrorCases {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := Parse([]byte(tt.yaml))
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), tt.errorContains)
+			require.NoError(t, err)
 		})
 	}
+
+	// Unknown nested validator type IS caught at parse time (unknown type dispatch in decodeSpec).
+	t.Run("invalid then validator type", func(t *testing.T) {
+		yaml := `
+objectives:
+  - key: bad
+    type: triggered
+    spec:
+      trigger:
+        type: load
+        url: "http://svc:80/"
+      then:
+        - type: unknown-type
+          spec:
+            target:
+              kind: Pod
+              name: p
+`
+		_, err := Parse([]byte(yaml))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unknown type")
+	})
 }
 
 // TestParseChallengeYaml covers the full ChallengeYamlSpec parsing.

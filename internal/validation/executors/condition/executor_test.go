@@ -9,7 +9,6 @@ import (
 	"github.com/kubeasy-dev/kubeasy-cli/internal/validation/vtypes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
@@ -41,7 +40,7 @@ func TestExecute_Pod_Ready(t *testing.T) {
 	})
 	spec := vtypes.ConditionSpec{
 		Target: vtypes.Target{Kind: "Pod", Name: "test-pod"},
-		Checks: []vtypes.ConditionCheck{{Type: "Ready", Status: corev1.ConditionTrue}},
+		Checks: []vtypes.ConditionCheck{{Type: "Ready", Status: "True"}},
 	}
 
 	passed, msg, err := condition.Execute(context.Background(), spec, deps(dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), pod)))
@@ -56,7 +55,7 @@ func TestExecute_Pod_ConditionFalse(t *testing.T) {
 	})
 	spec := vtypes.ConditionSpec{
 		Target: vtypes.Target{Kind: "Pod", Name: "test-pod"},
-		Checks: []vtypes.ConditionCheck{{Type: "Ready", Status: corev1.ConditionTrue}},
+		Checks: []vtypes.ConditionCheck{{Type: "Ready", Status: "True"}},
 	}
 
 	passed, msg, err := condition.Execute(context.Background(), spec, deps(dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), pod)))
@@ -71,7 +70,7 @@ func TestExecute_Pod_ConditionNotFound(t *testing.T) {
 	})
 	spec := vtypes.ConditionSpec{
 		Target: vtypes.Target{Kind: "Pod", Name: "test-pod"},
-		Checks: []vtypes.ConditionCheck{{Type: "Ready", Status: corev1.ConditionTrue}},
+		Checks: []vtypes.ConditionCheck{{Type: "Ready", Status: "True"}},
 	}
 
 	passed, msg, err := condition.Execute(context.Background(), spec, deps(dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), pod)))
@@ -87,7 +86,7 @@ func TestExecute_Deployment_Available(t *testing.T) {
 	})
 	spec := vtypes.ConditionSpec{
 		Target: vtypes.Target{Kind: "Deployment", Name: "my-deploy"},
-		Checks: []vtypes.ConditionCheck{{Type: "Available", Status: corev1.ConditionTrue}},
+		Checks: []vtypes.ConditionCheck{{Type: "Available", Status: "True"}},
 	}
 
 	passed, msg, err := condition.Execute(context.Background(), spec, deps(dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), d)))
@@ -102,7 +101,7 @@ func TestExecute_Deployment_ConditionFalse(t *testing.T) {
 	})
 	spec := vtypes.ConditionSpec{
 		Target: vtypes.Target{Kind: "Deployment", Name: "my-deploy"},
-		Checks: []vtypes.ConditionCheck{{Type: "Available", Status: corev1.ConditionTrue}},
+		Checks: []vtypes.ConditionCheck{{Type: "Available", Status: "True"}},
 	}
 
 	passed, msg, err := condition.Execute(context.Background(), spec, deps(dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), d)))
@@ -115,7 +114,7 @@ func TestExecute_NoStatus(t *testing.T) {
 	d := resource("Deployment", "apps/v1", "my-deploy", nil)
 	spec := vtypes.ConditionSpec{
 		Target: vtypes.Target{Kind: "Deployment", Name: "my-deploy"},
-		Checks: []vtypes.ConditionCheck{{Type: "Available", Status: corev1.ConditionTrue}},
+		Checks: []vtypes.ConditionCheck{{Type: "Available", Status: "True"}},
 	}
 
 	passed, msg, err := condition.Execute(context.Background(), spec, deps(dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), d)))
@@ -127,7 +126,7 @@ func TestExecute_NoStatus(t *testing.T) {
 func TestExecute_NoMatchingResources(t *testing.T) {
 	spec := vtypes.ConditionSpec{
 		Target: vtypes.Target{Kind: "Deployment", Name: "nonexistent"},
-		Checks: []vtypes.ConditionCheck{{Type: "Available", Status: corev1.ConditionTrue}},
+		Checks: []vtypes.ConditionCheck{{Type: "Available", Status: "True"}},
 	}
 
 	passed, _, err := condition.Execute(context.Background(), spec, deps(dynamicfake.NewSimpleDynamicClient(runtime.NewScheme())))

@@ -21,10 +21,11 @@ type DevValidateOpts struct {
 	JSONOutput bool
 }
 
-// runDevApply deploys local challenge manifests to the Kind cluster.
-// If clean is true, it deletes existing resources before applying.
-func runDevApply(cmd *cobra.Command, challengeSlug, challengeDir string, clean bool) error {
-	// Clean existing resources if requested
+// runDevApply deploys challenge manifests to the Kind cluster.
+// When challengeDir is empty it fetches manifests from registryURL (registry mode).
+// When challengeDir is set it reads from the local filesystem (--dir override).
+// Returns the manifest content hash (only meaningful in registry mode; empty in filesystem mode).
+func runDevApply(cmd *cobra.Command, challengeSlug, challengeDir, registryURL string, clean bool) (string, error) {
 	if clean {
 		ui.Info("Cleaning existing resources before apply...")
 		if err := deleteChallengeResources(cmd.Context(), challengeSlug); err != nil {
@@ -32,82 +33,101 @@ func runDevApply(cmd *cobra.Command, challengeSlug, challengeDir string, clean b
 		}
 	}
 
-	// Get Kubernetes clients
 	clientset, err := kube.GetKubernetesClient()
 	if err != nil {
 		ui.Error("Failed to get Kubernetes client. Is the cluster running? Try 'kubeasy setup'")
-		return fmt.Errorf("failed to get Kubernetes client: %w", err)
+		return "", fmt.Errorf("failed to get Kubernetes client: %w", err)
 	}
 
 	dynamicClient, err := kube.GetDynamicClient()
 	if err != nil {
 		ui.Error("Failed to get dynamic client")
-		return fmt.Errorf("failed to get dynamic client: %w", err)
+		return "", fmt.Errorf("failed to get dynamic client: %w", err)
 	}
 
-	// Build and load Docker image if image/ directory exists
-	if deployer.HasImageDir(challengeDir) {
-		imageDir := filepath.Join(challengeDir, "image")
-		imageTag := challengeSlug + ":latest"
-		ui.Info(fmt.Sprintf("Detected image/ directory, building '%s'...", imageTag))
-
-		err = ui.TimedSpinner("Building and loading Docker image", func() error {
-			return deployer.BuildAndLoadImage(cmd.Context(), imageDir, imageTag, constants.KubeasyClusterName)
-		})
-		if err != nil {
-			ui.Error("Failed to build/load Docker image")
-			return fmt.Errorf("failed to build/load Docker image: %w", err)
-		}
-	}
-
-	// Create namespace
 	err = ui.WaitMessage("Creating namespace", func() error {
 		return kube.CreateNamespace(cmd.Context(), clientset, challengeSlug)
 	})
 	if err != nil {
 		ui.Error("Failed to create namespace")
-		return fmt.Errorf("failed to create namespace: %w", err)
+		return "", fmt.Errorf("failed to create namespace: %w", err)
 	}
 
-	// Deploy local manifests
+	if challengeDir != "" {
+		// Filesystem mode: build custom image if present, then deploy local manifests.
+		if deployer.HasImageDir(challengeDir) {
+			imageDir := filepath.Join(challengeDir, "image")
+			imageTag := challengeSlug + ":latest"
+			ui.Info(fmt.Sprintf("Detected image/ directory, building '%s'...", imageTag))
+			err = ui.TimedSpinner("Building and loading Docker image", func() error {
+				return deployer.BuildAndLoadImage(cmd.Context(), imageDir, imageTag, constants.KubeasyClusterName)
+			})
+			if err != nil {
+				ui.Error("Failed to build/load Docker image")
+				return "", fmt.Errorf("failed to build/load Docker image: %w", err)
+			}
+		}
+
+		err = ui.TimedSpinner("Deploying challenge manifests", func() error {
+			return deployer.DeployLocalChallenge(cmd.Context(), clientset, dynamicClient, challengeDir, challengeSlug)
+		})
+		if err != nil {
+			ui.Error("Failed to deploy challenge")
+			return "", fmt.Errorf("failed to deploy challenge: %w", err)
+		}
+
+		if err := kube.SetNamespaceForContext(constants.KubeasyClusterContext, challengeSlug); err != nil {
+			ui.Warning(fmt.Sprintf("Failed to set kubectl context namespace: %v", err))
+		}
+		return "", nil
+	}
+
+	// Registry mode: fetch tar.gz from local registry and apply.
+	var hash string
 	err = ui.TimedSpinner("Deploying challenge manifests", func() error {
-		return deployer.DeployLocalChallenge(cmd.Context(), clientset, dynamicClient, challengeDir, challengeSlug)
+		var deployErr error
+		hash, deployErr = deployer.DeployChallengeFromRegistry(cmd.Context(), clientset, dynamicClient, registryURL, challengeSlug)
+		return deployErr
 	})
 	if err != nil {
-		ui.Error("Failed to deploy challenge")
-		return fmt.Errorf("failed to deploy challenge: %w", err)
+		ui.Error("Failed to deploy challenge from registry")
+		return "", fmt.Errorf("failed to deploy challenge from registry: %w", err)
 	}
 
-	// Set kubectl context
 	if err := kube.SetNamespaceForContext(constants.KubeasyClusterContext, challengeSlug); err != nil {
 		ui.Warning(fmt.Sprintf("Failed to set kubectl context namespace: %v", err))
 	}
 
-	return nil
+	return hash, nil
 }
 
 // runDevValidate runs validations against the cluster and displays results.
+// When challengeDir is empty it loads the challenge YAML from registryURL (registry mode).
+// When challengeDir is set it reads from the local filesystem (--dir override).
 // Returns true if all validations passed.
-func runDevValidate(cmd *cobra.Command, challengeSlug, challengeDir string, opts DevValidateOpts) (bool, error) {
-	// Load validations from local challenge.yaml
-	challengeYAML := filepath.Join(challengeDir, "challenge.yaml")
+func runDevValidate(cmd *cobra.Command, challengeSlug, challengeDir, registryURL string, opts DevValidateOpts) (bool, error) {
 	var config *validation.ValidationConfig
 
+	loadConfig := func() error {
+		if challengeDir != "" {
+			var err error
+			config, err = validation.LoadFromFile(filepath.Join(challengeDir, "challenge.yaml"))
+			return err
+		}
+		var err error
+		config, err = validation.LoadForChallengeFromRegistryURL(registryURL, challengeSlug)
+		return err
+	}
+
 	if !opts.JSONOutput {
-		err := ui.WaitMessage("Loading validations", func() error {
-			var loadErr error
-			config, loadErr = validation.LoadFromFile(challengeYAML)
-			return loadErr
-		})
+		err := ui.WaitMessage("Loading validations", loadConfig)
 		if err != nil {
 			ui.Error("Failed to load validations")
-			return false, fmt.Errorf("failed to load validations from %s: %w", challengeYAML, err)
+			return false, fmt.Errorf("failed to load validations: %w", err)
 		}
 	} else {
-		var err error
-		config, err = validation.LoadFromFile(challengeYAML)
-		if err != nil {
-			return false, fmt.Errorf("failed to load validations from %s: %w", challengeYAML, err)
+		if err := loadConfig(); err != nil {
+			return false, fmt.Errorf("failed to load validations: %w", err)
 		}
 	}
 

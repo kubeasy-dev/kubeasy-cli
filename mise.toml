@@ -100,7 +100,7 @@ LDFLAGS="-s -w \
   -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.Version=${VERSION}' \
   -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.LogFilePath=/tmp/kubeasy-cli.log' \
   -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.WebsiteURL=https://kubeasy.dev' \
-  -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.ExercicesRepoBranch=main'"
+  -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.ExercisesRepoBranch=main'"
 echo "Building {{vars.BINARY_NAME}} ${VERSION}..."
 mkdir -p {{vars.BUILD_DIR}}
 go build -ldflags "${LDFLAGS}" -o {{vars.BUILD_DIR}}/{{vars.BINARY_NAME}} .
@@ -115,7 +115,7 @@ LDFLAGS="-s -w \
   -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.Version=${VERSION}' \
   -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.LogFilePath=/tmp/kubeasy-cli.log' \
   -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.WebsiteURL=https://kubeasy.dev' \
-  -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.ExercicesRepoBranch=main'"
+  -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.ExercisesRepoBranch=main'"
 echo "Building for all platforms..."
 mkdir -p {{vars.DIST_DIR}}
 for GOOS in linux darwin windows; do

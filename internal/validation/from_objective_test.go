@@ -9,9 +9,9 @@ import (
 
 func TestFromObjective_UnknownSpec(t *testing.T) {
 	obj := challenges.Objective{
-		Key:   "unknown-obj",
-		Type:  "unknown-type",
-		Spec:  struct{ Foo string }{Foo: "bar"}, // Not one of the supported pointer types
+		Key:  "unknown-obj",
+		Type: "unknown-type",
+		Spec: struct{ Foo string }{Foo: "bar"}, // Not one of the supported pointer types
 	}
 
 	v := fromObjective(obj)

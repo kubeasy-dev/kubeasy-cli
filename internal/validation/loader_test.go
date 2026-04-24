@@ -534,7 +534,6 @@ objectives:
 	// See TestParse_ConnectivityProbeMode for probe mode acceptance test.
 }
 
-
 // TestLoadFromFile tests loading validation config from file
 func TestLoadFromFile(t *testing.T) {
 	t.Run("success - valid file", func(t *testing.T) {
@@ -617,7 +616,6 @@ func TestFindLocalChallengeFile(t *testing.T) {
 		assert.Empty(t, found)
 	})
 }
-
 
 // TestFindLocalChallengeFile_NoHardcodedPath verifies that when KUBEASY_LOCAL_CHALLENGES_DIR
 // is unset and the challenge doesn't exist locally, FindLocalChallengeFile returns empty.

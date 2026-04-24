@@ -35,8 +35,8 @@ var LogFilePath = "/tmp/kubeasy-cli.log"
 // MaxLogLines is the maximum number of lines allowed in the log file.
 const MaxLogLines = 5000
 
-// ExercicesRepoBranch is the default branch to use when downloading exercices manifests.
-var ExercicesRepoBranch = "main"
+// ExercisesRepoBranch is the default branch to use when downloading exercises manifests.
+var ExercisesRepoBranch = "main"
 
 // GetKubeasyConfigDir returns the path to the CLI configuration directory (~/.config/kubeasy-cli)
 func GetKubeasyConfigDir() string {
@@ -119,6 +119,7 @@ const (
 	// KubeasyCASecretNamespace is the namespace where the Kubeasy CA Secret is stored.
 	KubeasyCASecretNamespace = "cert-manager"
 	// KubeasyCASecretName is the name of the Kubeasy CA Secret.
+	// #nosec G101 (false positive: this is a resource name, not a secret value)
 	KubeasyCASecretName = "kubeasy-ca"
 	// KubeasyCASecretCertKey is the key holding the PEM-encoded CA certificate.
 	KubeasyCASecretCertKey = "tls.crt"

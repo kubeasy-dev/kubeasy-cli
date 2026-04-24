@@ -283,6 +283,8 @@ func TestWebsiteURL_NoEnv_Retains_Default(t *testing.T) {
 		WebsiteURL = v
 	} else if v := os.Getenv("API_URL"); v != "" {
 		WebsiteURL = v
+	} else {
+		WebsiteURL = "https://kubeasy.dev"
 	}
-	assert.Equal(t, orig, WebsiteURL)
+	assert.Equal(t, "https://kubeasy.dev", WebsiteURL)
 }

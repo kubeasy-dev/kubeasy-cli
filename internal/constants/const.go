@@ -7,7 +7,7 @@ import (
 )
 
 // WebsiteURL is the base URL for the Kubeasy website (used for CLI API routes)
-var WebsiteURL = "http://localhost:3000"
+var WebsiteURL = "https://kubeasy.dev"
 
 func init() {
 	if v := os.Getenv("KUBEASY_API_URL"); v != "" {

@@ -19,7 +19,7 @@ func TestMain(m *testing.M) {
 func cleanupTestEnv(t *testing.T) {
 	t.Helper()
 	// Clear environment variable
-	os.Unsetenv(EnvVarName)
+	_ = os.Unsetenv(EnvVarName)
 	// Clear keyring
 	_ = keyring.Delete("kubeasy-cli", "api_key")
 	// Clear file storage
@@ -88,7 +88,7 @@ func TestGet_Priority(t *testing.T) {
 	assert.Equal(t, "env-token", token)
 
 	// Remove env, keyring should be next
-	os.Unsetenv(EnvVarName)
+	_ = os.Unsetenv(EnvVarName)
 	token, err = Get()
 	require.NoError(t, err)
 	assert.Equal(t, "keyring-token", token)

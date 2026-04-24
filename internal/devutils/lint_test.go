@@ -19,7 +19,7 @@ func writeChallengeFile(t *testing.T, dir, content string) string {
 func TestLintChallengeFile_Valid(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, "manifests"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "manifests", "deploy.yaml"), []byte("apiVersion: v1"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "manifests", "deploy.yaml"), []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: test\n"), 0o600))
 
 	path := writeChallengeFile(t, dir, `
 title: "Test Challenge"
@@ -135,7 +135,7 @@ objectives: []
 func TestLintChallengeFile_DuplicateKeys(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, "manifests"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "manifests", "deploy.yaml"), []byte("apiVersion: v1"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "manifests", "deploy.yaml"), []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: test\n"), 0o600))
 
 	path := writeChallengeFile(t, dir, `
 title: "Test"
@@ -203,15 +203,15 @@ objectives: []
 	issues, err := LintChallengeFile(path)
 	require.NoError(t, err)
 
-	warnings := filterBySeverity(issues, SeverityWarning)
+	errors := filterBySeverity(issues, SeverityError)
 	found := false
-	for _, w := range warnings {
-		if w.Field == "manifests/" {
+	for _, e := range errors {
+		if e.Field == "manifests" {
 			found = true
 			break
 		}
 	}
-	assert.True(t, found, "expected warning for missing manifests/")
+	assert.True(t, found, "expected error for missing manifests/")
 }
 
 func filterBySeverity(issues []LintIssue, severity LintSeverity) []LintIssue {

@@ -43,19 +43,19 @@ go mod vendor
 # Tool Installation (Go-installed tools not managed by mise)
 # ===========================================================================
 
-["tasks.install:envtest"]
+[tasks."install:envtest"]
 description = "Install setup-envtest"
 run = "command -v setup-envtest || go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest"
 
-["tasks.install:gocovmerge"]
+[tasks."install:gocovmerge"]
 description = "Install gocovmerge"
 run = "command -v gocovmerge || go install github.com/wadey/gocovmerge@latest"
 
-["tasks.install:oapi-codegen"]
+[tasks."install:oapi-codegen"]
 description = "Install oapi-codegen"
 run = "command -v oapi-codegen || go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.5.1"
 
-["tasks.install:tools"]
+[tasks."install:tools"]
 description = "Install all development tools"
 depends = ["install:envtest", "install:gocovmerge", "install:oapi-codegen"]
 
@@ -63,21 +63,21 @@ depends = ["install:envtest", "install:gocovmerge", "install:oapi-codegen"]
 # Setup
 # ===========================================================================
 
-["tasks.setup:envtest"]
+[tasks."setup:envtest"]
 description = "Setup envtest Kubernetes assets"
 depends = ["install:envtest"]
 run = """
 test -d ./bin/k8s/k8s && exit 0
 echo "Setting up envtest assets..."
-"$(go env GOPATH)/bin/setup-envtest" use {{vars.K8S_VERSION}} --bin-dir ./bin/k8s
+setup-envtest use {{vars.K8S_VERSION}} --bin-dir ./bin/k8s
 """
 
 # ===========================================================================
 # Code Generation
 # ===========================================================================
 
-["tasks.generate:api"]
-description = "Generate Go API client from OpenAPI spec"
+[tasks."generate:api"]
+description = "Generate Go API client from Monorepo OpenAPI spec"
 depends = ["install:oapi-codegen"]
 sources = ["openapi.json", "oapi-codegen.yaml"]
 outputs = ["internal/apigen/client.gen.go"]
@@ -98,24 +98,20 @@ run = """
 VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS="-s -w \
   -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.Version=${VERSION}' \
-  -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.LogFilePath=/tmp/kubeasy-cli.log' \
-  -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.WebsiteURL=https://kubeasy.dev' \
-  -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.ExercicesRepoBranch=main'"
+  -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.LogFilePath=/tmp/kubeasy-cli.log'"
 echo "Building {{vars.BINARY_NAME}} ${VERSION}..."
 mkdir -p {{vars.BUILD_DIR}}
 go build -ldflags "${LDFLAGS}" -o {{vars.BUILD_DIR}}/{{vars.BINARY_NAME}} .
 """
 
-["tasks.build:all"]
+[tasks."build:all"]
 description = "Build binaries for all platforms"
 depends = ["clean"]
 run = """
 VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS="-s -w \
   -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.Version=${VERSION}' \
-  -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.LogFilePath=/tmp/kubeasy-cli.log' \
-  -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.WebsiteURL=https://kubeasy.dev' \
-  -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.ExercicesRepoBranch=main'"
+  -X 'github.com/kubeasy-dev/kubeasy-cli/internal/constants.LogFilePath=/tmp/kubeasy-cli.log'"
 echo "Building for all platforms..."
 mkdir -p {{vars.DIST_DIR}}
 for GOOS in linux darwin windows; do
@@ -137,7 +133,7 @@ done
 description = "Run all tests (unit + integration)"
 depends = ["test:unit", "test:integration"]
 
-["tasks.test:unit"]
+[tasks."test:unit"]
 description = "Run unit tests only"
 run = """
 echo "Running unit tests..."
@@ -148,12 +144,12 @@ if [ -s coverage-unit.out ]; then
 fi
 """
 
-["tasks.test:integration"]
+[tasks."test:integration"]
 description = "Run integration tests"
 depends = ["setup:envtest"]
 run = """
 echo "Running integration tests..."
-KUBEBUILDER_ASSETS=$("$(go env GOPATH)/bin/setup-envtest" use -p path {{vars.K8S_VERSION}}) \
+KUBEBUILDER_ASSETS=$(setup-envtest use -p path {{vars.K8S_VERSION}}) \
   go test -v -tags=integration -coverprofile=coverage-integration.out \
   -covermode=atomic -coverpkg=./internal/... ./test/integration/... -timeout 15m
 if [ -s coverage-integration.out ]; then
@@ -161,23 +157,22 @@ if [ -s coverage-integration.out ]; then
 fi
 """
 
-["tasks.test:e2e"]
+[tasks."test:e2e"]
 description = "Run Kind integration tests (requires Docker)"
 run = """
 echo "Running Kind integration tests..."
 go test -v -tags=kindintegration -count=1 ./test/e2e/... -timeout 10m
 """
 
-["tasks.test:coverage"]
+[tasks."test:coverage"]
 description = "Generate combined coverage report"
 depends = ["install:gocovmerge", "test:unit", "test:integration"]
 run = """
 echo "Generating combined coverage report..."
 mkdir -p coverage
-GOPATH=$(go env GOPATH)
 if [ -s coverage-unit.out ] && [ -s coverage-integration.out ]; then
   echo "Merging unit and integration coverage..."
-  "${GOPATH}/bin/gocovmerge" coverage-unit.out coverage-integration.out > coverage.out
+  gocovmerge coverage-unit.out coverage-integration.out > coverage.out
 elif [ -s coverage-integration.out ]; then
   cp coverage-integration.out coverage.out
 elif [ -s coverage-unit.out ]; then
@@ -201,7 +196,7 @@ echo "Running linters..."
 golangci-lint run --config .github/linters/.golangci.yml
 """
 
-["tasks.lint:fix"]
+[tasks."lint:fix"]
 description = "Run golangci-lint with auto-fix"
 run = """
 echo "Running linters with auto-fix..."
@@ -241,7 +236,7 @@ run = "./{{vars.BUILD_DIR}}/{{vars.BINARY_NAME}}"
 # Renovate
 # ===========================================================================
 
-["tasks.renovate:dry-run"]
+[tasks."renovate:dry-run"]
 description = "Run renovate in debug mode"
 run = """
 echo "Running renovate in debug mode..."

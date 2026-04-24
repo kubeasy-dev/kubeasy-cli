@@ -7,10 +7,12 @@ import (
 )
 
 // WebsiteURL is the base URL for the Kubeasy website (used for CLI API routes)
-var WebsiteURL = "http://localhost:3000"
+var WebsiteURL = "https://kubeasy.dev"
 
 func init() {
 	if v := os.Getenv("KUBEASY_API_URL"); v != "" {
+		WebsiteURL = v
+	} else if v := os.Getenv("API_URL"); v != "" {
 		WebsiteURL = v
 	}
 }
@@ -19,115 +21,107 @@ var KeyringServiceName = "kubeasy-cli"
 
 var GithubRootURL = "https://github.com/kubeasy-dev"
 
-// DownloadBaseURL is the base URL for the Kubeasy download CDN (Cloudflare R2).
-// Used by the version checker to fetch the latest version tag.
-var DownloadBaseURL = "https://download.kubeasy.dev"
-
-var ExercisesRepoURL = GithubRootURL + "/challenges"
-
-var ExercicesRepoBranch = "main"
-
-var Version = "dev"
-
+var KubeasyClusterContext = "kind-kubeasy"
 var KubeasyClusterName = "kubeasy"
 
-var KubeasyClusterContext = "kind-kubeasy"
+var DownloadBaseURL = "https://github.com/kubeasy-dev/kubeasy-cli/releases/download"
 
-// UnknownVersion is returned when a version cannot be parsed or determined.
-const UnknownVersion = "unknown"
+// Version is the current version of the CLI.
+// It is set at build time via LDFLAGS.
+var Version = "dev"
 
-// KindNodeImage is the container image used for Kind cluster nodes.
-// This is the single source of truth for the Kubernetes version used by Kind.
-// The version should match the k8s.io/* library versions in go.mod (v0.X.Y -> 1.X.Y).
-//
-// Note: This is a var (not const) to allow Renovate to update it automatically.
-// IMPORTANT: The comment format below is required for Renovate. Do not modify.
-// renovate: datasource=docker depName=kindest/node
-var KindNodeImage = "kindest/node:v1.35.0"
+// LogFilePath is the path where CLI logs are stored.
+// It is set at build time via LDFLAGS.
+var LogFilePath = "/tmp/kubeasy-cli.log"
 
-// GetKubernetesVersion extracts the Kubernetes version from KindNodeImage.
-// Returns the version without the "v" prefix (e.g., "1.35.0").
-// Handles prerelease versions (e.g., "1.35.0-alpha.1" returns "1.35.0-alpha.1").
-func GetKubernetesVersion() string {
-	// KindNodeImage format: "kindest/node:v1.35.0" or "kindest/node:v1.35.0-alpha.1"
-	parts := strings.SplitN(KindNodeImage, ":", 2)
-	if len(parts) != 2 {
-		return UnknownVersion
-	}
-	return strings.TrimPrefix(parts[1], "v")
-}
+// MaxLogLines is the maximum number of lines allowed in the log file.
+const MaxLogLines = 5000
 
-// GetMajorMinorVersion extracts just the major.minor part from a version string.
-// Handles various formats: "1.35.0", "1.35.0+k3s1", "1.35.0-eks", "v1.35.0".
-// Returns UnknownVersion if the version cannot be parsed.
-func GetMajorMinorVersion(version string) string {
-	// Remove leading "v" if present
-	v := strings.TrimPrefix(version, "v")
-
-	// Strip build metadata and prerelease info by finding the first separator
-	// Handles formats like "1.35.0+k3s1", "1.35.0-eks", or "1.35.0-rc.1+build123"
-	if idx := strings.IndexAny(v, "+-"); idx >= 0 {
-		v = v[:idx]
-	}
-
-	// Extract major.minor from "major.minor.patch"
-	parts := strings.Split(v, ".")
-	if len(parts) < 2 {
-		return UnknownVersion
-	}
-
-	return parts[0] + "." + parts[1]
-}
-
-// VersionsCompatible checks if two Kubernetes versions are compatible.
-// Two versions are considered compatible if they share the same major.minor version.
-// This handles build metadata (+k3s1, -eks) and patch version differences.
-func VersionsCompatible(version1, version2 string) bool {
-	mm1 := GetMajorMinorVersion(version1)
-	mm2 := GetMajorMinorVersion(version2)
-
-	if mm1 == UnknownVersion || mm2 == UnknownVersion {
-		return false
-	}
-
-	return mm1 == mm2
-}
-
-// LogFilePath defines the default path for the log file when debug is enabled
-var LogFilePath = "kubeasy-cli.log"
-
-var MaxLogLines = 1000 // Maximum number of lines to keep in the log file
-
-// GetKubeasyConfigDir returns the path to the Kubeasy configuration directory (~/.kubeasy).
-// The home directory is resolved at call time for portability.
+// GetKubeasyConfigDir returns the path to the CLI configuration directory (~/.config/kubeasy-cli)
 func GetKubeasyConfigDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return ".kubeasy"
+		return "/tmp/kubeasy-cli" // Fallback
 	}
 	return filepath.Join(home, ".kubeasy")
 }
 
-// GetKindConfigPath returns the path to the Kind cluster configuration file (~/.kubeasy/kind-config.yaml).
-// The home directory is resolved at call time for portability.
+// GetCredentialsFilePath returns the path to the CLI credentials file
+func GetCredentialsFilePath() (string, error) {
+	configDir := GetKubeasyConfigDir()
+	return filepath.Join(configDir, "credentials"), nil
+}
+
+// UnknownVersion is returned when a version cannot be determined.
+const UnknownVersion = "unknown"
+
+// KindNodeImage is the default Kind node image to use.
+const KindNodeImage = "kindest/node:v1.35.0"
+
+// GetKubernetesVersion extracts the Kubernetes version from KindNodeImage.
+func GetKubernetesVersion() string {
+	parts := strings.Split(KindNodeImage, ":v")
+	if len(parts) > 1 {
+		return parts[1]
+	}
+	return UnknownVersion
+}
+
+// GetMajorMinorVersion returns the major.minor part of a version string.
+func GetMajorMinorVersion(v string) string {
+	v = strings.TrimPrefix(v, "v")
+	parts := strings.Split(v, ".")
+	if len(parts) >= 2 {
+		// handle suffixes like 1.35.0-alpha.1 or 1.35.0+k3s1
+		minor := parts[1]
+		for i, char := range minor {
+			if char < '0' || char > '9' {
+				minor = minor[:i]
+				break
+			}
+		}
+		if minor == "" {
+			return UnknownVersion
+		}
+		return parts[0] + "." + minor
+	}
+	return UnknownVersion
+}
+
+// VersionsCompatible compares two semver-like strings and returns true if they are compatible.
+func VersionsCompatible(current, required string) bool {
+	if required == "" {
+		return current != ""
+	}
+	if current == "dev" {
+		return true
+	}
+	v1 := GetMajorMinorVersion(current)
+	v2 := GetMajorMinorVersion(required)
+	if v1 == UnknownVersion || v2 == UnknownVersion {
+		return false
+	}
+	return v1 == v2
+}
+
+// GetKindConfigPath returns the path to the Kind configuration file.
 func GetKindConfigPath() string {
 	return filepath.Join(GetKubeasyConfigDir(), "kind-config.yaml")
 }
 
-// GetCloudProviderKindBinPath returns the path to the cloud-provider-kind binary (~/.kubeasy/bin/cloud-provider-kind).
-// The home directory is resolved at call time for portability.
+// GetCloudProviderKindBinPath returns the path to the cloud-provider-kind binary.
 func GetCloudProviderKindBinPath() string {
 	return filepath.Join(GetKubeasyConfigDir(), "bin", "cloud-provider-kind")
 }
 
-// KubeasyCASecretNamespace is the namespace of the well-known CA Secret.
-const KubeasyCASecretNamespace = "cert-manager"
-
-// KubeasyCASecretName is the name of the well-known CA Secret and ClusterIssuer.
-const KubeasyCASecretName = "kubeasy-ca" //nolint:gosec // not a credential — this is a public CA certificate name
-
-// KubeasyCASecretCertKey is the key holding the PEM-encoded CA certificate.
-const KubeasyCASecretCertKey = "tls.crt"
-
-// KubeasyCAPrivateKeyField is the Secret data key holding the PEM-encoded CA private key.
-const KubeasyCAPrivateKeyField = "tls.key"
+const (
+	// KubeasyCASecretNamespace is the namespace where the Kubeasy CA Secret is stored.
+	KubeasyCASecretNamespace = "cert-manager"
+	// KubeasyCASecretName is the name of the Kubeasy CA Secret.
+	// #nosec G101 (false positive: this is a resource name, not a secret value)
+	KubeasyCASecretName = "kubeasy-ca"
+	// KubeasyCASecretCertKey is the key holding the PEM-encoded CA certificate.
+	KubeasyCASecretCertKey = "tls.crt"
+	// KubeasyCAPrivateKeyField is the Secret data key holding the PEM-encoded CA private key.
+	KubeasyCAPrivateKeyField = "tls.key"
+)

@@ -235,6 +235,33 @@ func TestResponseUnmarshaling(t *testing.T) {
 		assert.Contains(t, *errResp.Details, "Challenge with slug")
 	})
 
+	t.Run("Audit event responseCode marshaling", func(t *testing.T) {
+		type auditEvent struct {
+			ResponseCode *int `json:"responseCode,omitempty"`
+		}
+
+		// Case 1: nil should be omitted
+		ae1 := auditEvent{ResponseCode: nil}
+		data1, err := json.Marshal(ae1)
+		require.NoError(t, err)
+		assert.Equal(t, `{}`, string(data1))
+
+		// Case 2: non-zero should be included
+		val2 := 200
+		ae2 := auditEvent{ResponseCode: &val2}
+		data2, err := json.Marshal(ae2)
+		require.NoError(t, err)
+		assert.Contains(t, string(data2), `"responseCode":200`)
+
+		// Case 3: zero (if we ever passed it via pointer) should be included if pointer is non-nil
+		// But our logic in client.go prevents this by passing nil if ResponseCode is 0.
+		val3 := 0
+		ae3 := auditEvent{ResponseCode: &val3}
+		data3, err := json.Marshal(ae3)
+		require.NoError(t, err)
+		assert.Contains(t, string(data3), `"responseCode":0`)
+	})
+
 	t.Run("ChallengeResetResponse success", func(t *testing.T) {
 		jsonData := `{
 			"success": true,

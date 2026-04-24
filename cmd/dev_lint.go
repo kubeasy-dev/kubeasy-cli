@@ -2,59 +2,58 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/devutils"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/ui"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/validation"
 	"github.com/spf13/cobra"
 )
-
-var devLintDir string
 
 var devLintCmd = &cobra.Command{
 	Use:   "lint [challenge-slug]",
 	Short: "Validate challenge.yaml structure without a cluster",
 	Long: `Validates the structure and content of a challenge.yaml file.
 Checks required fields, valid values, objective structure, and manifests directory.
-No Kubernetes cluster is needed.`,
+No Kubernetes cluster is needed.
+
+If a slug is given, it searches for challenge.yaml in the current directory 
+or ../challenges/<slug>/. If no slug is given, it lints the current directory.`,
 	Args:          cobra.MaximumNArgs(1),
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var challengeDir string
+		ui.Section("Linting Challenge")
 
-		if len(args) > 0 {
+		var issues []devutils.LintIssue
+		var err error
+		var challengeYAML string
+
+		if len(args) == 0 {
+			// Lint current directory
+			challengeYAML = "challenge.yaml"
+			if _, err := os.Stat(challengeYAML); err != nil {
+				ui.Error("No challenge.yaml found in current directory. Use a slug to specify another challenge.")
+				return fmt.Errorf("challenge.yaml not found")
+			}
+		} else {
 			slug := args[0]
-			if err := validateChallengeSlug(slug); err != nil {
+			if err = validateChallengeSlug(slug); err != nil {
 				ui.Error("Invalid challenge slug")
 				return err
 			}
-			dir, err := devutils.ResolveLocalChallengeDir(slug, devLintDir)
-			if err != nil {
-				ui.Error("Failed to find challenge directory")
-				return err
+			challengeYAML = validation.FindLocalChallengeFile(slug)
+			if challengeYAML == "" {
+				ui.Error(fmt.Sprintf("Failed to find local challenge file for slug %q", slug))
+				return fmt.Errorf("challenge file not found")
 			}
-			challengeDir = dir
-		} else if devLintDir != "" {
-			absDir, err := filepath.Abs(devLintDir)
-			if err != nil {
-				return fmt.Errorf("failed to resolve path: %w", err)
-			}
-			challengeDir = absDir
-		} else {
-			// Try current directory
-			absDir, err := filepath.Abs(".")
-			if err != nil {
-				return fmt.Errorf("failed to resolve path: %w", err)
-			}
-			challengeDir = absDir
 		}
 
-		challengeYAML := filepath.Join(challengeDir, "challenge.yaml")
-		ui.Section("Linting Challenge")
-		ui.Info(fmt.Sprintf("File: %s", challengeYAML))
+		absPath, _ := filepath.Abs(challengeYAML)
+		ui.Info(fmt.Sprintf("File: %s", absPath))
 		ui.Println()
 
-		issues, err := devutils.LintChallengeFile(challengeYAML)
+		issues, err = devutils.LintChallengeFile(challengeYAML)
 		if err != nil {
 			ui.Error(fmt.Sprintf("Failed to lint: %v", err))
 			return err
@@ -73,8 +72,7 @@ No Kubernetes cluster is needed.`,
 
 		ui.Println()
 		if hasErrors {
-			errCount := 0
-			warnCount := 0
+			errCount, warnCount := 0, 0
 			for _, issue := range issues {
 				if issue.Severity == devutils.SeverityError {
 					errCount++
@@ -86,9 +84,8 @@ No Kubernetes cluster is needed.`,
 			return fmt.Errorf("lint failed with %d error(s)", errCount)
 		}
 
-		warnCount := len(issues)
-		if warnCount > 0 {
-			ui.Warning(fmt.Sprintf("Found %d warning(s), no errors", warnCount))
+		if len(issues) > 0 {
+			ui.Warning(fmt.Sprintf("Found %d warning(s), no errors", len(issues)))
 		} else {
 			ui.Success("No issues found!")
 		}
@@ -99,5 +96,4 @@ No Kubernetes cluster is needed.`,
 
 func init() {
 	devCmd.AddCommand(devLintCmd)
-	devLintCmd.Flags().StringVar(&devLintDir, "dir", "", "Path to challenge directory (default: auto-detect)")
 }

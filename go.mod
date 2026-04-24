@@ -5,7 +5,7 @@ go 1.25.4
 require (
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
-	github.com/hypersequent/zen v0.0.0-20250923135653-056103bb12ce
+	github.com/kubeasy-dev/registry v0.2.1
 	github.com/oapi-codegen/runtime v1.3.0
 	github.com/pterm/pterm v0.12.83
 	github.com/spf13/cobra v1.10.2
@@ -14,6 +14,7 @@ require (
 	go.yaml.in/yaml/v3 v3.0.4
 	golang.org/x/sys v0.42.0
 	golang.org/x/term v0.41.0
+	gopkg.in/yaml.v2 v2.2.4
 	k8s.io/api v0.35.0
 	k8s.io/apimachinery v0.35.0
 	k8s.io/client-go v0.35.0

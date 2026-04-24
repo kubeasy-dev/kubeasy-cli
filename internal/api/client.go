@@ -1,12 +1,12 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/apigen"
@@ -38,66 +38,83 @@ func parseErrorResponse(resp *http.Response, body []byte) error {
 	return fmt.Errorf("API error: %s", errResp.Error)
 }
 
-// GetProfile fetches the current user's profile via GET /api/cli/user
+// GetProfile fetches the current user's profile via GET /api/user/me
 func GetProfile(ctx context.Context) (*UserProfile, error) {
 	client, err := NewAuthenticatedClient()
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.GetUserWithResponse(ctx)
+	resp, err := client.GetUserMeWithResponse(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
 
-	if resp.JSON200 == nil {
+	if resp.StatusCode() != http.StatusOK {
 		return nil, parseErrorResponse(resp.HTTPResponse, resp.Body)
 	}
 
+	if resp.JSON200 == nil {
+		return nil, fmt.Errorf("not authenticated")
+	}
+
+	user := *resp.JSON200
+	firstName := user.Name
+	var lastName *string
+	if parts := strings.SplitN(user.Name, " ", 2); len(parts) > 1 {
+		firstName = parts[0]
+		lastName = &parts[1]
+	}
+
 	profile := &UserProfile{
-		FirstName: resp.JSON200.FirstName,
-		LastName:  resp.JSON200.LastName,
+		FirstName: firstName,
+		LastName:  lastName,
 	}
 	return profile, nil
 }
 
-// Login sends a POST /api/cli/user with CLI metadata, combining profile fetch
-// and login tracking in a single call.
+// Login tracks CLI login and returns the user profile
 func Login(ctx context.Context) (*LoginResponse, error) {
 	client, err := NewAuthenticatedClient()
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.LoginUserWithResponse(ctx, apigen.LoginUserJSONRequestBody{
+	// 1. Track login
+	trackResp, err := client.TrackCliLoginWithResponse(ctx, apigen.TrackCliLoginJSONRequestBody{
 		CliVersion: constants.Version,
 		Os:         runtime.GOOS,
 		Arch:       runtime.GOARCH,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to make request: %w", err)
+		return nil, fmt.Errorf("failed to track login: %w", err)
+	}
+	if trackResp.StatusCode() != http.StatusOK {
+		return nil, parseErrorResponse(trackResp.HTTPResponse, trackResp.Body)
 	}
 
-	if resp.JSON200 == nil {
-		return nil, parseErrorResponse(resp.HTTPResponse, resp.Body)
-	}
-
-	result := &LoginResponse{
-		FirstName:  resp.JSON200.FirstName,
-		LastName:   resp.JSON200.LastName,
-		FirstLogin: &resp.JSON200.FirstLogin,
-	}
-	return result, nil
-}
-
-// GetChallengeBySlug fetches a challenge by its slug via GET /api/cli/challenge/:slug
-func GetChallengeBySlug(ctx context.Context, slug string) (*ChallengeEntity, error) {
-	client, err := NewAuthenticatedClient()
+	// 2. Get profile
+	profile, err := GetProfile(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.CliGetChallengeWithResponse(ctx, slug)
+	result := &LoginResponse{
+		FirstName:  profile.FirstName,
+		LastName:   profile.LastName,
+		FirstLogin: &trackResp.JSON200.FirstLogin,
+	}
+	return result, nil
+}
+
+// GetChallengeBySlug fetches a challenge by its slug from the API
+func GetChallengeBySlug(ctx context.Context, slug string) (*ChallengeEntity, error) {
+	client, err := NewPublicClient()
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.GetChallengeWithResponse(ctx, slug)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
@@ -106,16 +123,12 @@ func GetChallengeBySlug(ctx context.Context, slug string) (*ChallengeEntity, err
 		return nil, fmt.Errorf("challenge '%s' not found", slug)
 	}
 
-	if resp.JSON200 == nil {
+	if resp.JSON200 == nil || resp.JSON200.Challenge == nil {
 		return nil, parseErrorResponse(resp.HTTPResponse, resp.Body)
 	}
 
-	if resp.JSON200.Challenge == nil {
-		return nil, fmt.Errorf("challenge '%s' not found", slug)
-	}
 	c := resp.JSON200.Challenge
 	challenge := &ChallengeEntity{
-		ID:               c.Id,
 		Title:            c.Title,
 		Slug:             c.Slug,
 		Description:      c.Description,
@@ -126,14 +139,14 @@ func GetChallengeBySlug(ctx context.Context, slug string) (*ChallengeEntity, err
 	return challenge, nil
 }
 
-// GetChallengeStatus fetches the user's progress status via GET /api/cli/challenge/:slug/status
+// GetChallengeStatus fetches the user's progress status via GET /api/progress/:slug
 func GetChallengeStatus(ctx context.Context, slug string) (*ChallengeStatusResponse, error) {
 	client, err := NewAuthenticatedClient()
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.CliGetChallengeStatusWithResponse(ctx, slug)
+	resp, err := client.GetChallengeStatusWithResponse(ctx, slug)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
@@ -154,14 +167,14 @@ func GetChallengeStatus(ctx context.Context, slug string) (*ChallengeStatusRespo
 	return status, nil
 }
 
-// StartChallengeWithResponse starts a challenge via POST /api/cli/challenge/:slug/start
+// StartChallengeWithResponse starts a challenge via POST /api/progress/:slug/start
 func StartChallengeWithResponse(ctx context.Context, slug string) (*ChallengeStartResponse, error) {
 	client, err := NewAuthenticatedClient()
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.CliStartChallengeWithResponse(ctx, slug)
+	resp, err := client.StartChallengeWithResponse(ctx, slug)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
@@ -182,21 +195,88 @@ func StartChallengeWithResponse(ctx context.Context, slug string) (*ChallengeSta
 	return result, nil
 }
 
-// SubmitChallenge submits a challenge via POST /api/cli/challenge/:slug/submit.
-// It uses raw JSON marshaling so that extra fields (e.g. auditEvents) are forwarded
-// without requiring regeneration of the OpenAPI client.
+// SubmitChallenge submits a challenge via POST /api/challenges/:slug/submit.
 func SubmitChallenge(ctx context.Context, slug string, req ChallengeSubmitRequest) (*ChallengeSubmitResponse, error) {
 	client, err := NewAuthenticatedClient()
 	if err != nil {
 		return nil, err
 	}
 
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	// Map CLI types to generated types
+	results := make([]struct {
+		Message      *string `json:"message,omitempty"`
+		ObjectiveKey string  `json:"objectiveKey"`
+		Passed       bool    `json:"passed"`
+	}, len(req.Results))
+	for i, r := range req.Results {
+		r := r
+		results[i] = struct {
+			Message      *string `json:"message,omitempty"`
+			ObjectiveKey string  `json:"objectiveKey"`
+			Passed       bool    `json:"passed"`
+		}{
+			ObjectiveKey: r.ObjectiveKey,
+			Passed:       r.Passed,
+			Message:      r.Message,
+		}
 	}
 
-	resp, err := client.CliSubmitChallengeLegacyWithBodyWithResponse(ctx, slug, "application/json", bytes.NewReader(body))
+	auditEvents := make([]struct {
+		Name         *string   `json:"name,omitempty"`
+		Namespace    *string   `json:"namespace,omitempty"`
+		Resource     string    `json:"resource"`
+		ResponseCode *int      `json:"responseCode,omitempty"`
+		Subresource  *string   `json:"subresource,omitempty"`
+		Timestamp    time.Time `json:"timestamp"`
+		UserAgent    *string   `json:"userAgent,omitempty"`
+		Verb         string    `json:"verb"`
+	}, len(req.AuditEvents))
+	for i, e := range req.AuditEvents {
+		e := e
+		var subresource, name, namespace, userAgent *string
+		if e.Subresource != "" {
+			subresource = &e.Subresource
+		}
+		if e.Name != "" {
+			name = &e.Name
+		}
+		if e.Namespace != "" {
+			namespace = &e.Namespace
+		}
+		if e.UserAgent != "" {
+			userAgent = &e.UserAgent
+		}
+		var rcPtr *int
+		if e.ResponseCode != 0 {
+			rc := e.ResponseCode
+			rcPtr = &rc
+		}
+
+		auditEvents[i] = struct {
+			Name         *string   `json:"name,omitempty"`
+			Namespace    *string   `json:"namespace,omitempty"`
+			Resource     string    `json:"resource"`
+			ResponseCode *int      `json:"responseCode,omitempty"`
+			Subresource  *string   `json:"subresource,omitempty"`
+			Timestamp    time.Time `json:"timestamp"`
+			UserAgent    *string   `json:"userAgent,omitempty"`
+			Verb         string    `json:"verb"`
+		}{
+			Timestamp:    e.Timestamp,
+			Verb:         e.Verb,
+			Resource:     e.Resource,
+			Subresource:  subresource,
+			Name:         name,
+			Namespace:    namespace,
+			UserAgent:    userAgent,
+			ResponseCode: rcPtr,
+		}
+	}
+
+	resp, err := client.SubmitChallengeWithResponse(ctx, slug, apigen.SubmitChallengeJSONRequestBody{
+		Results:     results,
+		AuditEvents: &auditEvents,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
@@ -205,11 +285,6 @@ func SubmitChallenge(ctx context.Context, slug string, req ChallengeSubmitReques
 		return nil, fmt.Errorf("challenge '%s' not found", slug)
 	}
 
-	// The submit endpoint uses distinct HTTP codes:
-	//   200 → success ({ success: true, xpAwarded, ... })
-	//   422 → validation failed ({ success: false, message, failedObjectives })
-	// We parse both as ChallengeSubmitResponse since they share the same
-	// discriminated union keyed on the "success" boolean.
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusUnprocessableEntity {
 		var result ChallengeSubmitResponse
 		if err := json.Unmarshal(resp.Body, &result); err != nil {
@@ -221,14 +296,14 @@ func SubmitChallenge(ctx context.Context, slug string, req ChallengeSubmitReques
 	return nil, parseErrorResponse(resp.HTTPResponse, resp.Body)
 }
 
-// ResetChallenge resets the user's progress via POST /api/cli/challenge/:slug/reset
+// ResetChallenge resets the user's progress via POST /api/progress/:slug/reset
 func ResetChallenge(ctx context.Context, slug string) (*ChallengeResetResponse, error) {
 	client, err := NewAuthenticatedClient()
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.CliResetChallengeWithResponse(ctx, slug)
+	resp, err := client.ResetChallengeWithResponse(ctx, slug)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
@@ -265,53 +340,67 @@ func TrackSetup(ctx context.Context) {
 	}
 }
 
-// GetTypes fetches challenge types from the public API.
+// GetTypes fetches challenge types from the API.
 func GetTypes(ctx context.Context) ([]string, error) {
 	client, err := NewPublicClient()
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.GetTypesWithResponse(ctx)
+	resp, err := client.GetChallengeMetaWithResponse(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch challenge types: %w", err)
+		return nil, fmt.Errorf("failed to fetch API meta: %w", err)
 	}
 
 	if resp.JSON200 == nil {
 		return nil, parseErrorResponse(resp.HTTPResponse, resp.Body)
 	}
 
-	slugs := make([]string, len(*resp.JSON200))
-	for i, t := range *resp.JSON200 {
+	slugs := make([]string, len(resp.JSON200.Types))
+	for i, t := range resp.JSON200.Types {
 		slugs[i] = t.Slug
 	}
 	return slugs, nil
 }
 
-// GetThemes fetches challenge themes from the public API.
+// GetThemes fetches challenge themes from the API.
 func GetThemes(ctx context.Context) ([]string, error) {
 	client, err := NewPublicClient()
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.GetThemesWithResponse(ctx)
+	resp, err := client.GetChallengeMetaWithResponse(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch challenge themes: %w", err)
+		return nil, fmt.Errorf("failed to fetch API meta: %w", err)
 	}
 
 	if resp.JSON200 == nil {
 		return nil, parseErrorResponse(resp.HTTPResponse, resp.Body)
 	}
 
-	slugs := make([]string, len(*resp.JSON200))
-	for i, t := range *resp.JSON200 {
+	slugs := make([]string, len(resp.JSON200.Themes))
+	for i, t := range resp.JSON200.Themes {
 		slugs[i] = t.Slug
 	}
 	return slugs, nil
 }
 
-// GetDifficulties is no longer available as a dedicated endpoint.
-func GetDifficulties(_ context.Context) ([]string, error) {
-	return nil, fmt.Errorf("difficulties endpoint removed")
+// GetDifficulties fetches challenge difficulties from the API.
+func GetDifficulties(ctx context.Context) ([]string, error) {
+	client, err := NewPublicClient()
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.GetChallengeMetaWithResponse(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch API meta: %w", err)
+	}
+
+	if resp.JSON200 == nil {
+		return nil, parseErrorResponse(resp.HTTPResponse, resp.Body)
+	}
+
+	return resp.JSON200.Difficulties, nil
 }

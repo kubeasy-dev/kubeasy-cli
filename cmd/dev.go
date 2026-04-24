@@ -12,10 +12,13 @@ var devCmd = &cobra.Command{
 	Long: `Development mode lets challenge creators scaffold, test, and iterate
 on challenges locally without needing the Kubeasy API.
 
+Dev commands operate on local files (Filesystem-first). They search for 
+challenge.yaml in the current directory or ../challenges/<slug>/.
+
 Commands:
   create   - Scaffold a new challenge directory
-  get      - Display local challenge metadata
-  apply    - Deploy local challenge manifests to the Kind cluster
+  get      - Display challenge metadata from local files
+  apply    - Deploy challenge manifests from local files
   validate - Run validations locally without submitting to API
   test     - Apply manifests and run validations in one step
   clean    - Remove dev challenge resources from the cluster

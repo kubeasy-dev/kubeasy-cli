@@ -24,6 +24,8 @@ var devTestCmd = &cobra.Command{
 	Long: `Deploys challenge manifests and then runs validations in one step.
 This is equivalent to running 'kubeasy dev apply' followed by 'kubeasy dev validate'.
 
+It searches for challenge.yaml in the current directory or ../challenges/<slug>/.
+Use --dir to specify a custom directory.
 Use --clean to delete existing resources before applying.
 Use --watch to continuously re-run validations at the given interval after the initial apply (see --watch-interval).
 Use --fail-fast to stop at the first validation failure.
@@ -46,25 +48,30 @@ Use --json for structured JSON output (useful for CI).`,
 			return err
 		}
 
-		// Resolve local challenge directory
-		challengeDir, err := devutils.ResolveLocalChallengeDir(challengeSlug, devTestDir)
-		if err != nil {
-			if !opts.JSONOutput {
-				ui.Error("Failed to find challenge directory")
+		challengeDir := ""
+		if devTestDir != "" {
+			dir, err := devutils.ResolveLocalChallengeDir(challengeSlug, devTestDir)
+			if err != nil {
+				if !opts.JSONOutput {
+					ui.Error("Failed to find challenge directory")
+				}
+				return err
 			}
-			return err
+			challengeDir = dir
 		}
 
 		// Apply
 		ui.Section(fmt.Sprintf("Applying Dev Challenge: %s", challengeSlug))
-		ui.Info(fmt.Sprintf("Using challenge directory: %s", challengeDir))
+		if challengeDir != "" {
+			ui.Info(fmt.Sprintf("Using local directory: %s", challengeDir))
+		}
 
 		if err := runDevApply(cmd, challengeSlug, challengeDir, devTestClean); err != nil {
 			return err
 		}
 
 		ui.Println()
-		ui.Success(fmt.Sprintf("Challenge '%s' deployed from local files!", challengeSlug))
+		ui.Success(fmt.Sprintf("Challenge '%s' deployed!", challengeSlug))
 		ui.Println()
 
 		// Validate
@@ -98,7 +105,7 @@ Use --json for structured JSON output (useful for CI).`,
 
 func init() {
 	devCmd.AddCommand(devTestCmd)
-	devTestCmd.Flags().StringVar(&devTestDir, "dir", "", "Path to challenge directory (default: auto-detect)")
+	devTestCmd.Flags().StringVar(&devTestDir, "dir", "", "Read from local directory")
 	devTestCmd.Flags().BoolVar(&devTestClean, "clean", false, "Delete existing resources before applying")
 	devTestCmd.Flags().BoolVarP(&devTestWatch, "watch", "w", false, "Continuously re-run validations at the given interval after apply (see --watch-interval)")
 	devTestCmd.Flags().DurationVarP(&devTestWatchInterval, "watch-interval", "i", 5*time.Second, "Interval between watch re-runs (e.g. 10s, 1m)")

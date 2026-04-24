@@ -3,11 +3,10 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
-	"github.com/kubeasy-dev/kubeasy-cli/internal/devutils"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/ui"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/validation"
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 	"go.yaml.in/yaml/v3"
@@ -30,15 +29,13 @@ type challengeMetadata struct {
 	} `yaml:"objectives"`
 }
 
-var devGetDir string
-
 var devGetCmd = &cobra.Command{
 	Use:   "get [challenge-slug]",
-	Short: "Display local challenge metadata",
-	Long: `Reads challenge.yaml from the local directory and displays its metadata,
-description, objective, and objectives summary. No cluster or API required.
+	Short: "Display challenge metadata from local files",
+	Long: `Reads challenge metadata from local challenge.yaml and displays it.
+No cluster or Kubeasy API required.
 
-This is the dev equivalent of 'kubeasy challenge get'.`,
+It searches for challenge.yaml in the current directory or ../challenges/<slug>/.`,
 	Args:          cobra.ExactArgs(1),
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -49,16 +46,16 @@ This is the dev equivalent of 'kubeasy challenge get'.`,
 			return err
 		}
 
-		challengeDir, err := devutils.ResolveLocalChallengeDir(challengeSlug, devGetDir)
-		if err != nil {
-			ui.Error("Failed to find challenge directory")
-			return err
+		localPath := validation.FindLocalChallengeFile(challengeSlug)
+		if localPath == "" {
+			ui.Error(fmt.Sprintf("Failed to find local challenge file for slug %q", challengeSlug))
+			ui.Info("Checked: ./" + challengeSlug + "/challenge.yaml and ../challenges/" + challengeSlug + "/challenge.yaml")
+			return fmt.Errorf("challenge file not found")
 		}
 
-		challengeYAML := filepath.Join(challengeDir, "challenge.yaml")
-		data, err := os.ReadFile(challengeYAML)
+		data, err := os.ReadFile(localPath)
 		if err != nil {
-			ui.Error(fmt.Sprintf("Failed to read %s", challengeYAML))
+			ui.Error(fmt.Sprintf("Failed to read challenge file: %v", err))
 			return err
 		}
 
@@ -68,11 +65,9 @@ This is the dev equivalent of 'kubeasy challenge get'.`,
 			return fmt.Errorf("failed to parse challenge.yaml: %w", err)
 		}
 
-		// Header
 		ui.Println()
 		ui.Section(meta.Title)
 
-		// Metadata
 		ui.KeyValue("Slug", challengeSlug)
 		ui.KeyValue("Type", meta.Type)
 		ui.KeyValue("Theme", meta.Theme)
@@ -81,20 +76,17 @@ This is the dev equivalent of 'kubeasy challenge get'.`,
 		ui.KeyValue("Objectives", fmt.Sprintf("%d", len(meta.Objectives)))
 		ui.Println()
 
-		// Description
 		if desc := strings.TrimSpace(meta.Description); desc != "" {
 			ui.Panel("Description", desc)
 			ui.Println()
 		}
 
-		// Initial situation
 		if sit := strings.TrimSpace(meta.InitialSituation); sit != "" {
 			pterm.DefaultSection.Println("Initial Situation")
 			pterm.Println(sit)
 			ui.Println()
 		}
 
-		// Objectives list
 		if len(meta.Objectives) > 0 {
 			pterm.DefaultSection.Println("Validation Objectives")
 			rows := make([][]string, 0, len(meta.Objectives))
@@ -117,5 +109,4 @@ This is the dev equivalent of 'kubeasy challenge get'.`,
 
 func init() {
 	devCmd.AddCommand(devGetCmd)
-	devGetCmd.Flags().StringVar(&devGetDir, "dir", "", "Path to challenge directory (default: auto-detect)")
 }

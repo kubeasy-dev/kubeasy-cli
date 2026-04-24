@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/validation"
+	"github.com/kubeasy-dev/registry/pkg/challenges"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -28,12 +29,26 @@ type LintIssue struct {
 }
 
 // LintChallengeFile validates a challenge.yaml file structure without requiring a cluster.
+// Also checks that the manifests/ directory exists next to the file.
 func LintChallengeFile(path string) ([]LintIssue, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %s: %w", path, err)
 	}
+	issues, err := LintChallengeData(data)
+	if err != nil {
+		return nil, err
+	}
+	// Validate manifests/ directory alongside the file using the registry's shared validator.
+	challengeDir := filepath.Dir(path)
+	for _, ve := range challenges.ValidateManifests(challengeDir) {
+		issues = append(issues, LintIssue{Field: ve.Field, Severity: SeverityError, Message: ve.Message})
+	}
+	return issues, nil
+}
 
+// LintChallengeData validates challenge.yaml bytes without requiring a file on disk.
+func LintChallengeData(data []byte) ([]LintIssue, error) {
 	// Unmarshal into the canonical ChallengeYamlSpec struct — single source of truth.
 	var spec validation.ChallengeYamlSpec
 	if err := yaml.Unmarshal(data, &spec); err != nil {
@@ -111,33 +126,6 @@ func LintChallengeFile(path string) ([]LintIssue, error) {
 					break
 				}
 			}
-		}
-	}
-
-	// Check manifests/ directory exists and is non-empty.
-	dir := filepath.Dir(path)
-	manifestsDir := filepath.Join(dir, "manifests")
-	entries, err := os.ReadDir(manifestsDir)
-	if err != nil {
-		issues = append(issues, LintIssue{
-			Field:    "manifests/",
-			Severity: SeverityWarning,
-			Message:  "manifests/ directory not found",
-		})
-	} else {
-		hasManifests := false
-		for _, e := range entries {
-			if !e.IsDir() && e.Name() != ".gitkeep" {
-				hasManifests = true
-				break
-			}
-		}
-		if !hasManifests {
-			issues = append(issues, LintIssue{
-				Field:    "manifests/",
-				Severity: SeverityWarning,
-				Message:  "manifests/ directory is empty (no YAML files)",
-			})
 		}
 	}
 

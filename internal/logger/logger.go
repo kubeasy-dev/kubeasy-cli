@@ -155,7 +155,7 @@ func countLinesInFile(filePath string) int {
 	if err != nil {
 		return 0 // File doesn't exist or can't be opened
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	scanner := bufio.NewScanner(file)
 	lineCount := 0
@@ -296,7 +296,7 @@ func (l *Logger) readAllLines() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	var lines []string
 	scanner := bufio.NewScanner(file)

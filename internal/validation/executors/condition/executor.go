@@ -10,7 +10,6 @@ import (
 	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/validation/shared"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/validation/vtypes"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
@@ -87,7 +86,7 @@ func Execute(ctx context.Context, spec vtypes.ConditionSpec, deps shared.Deps) (
 				}
 				conditionFound = true
 				condStatus, _ := cond["status"].(string)
-				passed = corev1.ConditionStatus(condStatus) == check.Status
+				passed = condStatus == check.Status
 				break
 			}
 			if !conditionFound {

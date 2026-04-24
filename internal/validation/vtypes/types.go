@@ -128,7 +128,7 @@ type TypeRegistration struct {
 }
 
 // RegisteredTypes lists all validation types in display order for schema generation.
-// This is used by external tools (like hack/generate-schema) to produce the
+// Used by the registry repo's schema generation tooling to produce
 // JSON Schema/Zod definitions for the challenge.yaml format.
 var RegisteredTypes = []TypeRegistration{
 	{TypeStatus, StatusSpec{}, "StatusSpec"},

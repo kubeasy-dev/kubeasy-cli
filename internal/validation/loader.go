@@ -129,6 +129,9 @@ func fromObjective(obj challenges.Objective) Validation {
 			WaitAfterSeconds: s.WaitAfterSeconds,
 			Then:             then,
 		}
+	default:
+		// Unknown objective type not yet supported by this CLI version.
+		// v.Spec remains nil; the executor will report an "Unknown validation type" error.
 	}
 
 	return v

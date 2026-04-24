@@ -248,9 +248,9 @@ func TestWebsiteURL_EnvOverride(t *testing.T) {
 	orig := WebsiteURL
 	t.Cleanup(func() { WebsiteURL = orig })
 
-	t.Setenv("API_URL", "https://staging.kubeasy.com")
+	t.Setenv("KUBEASY_API_URL", "https://staging.kubeasy.com")
 	// init() already ran; re-apply the same logic inline to test the pattern
-	if v := os.Getenv("API_URL"); v != "" {
+	if v := os.Getenv("KUBEASY_API_URL"); v != "" {
 		WebsiteURL = v
 	}
 	assert.Equal(t, "https://staging.kubeasy.com", WebsiteURL)
@@ -261,9 +261,9 @@ func TestWebsiteURL_NoEnv_Retains_Default(t *testing.T) {
 	t.Cleanup(func() { WebsiteURL = orig })
 
 	// Ensure env var is absent
-	t.Setenv("API_URL", "")
+	t.Setenv("KUBEASY_API_URL", "")
 	// Re-apply the init logic inline
-	if v := os.Getenv("API_URL"); v != "" {
+	if v := os.Getenv("KUBEASY_API_URL"); v != "" {
 		WebsiteURL = v
 	}
 	assert.Equal(t, orig, WebsiteURL)

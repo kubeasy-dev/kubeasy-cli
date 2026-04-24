@@ -246,7 +246,11 @@ func SubmitChallenge(ctx context.Context, slug string, req ChallengeSubmitReques
 		if e.UserAgent != "" {
 			userAgent = &e.UserAgent
 		}
-		rc := e.ResponseCode
+		var rcPtr *int
+		if e.ResponseCode != 0 {
+			rc := e.ResponseCode
+			rcPtr = &rc
+		}
 
 		auditEvents[i] = struct {
 			Name         *string   `json:"name,omitempty"`
@@ -265,7 +269,7 @@ func SubmitChallenge(ctx context.Context, slug string, req ChallengeSubmitReques
 			Name:         name,
 			Namespace:    namespace,
 			UserAgent:    userAgent,
-			ResponseCode: &rc,
+			ResponseCode: rcPtr,
 		}
 	}
 

@@ -10,7 +10,7 @@ import (
 var WebsiteURL = "http://localhost:3000"
 
 func init() {
-	if v := os.Getenv("API_URL"); v != "" {
+	if v := os.Getenv("KUBEASY_API_URL"); v != "" {
 		WebsiteURL = v
 	}
 }

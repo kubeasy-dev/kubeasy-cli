@@ -35,9 +35,6 @@ var LogFilePath = "/tmp/kubeasy-cli.log"
 // MaxLogLines is the maximum number of lines allowed in the log file.
 const MaxLogLines = 5000
 
-// ExercisesRepoBranch is the default branch to use when downloading exercises manifests.
-var ExercisesRepoBranch = "main"
-
 // GetKubeasyConfigDir returns the path to the CLI configuration directory (~/.config/kubeasy-cli)
 func GetKubeasyConfigDir() string {
 	home, err := os.UserHomeDir()

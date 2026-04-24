@@ -2,14 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"io"
-	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 
-	"github.com/kubeasy-dev/kubeasy-cli/internal/devutils"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/ui"
+	"github.com/kubeasy-dev/kubeasy-cli/internal/validation"
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 	"go.yaml.in/yaml/v3"
@@ -32,16 +29,13 @@ type challengeMetadata struct {
 	} `yaml:"objectives"`
 }
 
-var devGetDir string
-
 var devGetCmd = &cobra.Command{
 	Use:   "get [challenge-slug]",
-	Short: "Display challenge metadata from the local registry",
-	Long: `Fetches challenge metadata from the local registry and displays it.
+	Short: "Display challenge metadata from local files",
+	Long: `Reads challenge metadata from local challenge.yaml and displays it.
 No cluster or Kubeasy API required.
 
-Use --dir to read from a local directory instead of the registry.
-This is the dev equivalent of 'kubeasy challenge get'.`,
+It searches for challenge.yaml in the current directory or ../challenges/<slug>/.`,
 	Args:          cobra.ExactArgs(1),
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -52,36 +46,17 @@ This is the dev equivalent of 'kubeasy challenge get'.`,
 			return err
 		}
 
-		var data []byte
+		localPath := validation.FindLocalChallengeFile(challengeSlug)
+		if localPath == "" {
+			ui.Error(fmt.Sprintf("Failed to find local challenge file for slug %q", challengeSlug))
+			ui.Info("Checked: ./" + challengeSlug + "/challenge.yaml and ../challenges/" + challengeSlug + "/challenge.yaml")
+			return fmt.Errorf("challenge file not found")
+		}
 
-		if devGetDir != "" {
-			// Filesystem mode.
-			challengeDir, err := devutils.ResolveLocalChallengeDir(challengeSlug, devGetDir)
-			if err != nil {
-				ui.Error("Failed to find challenge directory")
-				return err
-			}
-			data, err = os.ReadFile(filepath.Join(challengeDir, "challenge.yaml"))
-			if err != nil {
-				ui.Error("Failed to read challenge.yaml")
-				return err
-			}
-		} else {
-			// Registry mode.
-			url := fmt.Sprintf("%s/challenges/%s/yaml", devRegistryURL, challengeSlug)
-			resp, err := http.Get(url) //nolint:noctx,gosec
-			if err != nil {
-				ui.Error(fmt.Sprintf("Failed to reach registry: %v", err))
-				return err
-			}
-			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusOK {
-				return fmt.Errorf("registry returned HTTP %d for challenge %q", resp.StatusCode, challengeSlug)
-			}
-			data, err = io.ReadAll(resp.Body)
-			if err != nil {
-				return fmt.Errorf("failed to read response: %w", err)
-			}
+		data, err := os.ReadFile(localPath)
+		if err != nil {
+			ui.Error(fmt.Sprintf("Failed to read challenge file: %v", err))
+			return err
 		}
 
 		var meta challengeMetadata
@@ -134,5 +109,4 @@ This is the dev equivalent of 'kubeasy challenge get'.`,
 
 func init() {
 	devCmd.AddCommand(devGetCmd)
-	devGetCmd.Flags().StringVar(&devGetDir, "dir", "", "Read from local directory instead of registry")
 }

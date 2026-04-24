@@ -9,30 +9,29 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/kubeasy-dev/kubeasy-cli/internal/api"
 	"github.com/kubeasy-dev/kubeasy-cli/internal/logger"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/restmapper"
 )
 
-// FetchManifestHash fetches the manifests tar.gz and returns its SHA-256 hash.
-// Used for change detection in watch mode without re-applying.
-func FetchManifestHash(ctx context.Context, registryURL, slug string) (string, error) {
-	_, hash, err := fetchManifestsTarGz(ctx, registryURL, slug)
+// FetchManifestHash fetches the manifests tar.gz from the API and returns its SHA-256 hash.
+func FetchManifestHash(ctx context.Context, slug string) (string, error) {
+	_, hash, err := fetchManifestsTarGz(ctx, slug)
 	return hash, err
 }
 
-// DeployChallengeFromRegistry fetches challenge manifests from the registry and applies them.
-// Returns the content hash of the tar.gz for change detection in watch mode.
-func DeployChallengeFromRegistry(ctx context.Context, clientset *kubernetes.Clientset, dynamicClient dynamic.Interface, registryURL, slug string) (string, error) {
-	logger.Info("Fetching manifests for '%s' from %s...", slug, registryURL)
+// DeployChallengeFromRegistry fetches challenge manifests from the API and applies them.
+// Returns the content hash of the tar.gz for change detection.
+func DeployChallengeFromRegistry(ctx context.Context, clientset *kubernetes.Clientset, dynamicClient dynamic.Interface, slug string) (string, error) {
+	logger.Info("Fetching manifests for '%s'...", slug)
 
-	data, hash, err := fetchManifestsTarGz(ctx, registryURL, slug)
+	data, hash, err := fetchManifestsTarGz(ctx, slug)
 	if err != nil {
 		return "", err
 	}
@@ -65,28 +64,22 @@ func DeployChallengeFromRegistry(ctx context.Context, clientset *kubernetes.Clie
 	return hash, nil
 }
 
-func fetchManifestsTarGz(ctx context.Context, registryURL, slug string) ([]byte, string, error) {
-	url := fmt.Sprintf("%s/challenges/%s/manifests", registryURL, slug)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+func fetchManifestsTarGz(ctx context.Context, slug string) ([]byte, string, error) {
+	client, err := api.NewPublicClient()
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to build request: %w", err)
+		return nil, "", err
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.GetChallengeManifestsWithResponse(ctx, slug)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to reach registry at %s: %w", registryURL, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, "", fmt.Errorf("registry returned HTTP %d for challenge %q", resp.StatusCode, slug)
+		return nil, "", fmt.Errorf("failed to reach API: %w", err)
 	}
 
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to read response: %w", err)
+	if resp.StatusCode() != 200 {
+		return nil, "", fmt.Errorf("API returned HTTP %d for challenge %q", resp.StatusCode(), slug)
 	}
 
+	data := resp.Body
 	sum := sha256.Sum256(data)
 	return data, hex.EncodeToString(sum[:]), nil
 }

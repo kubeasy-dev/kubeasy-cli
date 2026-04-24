@@ -29,35 +29,30 @@ const (
 	Medium ListChallengesParamsDifficulty = "medium"
 )
 
-// Defines values for ListChallengesParamsShowCompleted.
-const (
-	ListChallengesParamsShowCompletedFalse ListChallengesParamsShowCompleted = "false"
-	ListChallengesParamsShowCompletedTrue  ListChallengesParamsShowCompleted = "true"
-)
-
-// Defines values for GetCompletionParamsSplitByTheme.
-const (
-	GetCompletionParamsSplitByThemeFalse GetCompletionParamsSplitByTheme = "false"
-	GetCompletionParamsSplitByThemeTrue  GetCompletionParamsSplitByTheme = "true"
-)
-
 // ListChallengesParams defines parameters for ListChallenges.
 type ListChallengesParams struct {
-	Difficulty    *ListChallengesParamsDifficulty    `form:"difficulty,omitempty" json:"difficulty,omitempty"`
-	Type          *string                            `form:"type,omitempty" json:"type,omitempty"`
-	Theme         *string                            `form:"theme,omitempty" json:"theme,omitempty"`
-	Search        *string                            `form:"search,omitempty" json:"search,omitempty"`
-	ShowCompleted *ListChallengesParamsShowCompleted `form:"showCompleted,omitempty" json:"showCompleted,omitempty"`
+	Difficulty    *ListChallengesParamsDifficulty `form:"difficulty,omitempty" json:"difficulty,omitempty"`
+	Type          *string                         `form:"type,omitempty" json:"type,omitempty"`
+	Theme         *string                         `form:"theme,omitempty" json:"theme,omitempty"`
+	Search        *string                         `form:"search,omitempty" json:"search,omitempty"`
+	ShowCompleted *string                         `form:"showCompleted,omitempty" json:"showCompleted,omitempty"`
 }
 
 // ListChallengesParamsDifficulty defines parameters for ListChallenges.
 type ListChallengesParamsDifficulty string
 
-// ListChallengesParamsShowCompleted defines parameters for ListChallenges.
-type ListChallengesParamsShowCompleted string
-
 // SubmitChallengeJSONBody defines parameters for SubmitChallenge.
 type SubmitChallengeJSONBody struct {
+	AuditEvents *[]struct {
+		Name         *string   `json:"name,omitempty"`
+		Namespace    *string   `json:"namespace,omitempty"`
+		Resource     string    `json:"resource"`
+		ResponseCode *int      `json:"responseCode,omitempty"`
+		Subresource  *string   `json:"subresource,omitempty"`
+		Timestamp    time.Time `json:"timestamp"`
+		UserAgent    *string   `json:"userAgent,omitempty"`
+		Verb         string    `json:"verb"`
+	} `json:"auditEvents,omitempty"`
 	Results []struct {
 		Message      *string `json:"message,omitempty"`
 		ObjectiveKey string  `json:"objectiveKey"`
@@ -65,22 +60,11 @@ type SubmitChallengeJSONBody struct {
 	} `json:"results"`
 }
 
-// CliSubmitChallengeLegacyJSONBody defines parameters for CliSubmitChallengeLegacy.
-type CliSubmitChallengeLegacyJSONBody struct {
-	Results []struct {
-		Message      *string `json:"message,omitempty"`
-		ObjectiveKey string  `json:"objectiveKey"`
-		Passed       bool    `json:"passed"`
-	} `json:"results"`
-}
-
-// CliSubmitChallengeJSONBody defines parameters for CliSubmitChallenge.
-type CliSubmitChallengeJSONBody struct {
-	Results []struct {
-		Message      *string `json:"message,omitempty"`
-		ObjectiveKey string  `json:"objectiveKey"`
-		Passed       bool    `json:"passed"`
-	} `json:"results"`
+// TrackCliLoginJSONBody defines parameters for TrackCliLogin.
+type TrackCliLoginJSONBody struct {
+	Arch       string `json:"arch"`
+	CliVersion string `json:"cliVersion"`
+	Os         string `json:"os"`
 }
 
 // TrackSetupJSONBody defines parameters for TrackSetup.
@@ -90,53 +74,14 @@ type TrackSetupJSONBody struct {
 	Os         string `json:"os"`
 }
 
-// LoginUserJSONBody defines parameters for LoginUser.
-type LoginUserJSONBody struct {
-	Arch       string `json:"arch"`
-	CliVersion string `json:"cliVersion"`
-	Os         string `json:"os"`
-}
-
-// GetCompletionParams defines parameters for GetCompletion.
-type GetCompletionParams struct {
-	SplitByTheme *GetCompletionParamsSplitByTheme `form:"splitByTheme,omitempty" json:"splitByTheme,omitempty"`
-	ThemeSlug    *string                          `form:"themeSlug,omitempty" json:"themeSlug,omitempty"`
-}
-
-// GetCompletionParamsSplitByTheme defines parameters for GetCompletion.
-type GetCompletionParamsSplitByTheme string
-
-// UpdateEmailTopicJSONBody defines parameters for UpdateEmailTopic.
-type UpdateEmailTopicJSONBody struct {
-	Subscribed bool `json:"subscribed"`
-}
-
-// UpdateUserNameJSONBody defines parameters for UpdateUserName.
-type UpdateUserNameJSONBody struct {
-	FirstName string  `json:"firstName"`
-	LastName  *string `json:"lastName,omitempty"`
-}
-
 // SubmitChallengeJSONRequestBody defines body for SubmitChallenge for application/json ContentType.
 type SubmitChallengeJSONRequestBody SubmitChallengeJSONBody
 
-// CliSubmitChallengeLegacyJSONRequestBody defines body for CliSubmitChallengeLegacy for application/json ContentType.
-type CliSubmitChallengeLegacyJSONRequestBody CliSubmitChallengeLegacyJSONBody
-
-// CliSubmitChallengeJSONRequestBody defines body for CliSubmitChallenge for application/json ContentType.
-type CliSubmitChallengeJSONRequestBody CliSubmitChallengeJSONBody
+// TrackCliLoginJSONRequestBody defines body for TrackCliLogin for application/json ContentType.
+type TrackCliLoginJSONRequestBody TrackCliLoginJSONBody
 
 // TrackSetupJSONRequestBody defines body for TrackSetup for application/json ContentType.
 type TrackSetupJSONRequestBody TrackSetupJSONBody
-
-// LoginUserJSONRequestBody defines body for LoginUser for application/json ContentType.
-type LoginUserJSONRequestBody LoginUserJSONBody
-
-// UpdateEmailTopicJSONRequestBody defines body for UpdateEmailTopic for application/json ContentType.
-type UpdateEmailTopicJSONRequestBody UpdateEmailTopicJSONBody
-
-// UpdateUserNameJSONRequestBody defines body for UpdateUserName for application/json ContentType.
-type UpdateUserNameJSONRequestBody UpdateUserNameJSONBody
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -214,66 +159,32 @@ type ClientInterface interface {
 	// ListChallenges request
 	ListChallenges(ctx context.Context, params *ListChallengesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetChallengeMeta request
+	GetChallengeMeta(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetChallenge request
 	GetChallenge(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetChallengeObjectives request
-	GetChallengeObjectives(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// GetChallengeManifests request
+	GetChallengeManifests(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SubmitChallengeWithBody request with any body
 	SubmitChallengeWithBody(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	SubmitChallenge(ctx context.Context, slug string, body SubmitChallengeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CliGetChallenge request
-	CliGetChallenge(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// GetChallengeYaml request
+	GetChallengeYaml(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CliResetChallenge request
-	CliResetChallenge(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// TrackCliLoginWithBody request with any body
+	TrackCliLoginWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CliStartChallenge request
-	CliStartChallenge(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// CliGetChallengeStatus request
-	CliGetChallengeStatus(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// CliSubmitChallengeLegacyWithBody request with any body
-	CliSubmitChallengeLegacyWithBody(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	CliSubmitChallengeLegacy(ctx context.Context, slug string, body CliSubmitChallengeLegacyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// CliSubmitChallengeWithBody request with any body
-	CliSubmitChallengeWithBody(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	CliSubmitChallenge(ctx context.Context, slug string, body CliSubmitChallengeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	TrackCliLogin(ctx context.Context, body TrackCliLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// TrackSetupWithBody request with any body
 	TrackSetupWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	TrackSetup(ctx context.Context, body TrackSetupJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetUser request
-	GetUser(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// LoginUserWithBody request with any body
-	LoginUserWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	LoginUser(ctx context.Context, body LoginUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetOnboarding request
-	GetOnboarding(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// CompleteOnboarding request
-	CompleteOnboarding(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// SkipOnboarding request
-	SkipOnboarding(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// StartOnboarding request
-	StartOnboarding(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetCompletion request
-	GetCompletion(ctx context.Context, params *GetCompletionParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetChallengeStatus request
 	GetChallengeStatus(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -284,46 +195,24 @@ type ClientInterface interface {
 	// StartChallenge request
 	StartChallenge(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetSubmissions request
-	GetSubmissions(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetLatestSubmission request
-	GetLatestSubmission(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetThemes request
-	GetThemes(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetTypes request
-	GetTypes(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetEmailTopics request
-	GetEmailTopics(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// UpdateEmailTopicWithBody request with any body
-	UpdateEmailTopicWithBody(ctx context.Context, topicId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	UpdateEmailTopic(ctx context.Context, topicId string, body UpdateEmailTopicJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// UpdateUserNameWithBody request with any body
-	UpdateUserNameWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	UpdateUserName(ctx context.Context, body UpdateUserNameJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// DeleteUserProgress request
-	DeleteUserProgress(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetUserStreak request
-	GetUserStreak(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetUserXp request
-	GetUserXp(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetXpHistory request
-	GetXpHistory(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// GetUserMe request
+	GetUserMe(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) ListChallenges(ctx context.Context, params *ListChallengesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListChallengesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetChallengeMeta(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetChallengeMetaRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -346,8 +235,8 @@ func (c *Client) GetChallenge(ctx context.Context, slug string, reqEditors ...Re
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetChallengeObjectives(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetChallengeObjectivesRequest(c.Server, slug)
+func (c *Client) GetChallengeManifests(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetChallengeManifestsRequest(c.Server, slug)
 	if err != nil {
 		return nil, err
 	}
@@ -382,8 +271,8 @@ func (c *Client) SubmitChallenge(ctx context.Context, slug string, body SubmitCh
 	return c.Client.Do(req)
 }
 
-func (c *Client) CliGetChallenge(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCliGetChallengeRequest(c.Server, slug)
+func (c *Client) GetChallengeYaml(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetChallengeYamlRequest(c.Server, slug)
 	if err != nil {
 		return nil, err
 	}
@@ -394,8 +283,8 @@ func (c *Client) CliGetChallenge(ctx context.Context, slug string, reqEditors ..
 	return c.Client.Do(req)
 }
 
-func (c *Client) CliResetChallenge(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCliResetChallengeRequest(c.Server, slug)
+func (c *Client) TrackCliLoginWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTrackCliLoginRequestWithBody(c.Server, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -406,68 +295,8 @@ func (c *Client) CliResetChallenge(ctx context.Context, slug string, reqEditors 
 	return c.Client.Do(req)
 }
 
-func (c *Client) CliStartChallenge(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCliStartChallengeRequest(c.Server, slug)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) CliGetChallengeStatus(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCliGetChallengeStatusRequest(c.Server, slug)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) CliSubmitChallengeLegacyWithBody(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCliSubmitChallengeLegacyRequestWithBody(c.Server, slug, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) CliSubmitChallengeLegacy(ctx context.Context, slug string, body CliSubmitChallengeLegacyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCliSubmitChallengeLegacyRequest(c.Server, slug, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) CliSubmitChallengeWithBody(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCliSubmitChallengeRequestWithBody(c.Server, slug, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) CliSubmitChallenge(ctx context.Context, slug string, body CliSubmitChallengeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCliSubmitChallengeRequest(c.Server, slug, body)
+func (c *Client) TrackCliLogin(ctx context.Context, body TrackCliLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTrackCliLoginRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -492,102 +321,6 @@ func (c *Client) TrackSetupWithBody(ctx context.Context, contentType string, bod
 
 func (c *Client) TrackSetup(ctx context.Context, body TrackSetupJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewTrackSetupRequest(c.Server, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) GetUser(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetUserRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) LoginUserWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewLoginUserRequestWithBody(c.Server, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) LoginUser(ctx context.Context, body LoginUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewLoginUserRequest(c.Server, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) GetOnboarding(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetOnboardingRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) CompleteOnboarding(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCompleteOnboardingRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) SkipOnboarding(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSkipOnboardingRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) StartOnboarding(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewStartOnboardingRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) GetCompletion(ctx context.Context, params *GetCompletionParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetCompletionRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -634,152 +367,8 @@ func (c *Client) StartChallenge(ctx context.Context, slug string, reqEditors ...
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetSubmissions(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetSubmissionsRequest(c.Server, slug)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) GetLatestSubmission(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetLatestSubmissionRequest(c.Server, slug)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) GetThemes(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetThemesRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) GetTypes(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetTypesRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) GetEmailTopics(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetEmailTopicsRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) UpdateEmailTopicWithBody(ctx context.Context, topicId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateEmailTopicRequestWithBody(c.Server, topicId, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) UpdateEmailTopic(ctx context.Context, topicId string, body UpdateEmailTopicJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateEmailTopicRequest(c.Server, topicId, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) UpdateUserNameWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateUserNameRequestWithBody(c.Server, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) UpdateUserName(ctx context.Context, body UpdateUserNameJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateUserNameRequest(c.Server, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) DeleteUserProgress(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteUserProgressRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) GetUserStreak(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetUserStreakRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) GetUserXp(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetUserXpRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) GetXpHistory(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetXpHistoryRequest(c.Server)
+func (c *Client) GetUserMe(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetUserMeRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -903,6 +492,33 @@ func NewListChallengesRequest(server string, params *ListChallengesParams) (*htt
 	return req, nil
 }
 
+// NewGetChallengeMetaRequest generates requests for GetChallengeMeta
+func NewGetChallengeMetaRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/challenges/meta")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetChallengeRequest generates requests for GetChallenge
 func NewGetChallengeRequest(server string, slug string) (*http.Request, error) {
 	var err error
@@ -937,8 +553,8 @@ func NewGetChallengeRequest(server string, slug string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewGetChallengeObjectivesRequest generates requests for GetChallengeObjectives
-func NewGetChallengeObjectivesRequest(server string, slug string) (*http.Request, error) {
+// NewGetChallengeManifestsRequest generates requests for GetChallengeManifests
+func NewGetChallengeManifestsRequest(server string, slug string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -953,7 +569,7 @@ func NewGetChallengeObjectivesRequest(server string, slug string) (*http.Request
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/challenges/%s/objectives", pathParam0)
+	operationPath := fmt.Sprintf("/api/challenges/%s/manifests", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1018,8 +634,8 @@ func NewSubmitChallengeRequestWithBody(server string, slug string, contentType s
 	return req, nil
 }
 
-// NewCliGetChallengeRequest generates requests for CliGetChallenge
-func NewCliGetChallengeRequest(server string, slug string) (*http.Request, error) {
+// NewGetChallengeYamlRequest generates requests for GetChallengeYaml
+func NewGetChallengeYamlRequest(server string, slug string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -1034,7 +650,7 @@ func NewCliGetChallengeRequest(server string, slug string) (*http.Request, error
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/cli/challenge/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/challenges/%s/yaml", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1052,183 +668,27 @@ func NewCliGetChallengeRequest(server string, slug string) (*http.Request, error
 	return req, nil
 }
 
-// NewCliResetChallengeRequest generates requests for CliResetChallenge
-func NewCliResetChallengeRequest(server string, slug string) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "slug", runtime.ParamLocationPath, slug)
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/cli/challenge/%s/reset", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("POST", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewCliStartChallengeRequest generates requests for CliStartChallenge
-func NewCliStartChallengeRequest(server string, slug string) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "slug", runtime.ParamLocationPath, slug)
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/cli/challenge/%s/start", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("POST", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewCliGetChallengeStatusRequest generates requests for CliGetChallengeStatus
-func NewCliGetChallengeStatusRequest(server string, slug string) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "slug", runtime.ParamLocationPath, slug)
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/cli/challenge/%s/status", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewCliSubmitChallengeLegacyRequest calls the generic CliSubmitChallengeLegacy builder with application/json body
-func NewCliSubmitChallengeLegacyRequest(server string, slug string, body CliSubmitChallengeLegacyJSONRequestBody) (*http.Request, error) {
+// NewTrackCliLoginRequest calls the generic TrackCliLogin builder with application/json body
+func NewTrackCliLoginRequest(server string, body TrackCliLoginJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewCliSubmitChallengeLegacyRequestWithBody(server, slug, "application/json", bodyReader)
+	return NewTrackCliLoginRequestWithBody(server, "application/json", bodyReader)
 }
 
-// NewCliSubmitChallengeLegacyRequestWithBody generates requests for CliSubmitChallengeLegacy with any type of body
-func NewCliSubmitChallengeLegacyRequestWithBody(server string, slug string, contentType string, body io.Reader) (*http.Request, error) {
+// NewTrackCliLoginRequestWithBody generates requests for TrackCliLogin with any type of body
+func NewTrackCliLoginRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "slug", runtime.ParamLocationPath, slug)
-	if err != nil {
-		return nil, err
-	}
 
 	serverURL, err := url.Parse(server)
 	if err != nil {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/cli/challenge/%s/submit", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("POST", queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewCliSubmitChallengeRequest calls the generic CliSubmitChallenge builder with application/json body
-func NewCliSubmitChallengeRequest(server string, slug string, body CliSubmitChallengeJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewCliSubmitChallengeRequestWithBody(server, slug, "application/json", bodyReader)
-}
-
-// NewCliSubmitChallengeRequestWithBody generates requests for CliSubmitChallenge with any type of body
-func NewCliSubmitChallengeRequestWithBody(server string, slug string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "slug", runtime.ParamLocationPath, slug)
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/cli/challenges/%s/submit", pathParam0)
+	operationPath := fmt.Sprintf("/api/cli/track/login")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1284,246 +744,6 @@ func NewTrackSetupRequestWithBody(server string, contentType string, body io.Rea
 	}
 
 	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewGetUserRequest generates requests for GetUser
-func NewGetUserRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/cli/user")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewLoginUserRequest calls the generic LoginUser builder with application/json body
-func NewLoginUserRequest(server string, body LoginUserJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewLoginUserRequestWithBody(server, "application/json", bodyReader)
-}
-
-// NewLoginUserRequestWithBody generates requests for LoginUser with any type of body
-func NewLoginUserRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/cli/user")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("POST", queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewGetOnboardingRequest generates requests for GetOnboarding
-func NewGetOnboardingRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/onboarding")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewCompleteOnboardingRequest generates requests for CompleteOnboarding
-func NewCompleteOnboardingRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/onboarding/complete")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("POST", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewSkipOnboardingRequest generates requests for SkipOnboarding
-func NewSkipOnboardingRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/onboarding/skip")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("POST", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewStartOnboardingRequest generates requests for StartOnboarding
-func NewStartOnboardingRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/onboarding/start")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("POST", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetCompletionRequest generates requests for GetCompletion
-func NewGetCompletionRequest(server string, params *GetCompletionParams) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/progress/completion")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		queryValues := queryURL.Query()
-
-		if params.SplitByTheme != nil {
-
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "splitByTheme", runtime.ParamLocationQuery, *params.SplitByTheme); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
-				}
-			}
-
-		}
-
-		if params.ThemeSlug != nil {
-
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "themeSlug", runtime.ParamLocationQuery, *params.ThemeSlug); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
-				}
-			}
-
-		}
-
-		queryURL.RawQuery = queryValues.Encode()
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
 
 	return req, nil
 }
@@ -1630,76 +850,8 @@ func NewStartChallengeRequest(server string, slug string) (*http.Request, error)
 	return req, nil
 }
 
-// NewGetSubmissionsRequest generates requests for GetSubmissions
-func NewGetSubmissionsRequest(server string, slug string) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "slug", runtime.ParamLocationPath, slug)
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/submissions/%s", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetLatestSubmissionRequest generates requests for GetLatestSubmission
-func NewGetLatestSubmissionRequest(server string, slug string) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "slug", runtime.ParamLocationPath, slug)
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/submissions/%s/latest", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetThemesRequest generates requests for GetThemes
-func NewGetThemesRequest(server string) (*http.Request, error) {
+// NewGetUserMeRequest generates requests for GetUserMe
+func NewGetUserMeRequest(server string) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -1707,256 +859,7 @@ func NewGetThemesRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/themes")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetTypesRequest generates requests for GetTypes
-func NewGetTypesRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/types")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetEmailTopicsRequest generates requests for GetEmailTopics
-func NewGetEmailTopicsRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/user/email-topics")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewUpdateEmailTopicRequest calls the generic UpdateEmailTopic builder with application/json body
-func NewUpdateEmailTopicRequest(server string, topicId string, body UpdateEmailTopicJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewUpdateEmailTopicRequestWithBody(server, topicId, "application/json", bodyReader)
-}
-
-// NewUpdateEmailTopicRequestWithBody generates requests for UpdateEmailTopic with any type of body
-func NewUpdateEmailTopicRequestWithBody(server string, topicId string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "topicId", runtime.ParamLocationPath, topicId)
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/user/email-topics/%s", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("PATCH", queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewUpdateUserNameRequest calls the generic UpdateUserName builder with application/json body
-func NewUpdateUserNameRequest(server string, body UpdateUserNameJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewUpdateUserNameRequestWithBody(server, "application/json", bodyReader)
-}
-
-// NewUpdateUserNameRequestWithBody generates requests for UpdateUserName with any type of body
-func NewUpdateUserNameRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/user/name")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("PATCH", queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewDeleteUserProgressRequest generates requests for DeleteUserProgress
-func NewDeleteUserProgressRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/user/progress")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetUserStreakRequest generates requests for GetUserStreak
-func NewGetUserStreakRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/user/streak")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetUserXpRequest generates requests for GetUserXp
-func NewGetUserXpRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/user/xp")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetXpHistoryRequest generates requests for GetXpHistory
-func NewGetXpHistoryRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/xp/history")
+	operationPath := fmt.Sprintf("/api/user/me")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2020,66 +923,32 @@ type ClientWithResponsesInterface interface {
 	// ListChallengesWithResponse request
 	ListChallengesWithResponse(ctx context.Context, params *ListChallengesParams, reqEditors ...RequestEditorFn) (*ListChallengesResponse, error)
 
+	// GetChallengeMetaWithResponse request
+	GetChallengeMetaWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetChallengeMetaResponse, error)
+
 	// GetChallengeWithResponse request
 	GetChallengeWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*GetChallengeResponse, error)
 
-	// GetChallengeObjectivesWithResponse request
-	GetChallengeObjectivesWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*GetChallengeObjectivesResponse, error)
+	// GetChallengeManifestsWithResponse request
+	GetChallengeManifestsWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*GetChallengeManifestsResponse, error)
 
 	// SubmitChallengeWithBodyWithResponse request with any body
 	SubmitChallengeWithBodyWithResponse(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SubmitChallengeResponse, error)
 
 	SubmitChallengeWithResponse(ctx context.Context, slug string, body SubmitChallengeJSONRequestBody, reqEditors ...RequestEditorFn) (*SubmitChallengeResponse, error)
 
-	// CliGetChallengeWithResponse request
-	CliGetChallengeWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*CliGetChallengeResponse, error)
+	// GetChallengeYamlWithResponse request
+	GetChallengeYamlWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*GetChallengeYamlResponse, error)
 
-	// CliResetChallengeWithResponse request
-	CliResetChallengeWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*CliResetChallengeResponse, error)
+	// TrackCliLoginWithBodyWithResponse request with any body
+	TrackCliLoginWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TrackCliLoginResponse, error)
 
-	// CliStartChallengeWithResponse request
-	CliStartChallengeWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*CliStartChallengeResponse, error)
-
-	// CliGetChallengeStatusWithResponse request
-	CliGetChallengeStatusWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*CliGetChallengeStatusResponse, error)
-
-	// CliSubmitChallengeLegacyWithBodyWithResponse request with any body
-	CliSubmitChallengeLegacyWithBodyWithResponse(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CliSubmitChallengeLegacyResponse, error)
-
-	CliSubmitChallengeLegacyWithResponse(ctx context.Context, slug string, body CliSubmitChallengeLegacyJSONRequestBody, reqEditors ...RequestEditorFn) (*CliSubmitChallengeLegacyResponse, error)
-
-	// CliSubmitChallengeWithBodyWithResponse request with any body
-	CliSubmitChallengeWithBodyWithResponse(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CliSubmitChallengeResponse, error)
-
-	CliSubmitChallengeWithResponse(ctx context.Context, slug string, body CliSubmitChallengeJSONRequestBody, reqEditors ...RequestEditorFn) (*CliSubmitChallengeResponse, error)
+	TrackCliLoginWithResponse(ctx context.Context, body TrackCliLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*TrackCliLoginResponse, error)
 
 	// TrackSetupWithBodyWithResponse request with any body
 	TrackSetupWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TrackSetupResponse, error)
 
 	TrackSetupWithResponse(ctx context.Context, body TrackSetupJSONRequestBody, reqEditors ...RequestEditorFn) (*TrackSetupResponse, error)
-
-	// GetUserWithResponse request
-	GetUserWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserResponse, error)
-
-	// LoginUserWithBodyWithResponse request with any body
-	LoginUserWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LoginUserResponse, error)
-
-	LoginUserWithResponse(ctx context.Context, body LoginUserJSONRequestBody, reqEditors ...RequestEditorFn) (*LoginUserResponse, error)
-
-	// GetOnboardingWithResponse request
-	GetOnboardingWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetOnboardingResponse, error)
-
-	// CompleteOnboardingWithResponse request
-	CompleteOnboardingWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*CompleteOnboardingResponse, error)
-
-	// SkipOnboardingWithResponse request
-	SkipOnboardingWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*SkipOnboardingResponse, error)
-
-	// StartOnboardingWithResponse request
-	StartOnboardingWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*StartOnboardingResponse, error)
-
-	// GetCompletionWithResponse request
-	GetCompletionWithResponse(ctx context.Context, params *GetCompletionParams, reqEditors ...RequestEditorFn) (*GetCompletionResponse, error)
 
 	// GetChallengeStatusWithResponse request
 	GetChallengeStatusWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*GetChallengeStatusResponse, error)
@@ -2090,42 +959,8 @@ type ClientWithResponsesInterface interface {
 	// StartChallengeWithResponse request
 	StartChallengeWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*StartChallengeResponse, error)
 
-	// GetSubmissionsWithResponse request
-	GetSubmissionsWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*GetSubmissionsResponse, error)
-
-	// GetLatestSubmissionWithResponse request
-	GetLatestSubmissionWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*GetLatestSubmissionResponse, error)
-
-	// GetThemesWithResponse request
-	GetThemesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetThemesResponse, error)
-
-	// GetTypesWithResponse request
-	GetTypesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetTypesResponse, error)
-
-	// GetEmailTopicsWithResponse request
-	GetEmailTopicsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetEmailTopicsResponse, error)
-
-	// UpdateEmailTopicWithBodyWithResponse request with any body
-	UpdateEmailTopicWithBodyWithResponse(ctx context.Context, topicId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateEmailTopicResponse, error)
-
-	UpdateEmailTopicWithResponse(ctx context.Context, topicId string, body UpdateEmailTopicJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateEmailTopicResponse, error)
-
-	// UpdateUserNameWithBodyWithResponse request with any body
-	UpdateUserNameWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateUserNameResponse, error)
-
-	UpdateUserNameWithResponse(ctx context.Context, body UpdateUserNameJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateUserNameResponse, error)
-
-	// DeleteUserProgressWithResponse request
-	DeleteUserProgressWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*DeleteUserProgressResponse, error)
-
-	// GetUserStreakWithResponse request
-	GetUserStreakWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserStreakResponse, error)
-
-	// GetUserXpWithResponse request
-	GetUserXpWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserXpResponse, error)
-
-	// GetXpHistoryWithResponse request
-	GetXpHistoryWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetXpHistoryResponse, error)
+	// GetUserMeWithResponse request
+	GetUserMeWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserMeResponse, error)
 }
 
 type ListChallengesResponse struct {
@@ -2134,11 +969,9 @@ type ListChallengesResponse struct {
 	JSON200      *struct {
 		Challenges []struct {
 			CompletedCount   int                                   `json:"completedCount"`
-			CreatedAt        *time.Time                            `json:"createdAt"`
 			Description      string                                `json:"description"`
 			Difficulty       ListChallenges200ChallengesDifficulty `json:"difficulty"`
 			EstimatedTime    int                                   `json:"estimatedTime"`
-			Id               int                                   `json:"id"`
 			InitialSituation string                                `json:"initialSituation"`
 			OfTheWeek        bool                                  `json:"ofTheWeek"`
 			Slug             string                                `json:"slug"`
@@ -2147,7 +980,6 @@ type ListChallengesResponse struct {
 			Title            string                                `json:"title"`
 			Type             string                                `json:"type"`
 			TypeSlug         string                                `json:"typeSlug"`
-			UpdatedAt        *time.Time                            `json:"updatedAt"`
 			UserStatus       *string                               `json:"userStatus"`
 		} `json:"challenges"`
 		Count int `json:"count"`
@@ -2183,17 +1015,63 @@ func (r ListChallengesResponse) StatusCode() int {
 	return 0
 }
 
+type GetChallengeMetaResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *struct {
+		Difficulties []string `json:"difficulties"`
+		Themes       []struct {
+			Description string `json:"description"`
+			Logo        string `json:"logo"`
+			Name        string `json:"name"`
+			Slug        string `json:"slug"`
+		} `json:"themes"`
+		Types []struct {
+			Description string `json:"description"`
+			Logo        string `json:"logo"`
+			Name        string `json:"name"`
+			Slug        string `json:"slug"`
+		} `json:"types"`
+	}
+	JSON400 *struct {
+		Details *string `json:"details,omitempty"`
+		Error   string  `json:"error"`
+	}
+	JSON401 *struct {
+		Details *string `json:"details,omitempty"`
+		Error   string  `json:"error"`
+	}
+	JSON500 *struct {
+		Details *string `json:"details,omitempty"`
+		Error   string  `json:"error"`
+	}
+}
+
+// Status returns HTTPResponse.Status
+func (r GetChallengeMetaResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetChallengeMetaResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type GetChallengeResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *struct {
 		Challenge *struct {
 			Available        bool                               `json:"available"`
-			CreatedAt        *time.Time                         `json:"createdAt"`
 			Description      string                             `json:"description"`
 			Difficulty       GetChallenge200ChallengeDifficulty `json:"difficulty"`
 			EstimatedTime    int                                `json:"estimatedTime"`
-			Id               int                                `json:"id"`
 			InitialSituation string                             `json:"initialSituation"`
 			OfTheWeek        bool                               `json:"ofTheWeek"`
 			Slug             string                             `json:"slug"`
@@ -2203,7 +1081,6 @@ type GetChallengeResponse struct {
 			Title            string                             `json:"title"`
 			Type             string                             `json:"type"`
 			TypeSlug         string                             `json:"typeSlug"`
-			UpdatedAt        *time.Time                         `json:"updatedAt"`
 		} `json:"challenge"`
 	}
 	JSON400 *struct {
@@ -2237,24 +1114,18 @@ func (r GetChallengeResponse) StatusCode() int {
 	return 0
 }
 
-type GetChallengeObjectivesResponse struct {
+type GetChallengeManifestsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *struct {
-		Objectives []struct {
-			Category     string `json:"category"`
-			Description  string `json:"description"`
-			DisplayOrder int    `json:"displayOrder"`
-			Id           int    `json:"id"`
-			ObjectiveKey string `json:"objectiveKey"`
-			Title        string `json:"title"`
-		} `json:"objectives"`
-	}
-	JSON400 *struct {
+	JSON400      *struct {
 		Details *string `json:"details,omitempty"`
 		Error   string  `json:"error"`
 	}
 	JSON401 *struct {
+		Details *string `json:"details,omitempty"`
+		Error   string  `json:"error"`
+	}
+	JSON404 *struct {
 		Details *string `json:"details,omitempty"`
 		Error   string  `json:"error"`
 	}
@@ -2265,7 +1136,7 @@ type GetChallengeObjectivesResponse struct {
 }
 
 // Status returns HTTPResponse.Status
-func (r GetChallengeObjectivesResponse) Status() string {
+func (r GetChallengeManifestsResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -2273,7 +1144,7 @@ func (r GetChallengeObjectivesResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r GetChallengeObjectivesResponse) StatusCode() int {
+func (r GetChallengeManifestsResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -2287,10 +1158,10 @@ type SubmitChallengeResponse struct {
 		Objectives []struct {
 			Category    SubmitChallenge200ObjectivesCategory `json:"category"`
 			Description *string                              `json:"description,omitempty"`
-			Id          string                               `json:"id"`
+			Key         string                               `json:"key"`
 			Message     *string                              `json:"message,omitempty"`
-			Name        string                               `json:"name"`
 			Passed      bool                                 `json:"passed"`
+			Title       string                               `json:"title"`
 		} `json:"objectives"`
 		Success SubmitChallenge200Success `json:"success"`
 	}
@@ -2322,17 +1193,17 @@ type SubmitChallenge200ObjectivesCategory string
 type SubmitChallenge200Success bool
 type SubmitChallenge4220 struct {
 	FailedObjectives []struct {
-		Id      string `json:"id"`
+		Key     string `json:"key"`
 		Message string `json:"message"`
-		Name    string `json:"name"`
+		Title   string `json:"title"`
 	} `json:"failedObjectives"`
 	Objectives []struct {
 		Category    SubmitChallenge4220ObjectivesCategory `json:"category"`
 		Description *string                               `json:"description,omitempty"`
-		Id          string                                `json:"id"`
+		Key         string                                `json:"key"`
 		Message     *string                               `json:"message,omitempty"`
-		Name        string                                `json:"name"`
 		Passed      bool                                  `json:"passed"`
+		Title       string                                `json:"title"`
 	} `json:"objectives"`
 	Success SubmitChallenge4220Success `json:"success"`
 }
@@ -2359,30 +1230,10 @@ func (r SubmitChallengeResponse) StatusCode() int {
 	return 0
 }
 
-type CliGetChallengeResponse struct {
+type GetChallengeYamlResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *struct {
-		Challenge *struct {
-			Available        bool                                  `json:"available"`
-			CreatedAt        *time.Time                            `json:"createdAt"`
-			Description      string                                `json:"description"`
-			Difficulty       CliGetChallenge200ChallengeDifficulty `json:"difficulty"`
-			EstimatedTime    int                                   `json:"estimatedTime"`
-			Id               int                                   `json:"id"`
-			InitialSituation string                                `json:"initialSituation"`
-			OfTheWeek        bool                                  `json:"ofTheWeek"`
-			Slug             string                                `json:"slug"`
-			StarterFriendly  bool                                  `json:"starterFriendly"`
-			Theme            string                                `json:"theme"`
-			ThemeSlug        string                                `json:"themeSlug"`
-			Title            string                                `json:"title"`
-			Type             string                                `json:"type"`
-			TypeSlug         string                                `json:"typeSlug"`
-			UpdatedAt        *time.Time                            `json:"updatedAt"`
-		} `json:"challenge"`
-	}
-	JSON400 *struct {
+	JSON400      *struct {
 		Details *string `json:"details,omitempty"`
 		Error   string  `json:"error"`
 	}
@@ -2399,10 +1250,9 @@ type CliGetChallengeResponse struct {
 		Error   string  `json:"error"`
 	}
 }
-type CliGetChallenge200ChallengeDifficulty string
 
 // Status returns HTTPResponse.Status
-func (r CliGetChallengeResponse) Status() string {
+func (r GetChallengeYamlResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -2410,29 +1260,24 @@ func (r CliGetChallengeResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r CliGetChallengeResponse) StatusCode() int {
+func (r GetChallengeYamlResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
 	return 0
 }
 
-type CliResetChallengeResponse struct {
+type TrackCliLoginResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *struct {
-		Message string `json:"message"`
-		Success bool   `json:"success"`
+		FirstLogin bool `json:"firstLogin"`
 	}
 	JSON400 *struct {
 		Details *string `json:"details,omitempty"`
 		Error   string  `json:"error"`
 	}
 	JSON401 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON404 *struct {
 		Details *string `json:"details,omitempty"`
 		Error   string  `json:"error"`
 	}
@@ -2443,7 +1288,7 @@ type CliResetChallengeResponse struct {
 }
 
 // Status returns HTTPResponse.Status
-func (r CliResetChallengeResponse) Status() string {
+func (r TrackCliLoginResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -2451,243 +1296,7 @@ func (r CliResetChallengeResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r CliResetChallengeResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type CliStartChallengeResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *struct {
-		Message   *string                    `json:"message,omitempty"`
-		StartedAt *time.Time                 `json:"startedAt"`
-		Status    CliStartChallenge200Status `json:"status"`
-	}
-	JSON400 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON401 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON404 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON500 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-}
-type CliStartChallenge200Status string
-
-// Status returns HTTPResponse.Status
-func (r CliStartChallengeResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r CliStartChallengeResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type CliGetChallengeStatusResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *struct {
-		CompletedAt *time.Time                     `json:"completedAt"`
-		StartedAt   *time.Time                     `json:"startedAt"`
-		Status      CliGetChallengeStatus200Status `json:"status"`
-	}
-	JSON400 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON401 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON404 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON500 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-}
-type CliGetChallengeStatus200Status string
-
-// Status returns HTTPResponse.Status
-func (r CliGetChallengeStatusResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r CliGetChallengeStatusResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type CliSubmitChallengeLegacyResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *struct {
-		Objectives []struct {
-			Category    CliSubmitChallengeLegacy200ObjectivesCategory `json:"category"`
-			Description *string                                       `json:"description,omitempty"`
-			Id          string                                        `json:"id"`
-			Message     *string                                       `json:"message,omitempty"`
-			Name        string                                        `json:"name"`
-			Passed      bool                                          `json:"passed"`
-		} `json:"objectives"`
-		Success CliSubmitChallengeLegacy200Success `json:"success"`
-	}
-	JSON400 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON401 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON404 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON422 *struct {
-		union json.RawMessage
-	}
-	JSON500 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-}
-type CliSubmitChallengeLegacy200ObjectivesCategory string
-type CliSubmitChallengeLegacy200Success bool
-type CliSubmitChallengeLegacy4220 struct {
-	FailedObjectives []struct {
-		Id      string `json:"id"`
-		Message string `json:"message"`
-		Name    string `json:"name"`
-	} `json:"failedObjectives"`
-	Objectives []struct {
-		Category    CliSubmitChallengeLegacy4220ObjectivesCategory `json:"category"`
-		Description *string                                        `json:"description,omitempty"`
-		Id          string                                         `json:"id"`
-		Message     *string                                        `json:"message,omitempty"`
-		Name        string                                         `json:"name"`
-		Passed      bool                                           `json:"passed"`
-	} `json:"objectives"`
-	Success CliSubmitChallengeLegacy4220Success `json:"success"`
-}
-type CliSubmitChallengeLegacy4220ObjectivesCategory string
-type CliSubmitChallengeLegacy4220Success bool
-type CliSubmitChallengeLegacy4221 struct {
-	Details *string `json:"details,omitempty"`
-	Error   string  `json:"error"`
-}
-
-// Status returns HTTPResponse.Status
-func (r CliSubmitChallengeLegacyResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r CliSubmitChallengeLegacyResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type CliSubmitChallengeResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *struct {
-		Objectives []struct {
-			Category    CliSubmitChallenge200ObjectivesCategory `json:"category"`
-			Description *string                                 `json:"description,omitempty"`
-			Id          string                                  `json:"id"`
-			Message     *string                                 `json:"message,omitempty"`
-			Name        string                                  `json:"name"`
-			Passed      bool                                    `json:"passed"`
-		} `json:"objectives"`
-		Success CliSubmitChallenge200Success `json:"success"`
-	}
-	JSON400 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON401 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON404 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON422 *struct {
-		union json.RawMessage
-	}
-	JSON500 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-}
-type CliSubmitChallenge200ObjectivesCategory string
-type CliSubmitChallenge200Success bool
-type CliSubmitChallenge4220 struct {
-	FailedObjectives []struct {
-		Id      string `json:"id"`
-		Message string `json:"message"`
-		Name    string `json:"name"`
-	} `json:"failedObjectives"`
-	Objectives []struct {
-		Category    CliSubmitChallenge4220ObjectivesCategory `json:"category"`
-		Description *string                                  `json:"description,omitempty"`
-		Id          string                                   `json:"id"`
-		Message     *string                                  `json:"message,omitempty"`
-		Name        string                                   `json:"name"`
-		Passed      bool                                     `json:"passed"`
-	} `json:"objectives"`
-	Success CliSubmitChallenge4220Success `json:"success"`
-}
-type CliSubmitChallenge4220ObjectivesCategory string
-type CliSubmitChallenge4220Success bool
-type CliSubmitChallenge4221 struct {
-	Details *string `json:"details,omitempty"`
-	Error   string  `json:"error"`
-}
-
-// Status returns HTTPResponse.Status
-func (r CliSubmitChallengeResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r CliSubmitChallengeResponse) StatusCode() int {
+func (r TrackCliLoginResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -2725,278 +1334,6 @@ func (r TrackSetupResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r TrackSetupResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type GetUserResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *struct {
-		FirstName string  `json:"firstName"`
-		LastName  *string `json:"lastName"`
-	}
-	JSON400 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON401 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON500 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-}
-
-// Status returns HTTPResponse.Status
-func (r GetUserResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetUserResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type LoginUserResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *struct {
-		FirstLogin bool    `json:"firstLogin"`
-		FirstName  string  `json:"firstName"`
-		LastName   *string `json:"lastName"`
-	}
-	JSON400 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON401 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON500 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-}
-
-// Status returns HTTPResponse.Status
-func (r LoginUserResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r LoginUserResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type GetOnboardingResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *struct {
-		CurrentStep int  `json:"currentStep"`
-		IsComplete  bool `json:"isComplete"`
-		IsSkipped   bool `json:"isSkipped"`
-		Steps       struct {
-			CliAuthenticated      bool `json:"cliAuthenticated"`
-			ClusterInitialized    bool `json:"clusterInitialized"`
-			HasApiToken           bool `json:"hasApiToken"`
-			HasCompletedChallenge bool `json:"hasCompletedChallenge"`
-			HasStartedChallenge   bool `json:"hasStartedChallenge"`
-		} `json:"steps"`
-	}
-	JSON400 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON401 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON500 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-}
-
-// Status returns HTTPResponse.Status
-func (r GetOnboardingResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetOnboardingResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type CompleteOnboardingResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *struct {
-		Success bool `json:"success"`
-	}
-	JSON400 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON401 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON500 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-}
-
-// Status returns HTTPResponse.Status
-func (r CompleteOnboardingResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r CompleteOnboardingResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type SkipOnboardingResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *struct {
-		Success bool `json:"success"`
-	}
-	JSON400 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON401 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON500 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-}
-
-// Status returns HTTPResponse.Status
-func (r SkipOnboardingResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r SkipOnboardingResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type StartOnboardingResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *struct {
-		Success bool `json:"success"`
-	}
-	JSON400 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON401 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON500 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-}
-
-// Status returns HTTPResponse.Status
-func (r StartOnboardingResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r StartOnboardingResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type GetCompletionResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *struct {
-		ByTheme *[]struct {
-			CompletedCount      float32 `json:"completedCount"`
-			PercentageCompleted float32 `json:"percentageCompleted"`
-			ThemeSlug           string  `json:"themeSlug"`
-			TotalCount          float32 `json:"totalCount"`
-		} `json:"byTheme,omitempty"`
-		CompletedCount      float32 `json:"completedCount"`
-		PercentageCompleted float32 `json:"percentageCompleted"`
-		TotalCount          float32 `json:"totalCount"`
-	}
-	JSON400 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON401 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON500 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-}
-
-// Status returns HTTPResponse.Status
-func (r GetCompletionResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetCompletionResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -3130,124 +1467,14 @@ func (r StartChallengeResponse) StatusCode() int {
 	return 0
 }
 
-type GetSubmissionsResponse struct {
+type GetUserMeResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *struct {
-		Submissions []struct {
-			ChallengeId int    `json:"challengeId"`
-			Id          string `json:"id"`
-			Objectives  *[]struct {
-				Category    GetSubmissions200SubmissionsObjectivesCategory `json:"category"`
-				Description *string                                        `json:"description,omitempty"`
-				Id          string                                         `json:"id"`
-				Message     *string                                        `json:"message,omitempty"`
-				Name        string                                         `json:"name"`
-				Passed      bool                                           `json:"passed"`
-			} `json:"objectives"`
-
-			// Timestamp ISO 8601 date string
-			Timestamp string `json:"timestamp"`
-			UserId    string `json:"userId"`
-			Validated bool   `json:"validated"`
-		} `json:"submissions"`
-	}
-	JSON400 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON401 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON404 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON500 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-}
-type GetSubmissions200SubmissionsObjectivesCategory string
-
-// Status returns HTTPResponse.Status
-func (r GetSubmissionsResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetSubmissionsResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type GetLatestSubmissionResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *struct {
-		HasSubmission bool `json:"hasSubmission"`
-		Objectives    *[]struct {
-			Category    GetLatestSubmission200ObjectivesCategory `json:"category"`
-			Description *string                                  `json:"description,omitempty"`
-			Id          string                                   `json:"id"`
-			Message     *string                                  `json:"message,omitempty"`
-			Name        string                                   `json:"name"`
-			Passed      bool                                     `json:"passed"`
-		} `json:"objectives"`
-
-		// Timestamp ISO 8601 date string
-		Timestamp *string `json:"timestamp"`
-		Validated bool    `json:"validated"`
-	}
-	JSON400 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON401 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON404 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON500 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-}
-type GetLatestSubmission200ObjectivesCategory string
-
-// Status returns HTTPResponse.Status
-func (r GetLatestSubmissionResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetLatestSubmissionResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type GetThemesResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *[]struct {
-		Description string  `json:"description"`
-		Logo        *string `json:"logo"`
-		Name        string  `json:"name"`
-		Slug        string  `json:"slug"`
+		Email string  `json:"email"`
+		Id    string  `json:"id"`
+		Image *string `json:"image"`
+		Name  string  `json:"name"`
 	}
 	JSON400 *struct {
 		Details *string `json:"details,omitempty"`
@@ -3264,7 +1491,7 @@ type GetThemesResponse struct {
 }
 
 // Status returns HTTPResponse.Status
-func (r GetThemesResponse) Status() string {
+func (r GetUserMeResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -3272,322 +1499,7 @@ func (r GetThemesResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r GetThemesResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type GetTypesResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *[]struct {
-		Description string  `json:"description"`
-		Logo        *string `json:"logo"`
-		Name        string  `json:"name"`
-		Slug        string  `json:"slug"`
-	}
-	JSON400 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON401 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON500 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-}
-
-// Status returns HTTPResponse.Status
-func (r GetTypesResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetTypesResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type GetEmailTopicsResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *[]struct {
-		DefaultSubscription string  `json:"defaultSubscription"`
-		Description         *string `json:"description"`
-		Id                  string  `json:"id"`
-		Name                string  `json:"name"`
-		Subscribed          bool    `json:"subscribed"`
-	}
-	JSON400 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON401 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON500 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-}
-
-// Status returns HTTPResponse.Status
-func (r GetEmailTopicsResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetEmailTopicsResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type UpdateEmailTopicResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *struct {
-		Success bool `json:"success"`
-	}
-	JSON400 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON401 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON500 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-}
-
-// Status returns HTTPResponse.Status
-func (r UpdateEmailTopicResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r UpdateEmailTopicResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type UpdateUserNameResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *struct {
-		Name    string `json:"name"`
-		Success bool   `json:"success"`
-	}
-	JSON400 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON401 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON500 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-}
-
-// Status returns HTTPResponse.Status
-func (r UpdateUserNameResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r UpdateUserNameResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type DeleteUserProgressResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *struct {
-		DeletedChallenges int  `json:"deletedChallenges"`
-		DeletedXp         int  `json:"deletedXp"`
-		Success           bool `json:"success"`
-	}
-	JSON400 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON401 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON500 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-}
-
-// Status returns HTTPResponse.Status
-func (r DeleteUserProgressResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r DeleteUserProgressResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type GetUserStreakResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *struct {
-		CurrentStreak    float32 `json:"currentStreak"`
-		LastActivityDate *string `json:"lastActivityDate"`
-	}
-	JSON400 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON401 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON500 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-}
-
-// Status returns HTTPResponse.Status
-func (r GetUserStreakResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetUserStreakResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type GetUserXpResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *struct {
-		Rank     string `json:"rank"`
-		RankInfo struct {
-			Name       string   `json:"name"`
-			NextRankXp *float32 `json:"nextRankXp"`
-			Progress   float32  `json:"progress"`
-		} `json:"rankInfo"`
-		XpEarned float32 `json:"xpEarned"`
-	}
-	JSON400 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON401 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON500 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-}
-
-// Status returns HTTPResponse.Status
-func (r GetUserXpResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetUserXpResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type GetXpHistoryResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *[]struct {
-		Action              string  `json:"action"`
-		ChallengeDifficulty *string `json:"challengeDifficulty"`
-		ChallengeId         *int    `json:"challengeId"`
-		ChallengeSlug       *string `json:"challengeSlug"`
-		ChallengeTitle      *string `json:"challengeTitle"`
-
-		// CreatedAt ISO 8601 date string
-		CreatedAt   string  `json:"createdAt"`
-		Description *string `json:"description"`
-		Id          int     `json:"id"`
-		XpAmount    int     `json:"xpAmount"`
-	}
-	JSON400 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON401 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-	JSON500 *struct {
-		Details *string `json:"details,omitempty"`
-		Error   string  `json:"error"`
-	}
-}
-
-// Status returns HTTPResponse.Status
-func (r GetXpHistoryResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetXpHistoryResponse) StatusCode() int {
+func (r GetUserMeResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -3603,6 +1515,15 @@ func (c *ClientWithResponses) ListChallengesWithResponse(ctx context.Context, pa
 	return ParseListChallengesResponse(rsp)
 }
 
+// GetChallengeMetaWithResponse request returning *GetChallengeMetaResponse
+func (c *ClientWithResponses) GetChallengeMetaWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetChallengeMetaResponse, error) {
+	rsp, err := c.GetChallengeMeta(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetChallengeMetaResponse(rsp)
+}
+
 // GetChallengeWithResponse request returning *GetChallengeResponse
 func (c *ClientWithResponses) GetChallengeWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*GetChallengeResponse, error) {
 	rsp, err := c.GetChallenge(ctx, slug, reqEditors...)
@@ -3612,13 +1533,13 @@ func (c *ClientWithResponses) GetChallengeWithResponse(ctx context.Context, slug
 	return ParseGetChallengeResponse(rsp)
 }
 
-// GetChallengeObjectivesWithResponse request returning *GetChallengeObjectivesResponse
-func (c *ClientWithResponses) GetChallengeObjectivesWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*GetChallengeObjectivesResponse, error) {
-	rsp, err := c.GetChallengeObjectives(ctx, slug, reqEditors...)
+// GetChallengeManifestsWithResponse request returning *GetChallengeManifestsResponse
+func (c *ClientWithResponses) GetChallengeManifestsWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*GetChallengeManifestsResponse, error) {
+	rsp, err := c.GetChallengeManifests(ctx, slug, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseGetChallengeObjectivesResponse(rsp)
+	return ParseGetChallengeManifestsResponse(rsp)
 }
 
 // SubmitChallengeWithBodyWithResponse request with arbitrary body returning *SubmitChallengeResponse
@@ -3638,74 +1559,30 @@ func (c *ClientWithResponses) SubmitChallengeWithResponse(ctx context.Context, s
 	return ParseSubmitChallengeResponse(rsp)
 }
 
-// CliGetChallengeWithResponse request returning *CliGetChallengeResponse
-func (c *ClientWithResponses) CliGetChallengeWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*CliGetChallengeResponse, error) {
-	rsp, err := c.CliGetChallenge(ctx, slug, reqEditors...)
+// GetChallengeYamlWithResponse request returning *GetChallengeYamlResponse
+func (c *ClientWithResponses) GetChallengeYamlWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*GetChallengeYamlResponse, error) {
+	rsp, err := c.GetChallengeYaml(ctx, slug, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseCliGetChallengeResponse(rsp)
+	return ParseGetChallengeYamlResponse(rsp)
 }
 
-// CliResetChallengeWithResponse request returning *CliResetChallengeResponse
-func (c *ClientWithResponses) CliResetChallengeWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*CliResetChallengeResponse, error) {
-	rsp, err := c.CliResetChallenge(ctx, slug, reqEditors...)
+// TrackCliLoginWithBodyWithResponse request with arbitrary body returning *TrackCliLoginResponse
+func (c *ClientWithResponses) TrackCliLoginWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TrackCliLoginResponse, error) {
+	rsp, err := c.TrackCliLoginWithBody(ctx, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseCliResetChallengeResponse(rsp)
+	return ParseTrackCliLoginResponse(rsp)
 }
 
-// CliStartChallengeWithResponse request returning *CliStartChallengeResponse
-func (c *ClientWithResponses) CliStartChallengeWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*CliStartChallengeResponse, error) {
-	rsp, err := c.CliStartChallenge(ctx, slug, reqEditors...)
+func (c *ClientWithResponses) TrackCliLoginWithResponse(ctx context.Context, body TrackCliLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*TrackCliLoginResponse, error) {
+	rsp, err := c.TrackCliLogin(ctx, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseCliStartChallengeResponse(rsp)
-}
-
-// CliGetChallengeStatusWithResponse request returning *CliGetChallengeStatusResponse
-func (c *ClientWithResponses) CliGetChallengeStatusWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*CliGetChallengeStatusResponse, error) {
-	rsp, err := c.CliGetChallengeStatus(ctx, slug, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCliGetChallengeStatusResponse(rsp)
-}
-
-// CliSubmitChallengeLegacyWithBodyWithResponse request with arbitrary body returning *CliSubmitChallengeLegacyResponse
-func (c *ClientWithResponses) CliSubmitChallengeLegacyWithBodyWithResponse(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CliSubmitChallengeLegacyResponse, error) {
-	rsp, err := c.CliSubmitChallengeLegacyWithBody(ctx, slug, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCliSubmitChallengeLegacyResponse(rsp)
-}
-
-func (c *ClientWithResponses) CliSubmitChallengeLegacyWithResponse(ctx context.Context, slug string, body CliSubmitChallengeLegacyJSONRequestBody, reqEditors ...RequestEditorFn) (*CliSubmitChallengeLegacyResponse, error) {
-	rsp, err := c.CliSubmitChallengeLegacy(ctx, slug, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCliSubmitChallengeLegacyResponse(rsp)
-}
-
-// CliSubmitChallengeWithBodyWithResponse request with arbitrary body returning *CliSubmitChallengeResponse
-func (c *ClientWithResponses) CliSubmitChallengeWithBodyWithResponse(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CliSubmitChallengeResponse, error) {
-	rsp, err := c.CliSubmitChallengeWithBody(ctx, slug, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCliSubmitChallengeResponse(rsp)
-}
-
-func (c *ClientWithResponses) CliSubmitChallengeWithResponse(ctx context.Context, slug string, body CliSubmitChallengeJSONRequestBody, reqEditors ...RequestEditorFn) (*CliSubmitChallengeResponse, error) {
-	rsp, err := c.CliSubmitChallenge(ctx, slug, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCliSubmitChallengeResponse(rsp)
+	return ParseTrackCliLoginResponse(rsp)
 }
 
 // TrackSetupWithBodyWithResponse request with arbitrary body returning *TrackSetupResponse
@@ -3723,77 +1600,6 @@ func (c *ClientWithResponses) TrackSetupWithResponse(ctx context.Context, body T
 		return nil, err
 	}
 	return ParseTrackSetupResponse(rsp)
-}
-
-// GetUserWithResponse request returning *GetUserResponse
-func (c *ClientWithResponses) GetUserWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserResponse, error) {
-	rsp, err := c.GetUser(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetUserResponse(rsp)
-}
-
-// LoginUserWithBodyWithResponse request with arbitrary body returning *LoginUserResponse
-func (c *ClientWithResponses) LoginUserWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LoginUserResponse, error) {
-	rsp, err := c.LoginUserWithBody(ctx, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseLoginUserResponse(rsp)
-}
-
-func (c *ClientWithResponses) LoginUserWithResponse(ctx context.Context, body LoginUserJSONRequestBody, reqEditors ...RequestEditorFn) (*LoginUserResponse, error) {
-	rsp, err := c.LoginUser(ctx, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseLoginUserResponse(rsp)
-}
-
-// GetOnboardingWithResponse request returning *GetOnboardingResponse
-func (c *ClientWithResponses) GetOnboardingWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetOnboardingResponse, error) {
-	rsp, err := c.GetOnboarding(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetOnboardingResponse(rsp)
-}
-
-// CompleteOnboardingWithResponse request returning *CompleteOnboardingResponse
-func (c *ClientWithResponses) CompleteOnboardingWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*CompleteOnboardingResponse, error) {
-	rsp, err := c.CompleteOnboarding(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCompleteOnboardingResponse(rsp)
-}
-
-// SkipOnboardingWithResponse request returning *SkipOnboardingResponse
-func (c *ClientWithResponses) SkipOnboardingWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*SkipOnboardingResponse, error) {
-	rsp, err := c.SkipOnboarding(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseSkipOnboardingResponse(rsp)
-}
-
-// StartOnboardingWithResponse request returning *StartOnboardingResponse
-func (c *ClientWithResponses) StartOnboardingWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*StartOnboardingResponse, error) {
-	rsp, err := c.StartOnboarding(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseStartOnboardingResponse(rsp)
-}
-
-// GetCompletionWithResponse request returning *GetCompletionResponse
-func (c *ClientWithResponses) GetCompletionWithResponse(ctx context.Context, params *GetCompletionParams, reqEditors ...RequestEditorFn) (*GetCompletionResponse, error) {
-	rsp, err := c.GetCompletion(ctx, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetCompletionResponse(rsp)
 }
 
 // GetChallengeStatusWithResponse request returning *GetChallengeStatusResponse
@@ -3823,119 +1629,13 @@ func (c *ClientWithResponses) StartChallengeWithResponse(ctx context.Context, sl
 	return ParseStartChallengeResponse(rsp)
 }
 
-// GetSubmissionsWithResponse request returning *GetSubmissionsResponse
-func (c *ClientWithResponses) GetSubmissionsWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*GetSubmissionsResponse, error) {
-	rsp, err := c.GetSubmissions(ctx, slug, reqEditors...)
+// GetUserMeWithResponse request returning *GetUserMeResponse
+func (c *ClientWithResponses) GetUserMeWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserMeResponse, error) {
+	rsp, err := c.GetUserMe(ctx, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseGetSubmissionsResponse(rsp)
-}
-
-// GetLatestSubmissionWithResponse request returning *GetLatestSubmissionResponse
-func (c *ClientWithResponses) GetLatestSubmissionWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*GetLatestSubmissionResponse, error) {
-	rsp, err := c.GetLatestSubmission(ctx, slug, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetLatestSubmissionResponse(rsp)
-}
-
-// GetThemesWithResponse request returning *GetThemesResponse
-func (c *ClientWithResponses) GetThemesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetThemesResponse, error) {
-	rsp, err := c.GetThemes(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetThemesResponse(rsp)
-}
-
-// GetTypesWithResponse request returning *GetTypesResponse
-func (c *ClientWithResponses) GetTypesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetTypesResponse, error) {
-	rsp, err := c.GetTypes(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetTypesResponse(rsp)
-}
-
-// GetEmailTopicsWithResponse request returning *GetEmailTopicsResponse
-func (c *ClientWithResponses) GetEmailTopicsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetEmailTopicsResponse, error) {
-	rsp, err := c.GetEmailTopics(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetEmailTopicsResponse(rsp)
-}
-
-// UpdateEmailTopicWithBodyWithResponse request with arbitrary body returning *UpdateEmailTopicResponse
-func (c *ClientWithResponses) UpdateEmailTopicWithBodyWithResponse(ctx context.Context, topicId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateEmailTopicResponse, error) {
-	rsp, err := c.UpdateEmailTopicWithBody(ctx, topicId, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseUpdateEmailTopicResponse(rsp)
-}
-
-func (c *ClientWithResponses) UpdateEmailTopicWithResponse(ctx context.Context, topicId string, body UpdateEmailTopicJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateEmailTopicResponse, error) {
-	rsp, err := c.UpdateEmailTopic(ctx, topicId, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseUpdateEmailTopicResponse(rsp)
-}
-
-// UpdateUserNameWithBodyWithResponse request with arbitrary body returning *UpdateUserNameResponse
-func (c *ClientWithResponses) UpdateUserNameWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateUserNameResponse, error) {
-	rsp, err := c.UpdateUserNameWithBody(ctx, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseUpdateUserNameResponse(rsp)
-}
-
-func (c *ClientWithResponses) UpdateUserNameWithResponse(ctx context.Context, body UpdateUserNameJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateUserNameResponse, error) {
-	rsp, err := c.UpdateUserName(ctx, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseUpdateUserNameResponse(rsp)
-}
-
-// DeleteUserProgressWithResponse request returning *DeleteUserProgressResponse
-func (c *ClientWithResponses) DeleteUserProgressWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*DeleteUserProgressResponse, error) {
-	rsp, err := c.DeleteUserProgress(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseDeleteUserProgressResponse(rsp)
-}
-
-// GetUserStreakWithResponse request returning *GetUserStreakResponse
-func (c *ClientWithResponses) GetUserStreakWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserStreakResponse, error) {
-	rsp, err := c.GetUserStreak(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetUserStreakResponse(rsp)
-}
-
-// GetUserXpWithResponse request returning *GetUserXpResponse
-func (c *ClientWithResponses) GetUserXpWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserXpResponse, error) {
-	rsp, err := c.GetUserXp(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetUserXpResponse(rsp)
-}
-
-// GetXpHistoryWithResponse request returning *GetXpHistoryResponse
-func (c *ClientWithResponses) GetXpHistoryWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetXpHistoryResponse, error) {
-	rsp, err := c.GetXpHistory(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetXpHistoryResponse(rsp)
+	return ParseGetUserMeResponse(rsp)
 }
 
 // ParseListChallengesResponse parses an HTTP response from a ListChallengesWithResponse call
@@ -3956,11 +1656,9 @@ func ParseListChallengesResponse(rsp *http.Response) (*ListChallengesResponse, e
 		var dest struct {
 			Challenges []struct {
 				CompletedCount   int                                   `json:"completedCount"`
-				CreatedAt        *time.Time                            `json:"createdAt"`
 				Description      string                                `json:"description"`
 				Difficulty       ListChallenges200ChallengesDifficulty `json:"difficulty"`
 				EstimatedTime    int                                   `json:"estimatedTime"`
-				Id               int                                   `json:"id"`
 				InitialSituation string                                `json:"initialSituation"`
 				OfTheWeek        bool                                  `json:"ofTheWeek"`
 				Slug             string                                `json:"slug"`
@@ -3969,10 +1667,79 @@ func ParseListChallengesResponse(rsp *http.Response) (*ListChallengesResponse, e
 				Title            string                                `json:"title"`
 				Type             string                                `json:"type"`
 				TypeSlug         string                                `json:"typeSlug"`
-				UpdatedAt        *time.Time                            `json:"updatedAt"`
 				UserStatus       *string                               `json:"userStatus"`
 			} `json:"challenges"`
 			Count int `json:"count"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest struct {
+			Details *string `json:"details,omitempty"`
+			Error   string  `json:"error"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest struct {
+			Details *string `json:"details,omitempty"`
+			Error   string  `json:"error"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest struct {
+			Details *string `json:"details,omitempty"`
+			Error   string  `json:"error"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetChallengeMetaResponse parses an HTTP response from a GetChallengeMetaWithResponse call
+func ParseGetChallengeMetaResponse(rsp *http.Response) (*GetChallengeMetaResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetChallengeMetaResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Difficulties []string `json:"difficulties"`
+			Themes       []struct {
+				Description string `json:"description"`
+				Logo        string `json:"logo"`
+				Name        string `json:"name"`
+				Slug        string `json:"slug"`
+			} `json:"themes"`
+			Types []struct {
+				Description string `json:"description"`
+				Logo        string `json:"logo"`
+				Name        string `json:"name"`
+				Slug        string `json:"slug"`
+			} `json:"types"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
@@ -4032,11 +1799,9 @@ func ParseGetChallengeResponse(rsp *http.Response) (*GetChallengeResponse, error
 		var dest struct {
 			Challenge *struct {
 				Available        bool                               `json:"available"`
-				CreatedAt        *time.Time                         `json:"createdAt"`
 				Description      string                             `json:"description"`
 				Difficulty       GetChallenge200ChallengeDifficulty `json:"difficulty"`
 				EstimatedTime    int                                `json:"estimatedTime"`
-				Id               int                                `json:"id"`
 				InitialSituation string                             `json:"initialSituation"`
 				OfTheWeek        bool                               `json:"ofTheWeek"`
 				Slug             string                             `json:"slug"`
@@ -4046,7 +1811,6 @@ func ParseGetChallengeResponse(rsp *http.Response) (*GetChallengeResponse, error
 				Title            string                             `json:"title"`
 				Type             string                             `json:"type"`
 				TypeSlug         string                             `json:"typeSlug"`
-				UpdatedAt        *time.Time                         `json:"updatedAt"`
 			} `json:"challenge"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -4089,36 +1853,20 @@ func ParseGetChallengeResponse(rsp *http.Response) (*GetChallengeResponse, error
 	return response, nil
 }
 
-// ParseGetChallengeObjectivesResponse parses an HTTP response from a GetChallengeObjectivesWithResponse call
-func ParseGetChallengeObjectivesResponse(rsp *http.Response) (*GetChallengeObjectivesResponse, error) {
+// ParseGetChallengeManifestsResponse parses an HTTP response from a GetChallengeManifestsWithResponse call
+func ParseGetChallengeManifestsResponse(rsp *http.Response) (*GetChallengeManifestsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &GetChallengeObjectivesResponse{
+	response := &GetChallengeManifestsResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest struct {
-			Objectives []struct {
-				Category     string `json:"category"`
-				Description  string `json:"description"`
-				DisplayOrder int    `json:"displayOrder"`
-				Id           int    `json:"id"`
-				ObjectiveKey string `json:"objectiveKey"`
-				Title        string `json:"title"`
-			} `json:"objectives"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest struct {
 			Details *string `json:"details,omitempty"`
@@ -4138,6 +1886,16 @@ func ParseGetChallengeObjectivesResponse(rsp *http.Response) (*GetChallengeObjec
 			return nil, err
 		}
 		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest struct {
+			Details *string `json:"details,omitempty"`
+			Error   string  `json:"error"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest struct {
@@ -4173,10 +1931,10 @@ func ParseSubmitChallengeResponse(rsp *http.Response) (*SubmitChallengeResponse,
 			Objectives []struct {
 				Category    SubmitChallenge200ObjectivesCategory `json:"category"`
 				Description *string                              `json:"description,omitempty"`
-				Id          string                               `json:"id"`
+				Key         string                               `json:"key"`
 				Message     *string                              `json:"message,omitempty"`
-				Name        string                               `json:"name"`
 				Passed      bool                                 `json:"passed"`
+				Title       string                               `json:"title"`
 			} `json:"objectives"`
 			Success SubmitChallenge200Success `json:"success"`
 		}
@@ -4249,46 +2007,20 @@ func ParseSubmitChallengeResponse(rsp *http.Response) (*SubmitChallengeResponse,
 	return response, nil
 }
 
-// ParseCliGetChallengeResponse parses an HTTP response from a CliGetChallengeWithResponse call
-func ParseCliGetChallengeResponse(rsp *http.Response) (*CliGetChallengeResponse, error) {
+// ParseGetChallengeYamlResponse parses an HTTP response from a GetChallengeYamlWithResponse call
+func ParseGetChallengeYamlResponse(rsp *http.Response) (*GetChallengeYamlResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &CliGetChallengeResponse{
+	response := &GetChallengeYamlResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest struct {
-			Challenge *struct {
-				Available        bool                                  `json:"available"`
-				CreatedAt        *time.Time                            `json:"createdAt"`
-				Description      string                                `json:"description"`
-				Difficulty       CliGetChallenge200ChallengeDifficulty `json:"difficulty"`
-				EstimatedTime    int                                   `json:"estimatedTime"`
-				Id               int                                   `json:"id"`
-				InitialSituation string                                `json:"initialSituation"`
-				OfTheWeek        bool                                  `json:"ofTheWeek"`
-				Slug             string                                `json:"slug"`
-				StarterFriendly  bool                                  `json:"starterFriendly"`
-				Theme            string                                `json:"theme"`
-				ThemeSlug        string                                `json:"themeSlug"`
-				Title            string                                `json:"title"`
-				Type             string                                `json:"type"`
-				TypeSlug         string                                `json:"typeSlug"`
-				UpdatedAt        *time.Time                            `json:"updatedAt"`
-			} `json:"challenge"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest struct {
 			Details *string `json:"details,omitempty"`
@@ -4334,15 +2066,15 @@ func ParseCliGetChallengeResponse(rsp *http.Response) (*CliGetChallengeResponse,
 	return response, nil
 }
 
-// ParseCliResetChallengeResponse parses an HTTP response from a CliResetChallengeWithResponse call
-func ParseCliResetChallengeResponse(rsp *http.Response) (*CliResetChallengeResponse, error) {
+// ParseTrackCliLoginResponse parses an HTTP response from a TrackCliLoginWithResponse call
+func ParseTrackCliLoginResponse(rsp *http.Response) (*TrackCliLoginResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &CliResetChallengeResponse{
+	response := &TrackCliLoginResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
@@ -4350,8 +2082,7 @@ func ParseCliResetChallengeResponse(rsp *http.Response) (*CliResetChallengeRespo
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
-			Message string `json:"message"`
-			Success bool   `json:"success"`
+			FirstLogin bool `json:"firstLogin"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
@@ -4377,326 +2108,6 @@ func ParseCliResetChallengeResponse(rsp *http.Response) (*CliResetChallengeRespo
 			return nil, err
 		}
 		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseCliStartChallengeResponse parses an HTTP response from a CliStartChallengeWithResponse call
-func ParseCliStartChallengeResponse(rsp *http.Response) (*CliStartChallengeResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &CliStartChallengeResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest struct {
-			Message   *string                    `json:"message,omitempty"`
-			StartedAt *time.Time                 `json:"startedAt"`
-			Status    CliStartChallenge200Status `json:"status"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseCliGetChallengeStatusResponse parses an HTTP response from a CliGetChallengeStatusWithResponse call
-func ParseCliGetChallengeStatusResponse(rsp *http.Response) (*CliGetChallengeStatusResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &CliGetChallengeStatusResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest struct {
-			CompletedAt *time.Time                     `json:"completedAt"`
-			StartedAt   *time.Time                     `json:"startedAt"`
-			Status      CliGetChallengeStatus200Status `json:"status"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseCliSubmitChallengeLegacyResponse parses an HTTP response from a CliSubmitChallengeLegacyWithResponse call
-func ParseCliSubmitChallengeLegacyResponse(rsp *http.Response) (*CliSubmitChallengeLegacyResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &CliSubmitChallengeLegacyResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest struct {
-			Objectives []struct {
-				Category    CliSubmitChallengeLegacy200ObjectivesCategory `json:"category"`
-				Description *string                                       `json:"description,omitempty"`
-				Id          string                                        `json:"id"`
-				Message     *string                                       `json:"message,omitempty"`
-				Name        string                                        `json:"name"`
-				Passed      bool                                          `json:"passed"`
-			} `json:"objectives"`
-			Success CliSubmitChallengeLegacy200Success `json:"success"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest struct {
-			union json.RawMessage
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON422 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseCliSubmitChallengeResponse parses an HTTP response from a CliSubmitChallengeWithResponse call
-func ParseCliSubmitChallengeResponse(rsp *http.Response) (*CliSubmitChallengeResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &CliSubmitChallengeResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest struct {
-			Objectives []struct {
-				Category    CliSubmitChallenge200ObjectivesCategory `json:"category"`
-				Description *string                                 `json:"description,omitempty"`
-				Id          string                                  `json:"id"`
-				Message     *string                                 `json:"message,omitempty"`
-				Name        string                                  `json:"name"`
-				Passed      bool                                    `json:"passed"`
-			} `json:"objectives"`
-			Success CliSubmitChallenge200Success `json:"success"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest struct {
-			union json.RawMessage
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON422 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest struct {
@@ -4731,432 +2142,6 @@ func ParseTrackSetupResponse(rsp *http.Response) (*TrackSetupResponse, error) {
 		var dest struct {
 			FirstTime bool `json:"firstTime"`
 			Success   bool `json:"success"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetUserResponse parses an HTTP response from a GetUserWithResponse call
-func ParseGetUserResponse(rsp *http.Response) (*GetUserResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetUserResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest struct {
-			FirstName string  `json:"firstName"`
-			LastName  *string `json:"lastName"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseLoginUserResponse parses an HTTP response from a LoginUserWithResponse call
-func ParseLoginUserResponse(rsp *http.Response) (*LoginUserResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &LoginUserResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest struct {
-			FirstLogin bool    `json:"firstLogin"`
-			FirstName  string  `json:"firstName"`
-			LastName   *string `json:"lastName"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetOnboardingResponse parses an HTTP response from a GetOnboardingWithResponse call
-func ParseGetOnboardingResponse(rsp *http.Response) (*GetOnboardingResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetOnboardingResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest struct {
-			CurrentStep int  `json:"currentStep"`
-			IsComplete  bool `json:"isComplete"`
-			IsSkipped   bool `json:"isSkipped"`
-			Steps       struct {
-				CliAuthenticated      bool `json:"cliAuthenticated"`
-				ClusterInitialized    bool `json:"clusterInitialized"`
-				HasApiToken           bool `json:"hasApiToken"`
-				HasCompletedChallenge bool `json:"hasCompletedChallenge"`
-				HasStartedChallenge   bool `json:"hasStartedChallenge"`
-			} `json:"steps"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseCompleteOnboardingResponse parses an HTTP response from a CompleteOnboardingWithResponse call
-func ParseCompleteOnboardingResponse(rsp *http.Response) (*CompleteOnboardingResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &CompleteOnboardingResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest struct {
-			Success bool `json:"success"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseSkipOnboardingResponse parses an HTTP response from a SkipOnboardingWithResponse call
-func ParseSkipOnboardingResponse(rsp *http.Response) (*SkipOnboardingResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &SkipOnboardingResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest struct {
-			Success bool `json:"success"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseStartOnboardingResponse parses an HTTP response from a StartOnboardingWithResponse call
-func ParseStartOnboardingResponse(rsp *http.Response) (*StartOnboardingResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &StartOnboardingResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest struct {
-			Success bool `json:"success"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetCompletionResponse parses an HTTP response from a GetCompletionWithResponse call
-func ParseGetCompletionResponse(rsp *http.Response) (*GetCompletionResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetCompletionResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest struct {
-			ByTheme *[]struct {
-				CompletedCount      float32 `json:"completedCount"`
-				PercentageCompleted float32 `json:"percentageCompleted"`
-				ThemeSlug           string  `json:"themeSlug"`
-				TotalCount          float32 `json:"totalCount"`
-			} `json:"byTheme,omitempty"`
-			CompletedCount      float32 `json:"completedCount"`
-			PercentageCompleted float32 `json:"percentageCompleted"`
-			TotalCount          float32 `json:"totalCount"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
@@ -5407,15 +2392,15 @@ func ParseStartChallengeResponse(rsp *http.Response) (*StartChallengeResponse, e
 	return response, nil
 }
 
-// ParseGetSubmissionsResponse parses an HTTP response from a GetSubmissionsWithResponse call
-func ParseGetSubmissionsResponse(rsp *http.Response) (*GetSubmissionsResponse, error) {
+// ParseGetUserMeResponse parses an HTTP response from a GetUserMeWithResponse call
+func ParseGetUserMeResponse(rsp *http.Response) (*GetUserMeResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &GetSubmissionsResponse{
+	response := &GetUserMeResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
@@ -5423,665 +2408,10 @@ func ParseGetSubmissionsResponse(rsp *http.Response) (*GetSubmissionsResponse, e
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
-			Submissions []struct {
-				ChallengeId int    `json:"challengeId"`
-				Id          string `json:"id"`
-				Objectives  *[]struct {
-					Category    GetSubmissions200SubmissionsObjectivesCategory `json:"category"`
-					Description *string                                        `json:"description,omitempty"`
-					Id          string                                         `json:"id"`
-					Message     *string                                        `json:"message,omitempty"`
-					Name        string                                         `json:"name"`
-					Passed      bool                                           `json:"passed"`
-				} `json:"objectives"`
-
-				// Timestamp ISO 8601 date string
-				Timestamp string `json:"timestamp"`
-				UserId    string `json:"userId"`
-				Validated bool   `json:"validated"`
-			} `json:"submissions"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetLatestSubmissionResponse parses an HTTP response from a GetLatestSubmissionWithResponse call
-func ParseGetLatestSubmissionResponse(rsp *http.Response) (*GetLatestSubmissionResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetLatestSubmissionResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest struct {
-			HasSubmission bool `json:"hasSubmission"`
-			Objectives    *[]struct {
-				Category    GetLatestSubmission200ObjectivesCategory `json:"category"`
-				Description *string                                  `json:"description,omitempty"`
-				Id          string                                   `json:"id"`
-				Message     *string                                  `json:"message,omitempty"`
-				Name        string                                   `json:"name"`
-				Passed      bool                                     `json:"passed"`
-			} `json:"objectives"`
-
-			// Timestamp ISO 8601 date string
-			Timestamp *string `json:"timestamp"`
-			Validated bool    `json:"validated"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetThemesResponse parses an HTTP response from a GetThemesWithResponse call
-func ParseGetThemesResponse(rsp *http.Response) (*GetThemesResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetThemesResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []struct {
-			Description string  `json:"description"`
-			Logo        *string `json:"logo"`
-			Name        string  `json:"name"`
-			Slug        string  `json:"slug"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetTypesResponse parses an HTTP response from a GetTypesWithResponse call
-func ParseGetTypesResponse(rsp *http.Response) (*GetTypesResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetTypesResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []struct {
-			Description string  `json:"description"`
-			Logo        *string `json:"logo"`
-			Name        string  `json:"name"`
-			Slug        string  `json:"slug"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetEmailTopicsResponse parses an HTTP response from a GetEmailTopicsWithResponse call
-func ParseGetEmailTopicsResponse(rsp *http.Response) (*GetEmailTopicsResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetEmailTopicsResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []struct {
-			DefaultSubscription string  `json:"defaultSubscription"`
-			Description         *string `json:"description"`
-			Id                  string  `json:"id"`
-			Name                string  `json:"name"`
-			Subscribed          bool    `json:"subscribed"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseUpdateEmailTopicResponse parses an HTTP response from a UpdateEmailTopicWithResponse call
-func ParseUpdateEmailTopicResponse(rsp *http.Response) (*UpdateEmailTopicResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &UpdateEmailTopicResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest struct {
-			Success bool `json:"success"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseUpdateUserNameResponse parses an HTTP response from a UpdateUserNameWithResponse call
-func ParseUpdateUserNameResponse(rsp *http.Response) (*UpdateUserNameResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &UpdateUserNameResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest struct {
-			Name    string `json:"name"`
-			Success bool   `json:"success"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseDeleteUserProgressResponse parses an HTTP response from a DeleteUserProgressWithResponse call
-func ParseDeleteUserProgressResponse(rsp *http.Response) (*DeleteUserProgressResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &DeleteUserProgressResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest struct {
-			DeletedChallenges int  `json:"deletedChallenges"`
-			DeletedXp         int  `json:"deletedXp"`
-			Success           bool `json:"success"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetUserStreakResponse parses an HTTP response from a GetUserStreakWithResponse call
-func ParseGetUserStreakResponse(rsp *http.Response) (*GetUserStreakResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetUserStreakResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest struct {
-			CurrentStreak    float32 `json:"currentStreak"`
-			LastActivityDate *string `json:"lastActivityDate"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetUserXpResponse parses an HTTP response from a GetUserXpWithResponse call
-func ParseGetUserXpResponse(rsp *http.Response) (*GetUserXpResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetUserXpResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest struct {
-			Rank     string `json:"rank"`
-			RankInfo struct {
-				Name       string   `json:"name"`
-				NextRankXp *float32 `json:"nextRankXp"`
-				Progress   float32  `json:"progress"`
-			} `json:"rankInfo"`
-			XpEarned float32 `json:"xpEarned"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest struct {
-			Details *string `json:"details,omitempty"`
-			Error   string  `json:"error"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetXpHistoryResponse parses an HTTP response from a GetXpHistoryWithResponse call
-func ParseGetXpHistoryResponse(rsp *http.Response) (*GetXpHistoryResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetXpHistoryResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []struct {
-			Action              string  `json:"action"`
-			ChallengeDifficulty *string `json:"challengeDifficulty"`
-			ChallengeId         *int    `json:"challengeId"`
-			ChallengeSlug       *string `json:"challengeSlug"`
-			ChallengeTitle      *string `json:"challengeTitle"`
-
-			// CreatedAt ISO 8601 date string
-			CreatedAt   string  `json:"createdAt"`
-			Description *string `json:"description"`
-			Id          int     `json:"id"`
-			XpAmount    int     `json:"xpAmount"`
+			Email string  `json:"email"`
+			Id    string  `json:"id"`
+			Image *string `json:"image"`
+			Name  string  `json:"name"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err

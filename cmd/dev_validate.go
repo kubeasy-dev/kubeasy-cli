@@ -24,8 +24,8 @@ var devValidateCmd = &cobra.Command{
 This is the dev equivalent of 'kubeasy challenge submit' but does not send
 results to the Kubeasy API. No login required.
 
-By default, loads the challenge YAML from the local registry (http://localhost:8080).
-Use --dir to read from a local directory instead.
+It searches for challenge.yaml in the current directory or ../challenges/<slug>/.
+Use --dir to specify a custom directory.
 Use --watch to continuously re-run validations at the given interval.
 Use --fail-fast to stop at the first validation failure.
 Use --json for structured JSON output (useful for CI).`,
@@ -50,7 +50,6 @@ Use --json for structured JSON output (useful for CI).`,
 			return err
 		}
 
-		// Resolve filesystem dir if --dir provided; otherwise use registry mode.
 		challengeDir := ""
 		if devValidateDir != "" {
 			dir, err := devutils.ResolveLocalChallengeDir(challengeSlug, devValidateDir)
@@ -70,11 +69,11 @@ Use --json for structured JSON output (useful for CI).`,
 		if devValidateWatch {
 			header := fmt.Sprintf("Validating Dev Challenge: %s (watch mode)", challengeSlug)
 			return devutils.TickerWatchLoop(cmd.Context(), devValidateWatchInterval, header, func() {
-				runDevValidate(cmd, challengeSlug, challengeDir, devRegistryURL, opts) //nolint:errcheck
+				runDevValidate(cmd, challengeSlug, challengeDir, opts) //nolint:errcheck
 			})
 		}
 
-		allPassed, err := runDevValidate(cmd, challengeSlug, challengeDir, devRegistryURL, opts)
+		allPassed, err := runDevValidate(cmd, challengeSlug, challengeDir, opts)
 		if err != nil {
 			return err
 		}
@@ -89,7 +88,7 @@ Use --json for structured JSON output (useful for CI).`,
 
 func init() {
 	devCmd.AddCommand(devValidateCmd)
-	devValidateCmd.Flags().StringVar(&devValidateDir, "dir", "", "Read from local directory instead of registry")
+	devValidateCmd.Flags().StringVar(&devValidateDir, "dir", "", "Read from local directory")
 	devValidateCmd.Flags().BoolVarP(&devValidateWatch, "watch", "w", false, "Continuously re-run validations at the given interval (see --watch-interval)")
 	devValidateCmd.Flags().DurationVarP(&devValidateWatchInterval, "watch-interval", "i", 5*time.Second, "Interval between watch re-runs (e.g. 10s, 1m)")
 	devValidateCmd.Flags().BoolVar(&devValidateFailFast, "fail-fast", false, "Stop at the first validation failure")

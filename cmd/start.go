@@ -98,9 +98,10 @@ var startChallengeCmd = &cobra.Command{
 			return fmt.Errorf("failed to create namespace: %w", err)
 		}
 
-		// Step 2: Deploy challenge via OCI
+		// Step 2: Deploy challenge via API proxy
 		err = ui.WaitMessage("Deploying challenge", func() error {
-			return deployer.DeployChallenge(ctx, staticClient, dynamicClient, challengeSlug)
+			_, err := deployer.DeployChallengeFromRegistry(ctx, staticClient, dynamicClient, challengeSlug)
+			return err
 		})
 		if err != nil {
 			ui.Error("Failed to deploy challenge")

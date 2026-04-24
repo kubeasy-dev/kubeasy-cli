@@ -1,21 +1,18 @@
 package validation
 
 import (
+	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 
+	"github.com/kubeasy-dev/kubeasy-cli/internal/api"
 	"github.com/kubeasy-dev/registry/pkg/challenges"
 	"go.yaml.in/yaml/v3"
 )
 
 const (
-	// RegistryBaseURL is the production registry URL.
-	// Override with REGISTRY_URL env var for local development only.
-	RegistryBaseURL = "https://registry.kubeasy.dev"
-
 	// DefaultLogSinceSeconds is the default time window for log searches (5 minutes).
 	DefaultLogSinceSeconds = 300
 
@@ -60,14 +57,6 @@ func FindLocalChallengeFile(slug string) string {
 		}
 	}
 	return ""
-}
-
-// registryBaseURL returns the registry URL, with an env var override for local dev.
-func registryBaseURL() string {
-	if override := os.Getenv("REGISTRY_URL"); override != "" {
-		return override
-	}
-	return RegistryBaseURL
 }
 
 // Parse parses a challenge.yaml into a ValidationConfig ready for execution.
@@ -145,28 +134,28 @@ func fromObjective(obj challenges.Objective) Validation {
 	return v
 }
 
-// LoadForChallengeFromRegistryURL loads validations from an explicit registry URL.
-// Used by dev mode to point at the local registry instead of the upstream one.
-func LoadForChallengeFromRegistryURL(registryURL, slug string) (*ValidationConfig, error) {
-	data, err := fetchYAML(fmt.Sprintf("%s/challenges/%s/yaml", registryURL, slug))
-	if err != nil {
-		return nil, fmt.Errorf("registry at %s: %w", registryURL, err)
-	}
-	return Parse(data)
-}
-
 // LoadForChallenge loads validations for a challenge slug.
-// Tries local file first (dev override), then the upstream registry.
+// Tries local file first (dev override), then the Kubeasy API.
 func LoadForChallenge(slug string) (*ValidationConfig, error) {
 	if localPath := FindLocalChallengeFile(slug); localPath != "" {
 		return LoadFromFile(localPath)
 	}
 
-	data, err := fetchYAML(fmt.Sprintf("%s/challenges/%s/yaml", registryBaseURL(), slug))
+	client, err := api.NewPublicClient()
 	if err != nil {
-		return nil, fmt.Errorf("failed to load challenge %q from registry: %w", slug, err)
+		return nil, err
 	}
-	return Parse(data)
+
+	resp, err := client.GetChallengeYamlWithResponse(context.Background(), slug)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load challenge %q from API: %w", slug, err)
+	}
+
+	if resp.StatusCode() != http.StatusOK {
+		return nil, fmt.Errorf("API returned HTTP %d for challenge %q", resp.StatusCode(), slug)
+	}
+
+	return Parse(resp.Body)
 }
 
 // ParseChallengeYaml parses challenge.yaml bytes into a ChallengeYamlSpec (for lint/display).
@@ -179,7 +168,7 @@ func ParseChallengeYaml(data []byte) (*ChallengeYamlSpec, error) {
 }
 
 // LoadChallengeYamlForChallenge loads the full ChallengeYamlSpec for display in kubeasy start.
-// Tries local file first, then the upstream registry.
+// Tries local file first, then the Kubeasy API.
 func LoadChallengeYamlForChallenge(slug string) (*ChallengeYamlSpec, error) {
 	if localPath := FindLocalChallengeFile(slug); localPath != "" {
 		data, err := os.ReadFile(localPath)
@@ -189,28 +178,19 @@ func LoadChallengeYamlForChallenge(slug string) (*ChallengeYamlSpec, error) {
 		return ParseChallengeYaml(data)
 	}
 
-	data, err := fetchYAML(fmt.Sprintf("%s/challenges/%s/yaml", registryBaseURL(), slug))
+	client, err := api.NewPublicClient()
 	if err != nil {
-		return nil, fmt.Errorf("failed to load challenge %q from registry: %w", slug, err)
-	}
-	return ParseChallengeYaml(data)
-}
-
-// fetchYAML performs a GET request and returns the response body.
-func fetchYAML(url string) ([]byte, error) {
-	resp, err := http.Get(url) //nolint:noctx,gosec
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+		return nil, err
 	}
 
-	data, err := io.ReadAll(resp.Body)
+	resp, err := client.GetChallengeYamlWithResponse(context.Background(), slug)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, fmt.Errorf("failed to load challenge %q from API: %w", slug, err)
 	}
-	return data, nil
+
+	if resp.StatusCode() != http.StatusOK {
+		return nil, fmt.Errorf("API returned HTTP %d for challenge %q", resp.StatusCode(), slug)
+	}
+
+	return ParseChallengeYaml(resp.Body)
 }

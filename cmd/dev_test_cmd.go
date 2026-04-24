@@ -24,6 +24,8 @@ var devTestCmd = &cobra.Command{
 	Long: `Deploys challenge manifests and then runs validations in one step.
 This is equivalent to running 'kubeasy dev apply' followed by 'kubeasy dev validate'.
 
+It searches for challenge.yaml in the current directory or ../challenges/<slug>/.
+Use --dir to specify a custom directory.
 Use --clean to delete existing resources before applying.
 Use --watch to continuously re-run validations at the given interval after the initial apply (see --watch-interval).
 Use --fail-fast to stop at the first validation failure.
@@ -46,7 +48,6 @@ Use --json for structured JSON output (useful for CI).`,
 			return err
 		}
 
-		// Resolve filesystem dir if --dir provided; otherwise use registry mode.
 		challengeDir := ""
 		if devTestDir != "" {
 			dir, err := devutils.ResolveLocalChallengeDir(challengeSlug, devTestDir)
@@ -63,11 +64,9 @@ Use --json for structured JSON output (useful for CI).`,
 		ui.Section(fmt.Sprintf("Applying Dev Challenge: %s", challengeSlug))
 		if challengeDir != "" {
 			ui.Info(fmt.Sprintf("Using local directory: %s", challengeDir))
-		} else {
-			ui.Info(fmt.Sprintf("Using registry: %s", devRegistryURL))
 		}
 
-		if _, err := runDevApply(cmd, challengeSlug, challengeDir, devRegistryURL, devTestClean); err != nil {
+		if err := runDevApply(cmd, challengeSlug, challengeDir, devTestClean); err != nil {
 			return err
 		}
 
@@ -87,11 +86,11 @@ Use --json for structured JSON output (useful for CI).`,
 		if devTestWatch {
 			header := fmt.Sprintf("Validating Dev Challenge: %s (watch mode)", challengeSlug)
 			return devutils.TickerWatchLoop(cmd.Context(), devTestWatchInterval, header, func() {
-				runDevValidate(cmd, challengeSlug, challengeDir, devRegistryURL, opts) //nolint:errcheck
+				runDevValidate(cmd, challengeSlug, challengeDir, opts) //nolint:errcheck
 			})
 		}
 
-		allPassed, err := runDevValidate(cmd, challengeSlug, challengeDir, devRegistryURL, opts)
+		allPassed, err := runDevValidate(cmd, challengeSlug, challengeDir, opts)
 		if err != nil {
 			return err
 		}
@@ -106,7 +105,7 @@ Use --json for structured JSON output (useful for CI).`,
 
 func init() {
 	devCmd.AddCommand(devTestCmd)
-	devTestCmd.Flags().StringVar(&devTestDir, "dir", "", "Read from local directory instead of registry")
+	devTestCmd.Flags().StringVar(&devTestDir, "dir", "", "Read from local directory")
 	devTestCmd.Flags().BoolVar(&devTestClean, "clean", false, "Delete existing resources before applying")
 	devTestCmd.Flags().BoolVarP(&devTestWatch, "watch", "w", false, "Continuously re-run validations at the given interval after apply (see --watch-interval)")
 	devTestCmd.Flags().DurationVarP(&devTestWatchInterval, "watch-interval", "i", 5*time.Second, "Interval between watch re-runs (e.g. 10s, 1m)")

@@ -26,7 +26,7 @@ func DeployChallenge(ctx context.Context, clientset *kubernetes.Clientset, dynam
 	if err != nil {
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Pull OCI artifact
 	ref := fmt.Sprintf("%s/%s:latest", ChallengesOCIRegistry, slug)
@@ -69,7 +69,7 @@ func pullOCIArtifact(ctx context.Context, ref string, targetDir string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create file store: %w", err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	_, err = oras.Copy(ctx, repo, repo.Reference.Reference, store, "", oras.DefaultCopyOptions)
 	if err != nil {

@@ -92,10 +92,7 @@ func GetMajorMinorVersion(v string) string {
 // VersionsCompatible compares two semver-like strings and returns true if they are compatible.
 func VersionsCompatible(current, required string) bool {
 	if required == "" {
-		if current == "" {
-			return false
-		}
-		return true
+		return current != ""
 	}
 	if current == "dev" {
 		return true

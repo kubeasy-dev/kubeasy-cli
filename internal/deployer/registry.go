@@ -40,7 +40,7 @@ func DeployChallengeFromRegistry(ctx context.Context, clientset *kubernetes.Clie
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp directory: %w", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	if err := extractTarGz(data, tmpDir); err != nil {
 		return "", fmt.Errorf("failed to extract manifests: %w", err)
@@ -89,7 +89,7 @@ func extractTarGz(data []byte, destDir string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create gzip reader: %w", err)
 	}
-	defer gr.Close()
+	defer func() { _ = gr.Close() }()
 
 	tr := tar.NewReader(gr)
 	cleanDest := filepath.Clean(destDir) + string(os.PathSeparator)

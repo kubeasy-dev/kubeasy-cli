@@ -69,7 +69,7 @@ depends = ["install:envtest"]
 run = """
 test -d ./bin/k8s/k8s && exit 0
 echo "Setting up envtest assets..."
-"$(go env GOPATH)/bin/setup-envtest" use {{vars.K8S_VERSION}} --bin-dir ./bin/k8s
+setup-envtest use {{vars.K8S_VERSION}} --bin-dir ./bin/k8s
 """
 
 # ===========================================================================
@@ -151,7 +151,7 @@ description = "Run integration tests"
 depends = ["setup:envtest"]
 run = """
 echo "Running integration tests..."
-KUBEBUILDER_ASSETS=$("$(go env GOPATH)/bin/setup-envtest" use -p path {{vars.K8S_VERSION}}) \
+KUBEBUILDER_ASSETS=$(setup-envtest use -p path {{vars.K8S_VERSION}}) \
   go test -v -tags=integration -coverprofile=coverage-integration.out \
   -covermode=atomic -coverpkg=./internal/... ./test/integration/... -timeout 15m
 if [ -s coverage-integration.out ]; then
@@ -172,10 +172,9 @@ depends = ["install:gocovmerge", "test:unit", "test:integration"]
 run = """
 echo "Generating combined coverage report..."
 mkdir -p coverage
-GOPATH=$(go env GOPATH)
 if [ -s coverage-unit.out ] && [ -s coverage-integration.out ]; then
   echo "Merging unit and integration coverage..."
-  "${GOPATH}/bin/gocovmerge" coverage-unit.out coverage-integration.out > coverage.out
+  gocovmerge coverage-unit.out coverage-integration.out > coverage.out
 elif [ -s coverage-integration.out ]; then
   cp coverage-integration.out coverage.out
 elif [ -s coverage-unit.out ]; then

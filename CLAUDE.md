@@ -4,7 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-`kubeasy-cli` is a command-line tool built with Go and Cobra that helps developers learn Kubernetes through practical challenges. It manages local Kind clusters, deploys challenges via OCI artifacts, and validates solutions using a **CLI-based validation system** (as of v2.0.0).
+`kubeasy-cli` is a command-line tool built with Go and Cobra that helps developers learn Kubernetes through practical challenges. It manages local Kind clusters, deploys challenges, and validates solutions using a **CLI-based validation system**.
+
+### Architecture: API Hub
+
+The CLI always talks to the Kubeasy API (`https://kubeasy.dev`), never directly to the registry. The API proxies challenge data from the registry service.
+
+```
+registry.kubeasy.dev  ←→  API (kubeasy.dev)  ←→  CLI
+```
+
+- Challenge YAML and manifests are fetched from the API (`GET /challenges/:slug/yaml`, `GET /challenges/:slug/manifests`)
+- The CLI uses `registry/pkg/challenges` **only as a local Go parser** — no HTTP calls to the registry
+- API URL is overridable via `KUBEASY_API_URL` env var (see `internal/constants/constants.go`)
+- Dev mode (`kubeasy dev`) is filesystem-first: finds `challenge.yaml` locally, no network needed
 
 ## Commit & PR Conventions
 
@@ -121,7 +134,7 @@ go run main.go --debug [command]
   - `setup.go` - Creates Kind cluster "kubeasy" and installs infrastructure (Kyverno + local-path-provisioner)
   - `login.go` - Stores API key in system keyring (uses `zalando/go-keyring`)
   - `challenge` (parent command in `challenge.go`):
-    - `start.go` - Deploys challenge via OCI artifact, creates namespace, tracks progress
+    - `start.go` - Fetches manifests tar.gz from API, applies to cluster, tracks progress
     - `submit.go` - Validates solutions by loading validation specs and submitting results
     - `reset.go` - Deletes resources and resets progress in backend
     - `clean.go` - Removes challenge resources without resetting backend
@@ -130,43 +143,34 @@ go run main.go --debug [command]
 
 ### Core Packages (internal/)
 
-#### `internal/api/api.go`
+#### `internal/api/`
 
-- Communicates with backend API (Next.js + tRPC)
-- Authentication via JWT tokens stored in keyring
-- Key functions:
-  - `createSupabaseClient()` - Retrieves token from keyring
-  - `getUserIDFromKeyring()` - Extracts user ID from JWT claims
-  - `GetChallenge(slug)` - Fetches challenge metadata
-  - `GetChallengeProgress(slug)` - Checks user's progress
-  - `StartChallenge(slug)` - Creates progress record
-  - `SendSubmit(challengeSlug, results)` - Submits validation results
-    - Accepts `[]ObjectiveResult` with key, passed flag, and message
-    - Sends structured payload: `{results: [{objectiveKey, passed, message}, ...]}`
-  - `GetProfile()` - Fetches user profile information
+- Communicates with the Kubeasy API (`https://kubeasy.dev`, overridable via `KUBEASY_API_URL`)
+- Uses a generated OpenAPI client (`internal/apigen/`) — do not hand-edit
+- `auth.go` - `NewAuthenticatedClient()` / `NewPublicClient()` — injects Bearer token from keyring
+- `client.go` - Higher-level wrappers: `GetChallengeBySlug`, `SubmitChallenge`, `Login`, `GetProfile`, etc.
+- `types.go` - Named response types (stable interface over generated anonymous structs)
 
 #### `internal/deployer/`
 
-Handles direct deployment of infrastructure and challenges without ArgoCD.
+Handles direct deployment of infrastructure and challenges.
 
 - `infrastructure.go` - Installs Kyverno and local-path-provisioner directly via HTTP manifests
   - `SetupInfrastructure()` - Downloads and applies install manifests, waits for readiness
-  - `IsInfrastructureReady()` - Checks if all infrastructure deployments are running
-  - `IsInfrastructureReadyWithClient(ctx, clientset)` - Testable version with injected client
-- `challenge.go` - Deploys challenges via OCI artifacts from ghcr.io
-  - `DeployChallenge(ctx, clientset, dynamicClient, slug)` - Pulls OCI artifact, applies manifests, waits for ready
-- `cleanup.go` - Cleans up challenge resources
-  - `CleanupChallenge(ctx, clientset, slug)` - Deletes namespace and restores kubectl context
+  - `IsInfrastructureReady()` / `IsInfrastructureReadyWithClient(ctx, clientset)` - Readiness checks
+- `challenge.go` - Deploys challenges by fetching manifests tar.gz from the API
+  - `DeployChallenge(ctx, clientset, dynamicClient, slug)` - Fetches tar.gz, extracts, applies manifests, waits for ready
+- `registry.go` - Low-level helpers for fetching manifests from a registry-compatible URL (used in dev mode)
+- `cleanup.go` - `CleanupChallenge(ctx, clientset, slug)` - Deletes namespace and restores kubectl context
 
 #### `internal/validation/`
 
-**New in v1.4.0** - CLI-based validation system
+CLI-based validation system — loads specs from challenge.yaml and executes checks against the cluster.
 
-- `loader.go` - Loads validation configs from challenge.yaml
-  - `LoadForChallenge(slug)` - Tries local file first, falls back to GitHub
-  - `loadFromURL(url)` - Private, validates URLs against trusted base
-  - `Parse(data)` - Parses YAML and validates specs
-  - Security: URL validation prevents injection attacks
+- `loader.go` - Loads validation configs
+  - `LoadForChallenge(slug)` - Tries local file first (`FindLocalChallengeFile`), then API (`GET /challenges/:slug/yaml`)
+  - `Parse(data []byte)` - Delegates to `registry/pkg/challenges.ParseBytes()`, applies CLI defaults
+  - `fromObjective()` - Converts registry pointer types to CLI value types, applies SinceSeconds/Timeout defaults
 
 - `executor.go` - Thin router; dispatches to type-specific executor sub-packages
   - `NewExecutor(clientset, dynamicClient, restConfig, namespace)` - Creates executor
@@ -196,16 +200,14 @@ Handles direct deployment of infrastructure and challenges without ArgoCD.
 - `config.go` - Kubeconfig manipulation (namespace switching, context selection)
 - `manifest.go` - Manifest fetching and applying (supports dynamic resource creation)
 
-#### `internal/constants/const.go`
+#### `internal/constants/constants.go`
 
 - Global constants:
+  - `WebsiteURL = "https://kubeasy.dev"` — API base URL (override with `KUBEASY_API_URL` or `API_URL`)
   - `KubeasyClusterContext = "kind-kubeasy"`
   - `KeyringServiceName = "kubeasy-cli"`
-  - `RestAPIUrl` - API endpoint
   - `LogFilePath` - Path for debug logs
-  - `ChallengesOCIRegistry` - OCI registry for challenge artifacts (ghcr.io)
-  - `KyvernoVersion` - Kyverno release version (Renovate-managed)
-  - `LocalPathProvisionerVersion` - local-path-provisioner version (Renovate-managed)
+  - `KindNodeImage` - Kind node image (Renovate-managed)
 
 #### `internal/logger/logger.go`
 
@@ -218,16 +220,16 @@ Handles direct deployment of infrastructure and challenges without ArgoCD.
 #### Challenge Lifecycle
 
 1. **Setup**: `kubeasy setup` → Creates Kind cluster → Installs Kyverno + local-path-provisioner
-2. **Start**: `kubeasy challenge start <slug>` → Creates namespace → Pulls OCI artifact → Applies manifests → Tracks progress
+2. **Start**: `kubeasy challenge start <slug>` → Creates namespace → Fetches manifests tar.gz from API → Applies manifests → Tracks progress
 3. **Work**: User modifies cluster resources manually
 4. **Submit**: `kubeasy challenge submit <slug>` → Loads validations from challenge.yaml → Executes checks → Sends results to API
 5. **Clean/Reset**: `kubeasy challenge clean/reset <slug>` → Deletes namespace ± backend data
 
 #### Authentication Flow
 
-- User runs `kubeasy login` → Enters API key (JWT) → Stored in system keyring
-- Token reuse: If valid token exists, prompts to reuse with expiration info
-- All API calls retrieve token from keyring and include in Supabase client
+- User runs `kubeasy login` → Enters API key → Stored in system keyring
+- All authenticated API calls retrieve the key from keyring and send it as a Bearer token
+- Public endpoints (challenge list, YAML fetch) use `NewPublicClient()` — no auth required
 
 #### Validation System (CLI-Based, v1.4.0+)
 

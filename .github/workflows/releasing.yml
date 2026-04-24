@@ -132,9 +132,10 @@ jobs:
         with:
           distribution: goreleaser
           version: "v2.15.4"
-          args: release --clean --timeout=60m --previous-tag ${{ steps.prev_tag.outputs.tag }}
+          args: release --clean --timeout=60m
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_PREVIOUS_TAG: ${{ steps.prev_tag.outputs.tag }}
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           TAP_GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}

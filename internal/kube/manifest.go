@@ -24,8 +24,11 @@ var fetchManifestAllowedPrefixes = []string{
 	"https://raw.githubusercontent.com/",
 }
 
-// FetchManifest downloads a manifest from the given URL
-func FetchManifest(url string) ([]byte, error) {
+// FetchManifestFunc defines the signature for a function that downloads a manifest.
+type FetchManifestFunc func(url string) ([]byte, error)
+
+// DefaultFetchManifest is the default implementation of FetchManifest.
+func DefaultFetchManifest(url string) ([]byte, error) {
 	allowed := false
 	for _, prefix := range fetchManifestAllowedPrefixes {
 		if strings.HasPrefix(url, prefix) {
@@ -51,8 +54,16 @@ func FetchManifest(url string) ([]byte, error) {
 	return manifestBytes, nil
 }
 
-// ApplyManifest applies a Kubernetes manifest to the cluster
-func ApplyManifest(ctx context.Context, manifestBytes []byte, namespace string, mapper meta.RESTMapper, dynamicClient dynamic.Interface) error {
+// FetchManifest is the active function used to download manifests.
+// Can be overridden in tests.
+var FetchManifest = DefaultFetchManifest
+
+// ApplyManifestFunc defines the signature for a function that applies a manifest.
+type ApplyManifestFunc func(ctx context.Context, manifestBytes []byte, namespace string, mapper meta.RESTMapper, dynamicClient dynamic.Interface) error
+
+// ApplyManifest is the active function used to apply manifests.
+// Can be overridden in tests.
+var ApplyManifest = func(ctx context.Context, manifestBytes []byte, namespace string, mapper meta.RESTMapper, dynamicClient dynamic.Interface) error {
 	logger.Debug("ApplyManifest: Starting application of manifest in namespace '%s'", namespace)
 	// Create decoder for YAML content
 	decoder := yamlserializer.NewDecodingSerializer(unstructured.UnstructuredJSONScheme)

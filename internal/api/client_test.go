@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -325,6 +326,29 @@ func TestResponseUnmarshaling(t *testing.T) {
 		assert.Nil(t, resp.FirstLogin)
 	})
 
+}
+
+func TestTimeHelpers(t *testing.T) {
+	now := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+	expected := "2025-01-01T12:00:00Z"
+
+	t.Run("timeToStringPtr with time", func(t *testing.T) {
+		s := timeToStringPtr(&now)
+		require.NotNil(t, s)
+		assert.Equal(t, expected, *s)
+	})
+
+	t.Run("timeToStringPtr with nil", func(t *testing.T) {
+		assert.Nil(t, timeToStringPtr(nil))
+	})
+
+	t.Run("timeToString with time", func(t *testing.T) {
+		assert.Equal(t, expected, timeToString(&now))
+	})
+
+	t.Run("timeToString with nil", func(t *testing.T) {
+		assert.Equal(t, "", timeToString(nil))
+	})
 }
 
 // TestObjectiveResultVariations tests different ObjectiveResult scenarios

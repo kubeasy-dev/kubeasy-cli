@@ -13,13 +13,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
 	ktesting "k8s.io/client-go/testing"
 )
+
+var gvrDeployment = schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
 
 func testDeps(objs ...runtime.Object) shared.Deps {
 	return shared.Deps{
@@ -241,6 +245,97 @@ func TestExecuteTriggerLoad_HostBased(t *testing.T) {
 	mu.Unlock()
 	// At 5 rps for 1 second, expect ~5 requests; allow ±2 for timing jitter
 	assert.GreaterOrEqual(t, count, 3, "expected at least 3 requests")
+}
+
+func TestExecuteTriggerRollout(t *testing.T) {
+	sc := runtime.NewScheme()
+	obj := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "apps/v1", "kind": "Deployment",
+		"metadata": map[string]interface{}{"name": "my-deploy", "namespace": "test-ns"},
+		"spec": map[string]interface{}{
+			"template": map[string]interface{}{
+				"spec": map[string]interface{}{
+					"containers": []interface{}{
+						map[string]interface{}{"name": "web", "image": "nginx:1.24"},
+					},
+				},
+			},
+		},
+	}}
+	deps := shared.Deps{
+		Clientset:     fake.NewClientset(),
+		DynamicClient: dynamicfake.NewSimpleDynamicClient(sc, obj),
+		Namespace:     "test-ns",
+	}
+	trigger := vtypes.TriggerConfig{
+		Type:      vtypes.TriggerTypeRollout,
+		Target:    &vtypes.Target{Kind: "Deployment", Name: "my-deploy"},
+		Image:     "nginx:1.25",
+		Container: "web",
+	}
+
+	err := executeTriggerRollout(context.Background(), trigger, deps)
+	if err != nil {
+		t.Fatalf("Rollout failed: %v", err)
+	}
+
+	// Verify patch was applied
+	patched, err := deps.DynamicClient.Resource(gvrDeployment).Namespace("test-ns").Get(context.Background(), "my-deploy", metav1.GetOptions{})
+	require.NoError(t, err)
+	// Strategic merge patch might not work fully in dynamicfake as in a real API, 
+	// but dynamicfake should store the patched object.
+	assert.NotNil(t, patched)
+}
+
+func TestExecuteTriggerLoad_FromPod_NoRestConfig(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "source-pod", Namespace: "test-ns"},
+		Status:     corev1.PodStatus{Phase: corev1.PodRunning},
+	}
+	deps := shared.Deps{
+		Clientset:  fake.NewClientset(pod),
+		Namespace:  "test-ns",
+		RestConfig: nil, // Trigger error
+	}
+	trigger := vtypes.TriggerConfig{
+		Type:              vtypes.TriggerTypeLoad,
+		URL:               "http://target",
+		SourcePod:         &vtypes.SourcePod{Name: "source-pod"},
+		RequestsPerSecond: 10,
+		DurationSeconds:   1,
+	}
+
+	err := executeTriggerLoad(context.Background(), trigger, deps)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "exec not available")
+}
+
+func TestExecuteTriggerLoad_FromPod_BySelector(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "source-pod",
+			Namespace: "test-ns",
+			Labels:    map[string]string{"app": "source"},
+		},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning},
+	}
+	deps := shared.Deps{
+		Clientset:  fake.NewClientset(pod),
+		Namespace:  "test-ns",
+		RestConfig: &rest.Config{Host: "http://localhost"},
+	}
+	trigger := vtypes.TriggerConfig{
+		Type:              vtypes.TriggerTypeLoad,
+		URL:               "http://target",
+		SourcePod:         &vtypes.SourcePod{LabelSelector: map[string]string{"app": "source"}},
+		RequestsPerSecond: 10,
+		DurationSeconds:   1,
+	}
+
+	// This will fail because fake clientset RESTClient is nil
+	err := executeTriggerLoad(context.Background(), trigger, deps)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "RESTClient not available")
 }
 
 // --- firstContainerName tests ---

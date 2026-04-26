@@ -1,14 +1,21 @@
 package deployer
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 )
 
 func TestWalkDirFindsNestedYAML(t *testing.T) {
@@ -138,3 +145,78 @@ func TestWalkDirEmptyDirectory(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, files)
 }
+
+func TestWaitForChallengeReady(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	ns := "test-challenge"
+
+	t.Run("success with ready deployments", func(t *testing.T) {
+		clientset := fake.NewClientset(
+			&appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "dep1", Namespace: ns, Generation: 1},
+				Spec:       appsv1.DeploymentSpec{Replicas: int32Ptr(1)},
+				Status: appsv1.DeploymentStatus{
+					ObservedGeneration: 1,
+					UpdatedReplicas:    1,
+					AvailableReplicas:  1,
+					ReadyReplicas:      1,
+					Replicas:           1,
+				},
+			},
+		)
+		err := WaitForChallengeReady(ctx, clientset, ns)
+		assert.NoError(t, err)
+	})
+
+	t.Run("empty namespace passes immediately", func(t *testing.T) {
+		clientset := fake.NewClientset()
+		err := WaitForChallengeReady(ctx, clientset, ns)
+		assert.NoError(t, err)
+	})
+
+	t.Run("list error fails", func(t *testing.T) {
+		clientset := fake.NewClientset()
+		clientset.PrependReactor("list", "deployments", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			return true, nil, fmt.Errorf("api error")
+		})
+		err := WaitForChallengeReady(ctx, clientset, ns)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "api error")
+	})
+}
+
+func TestWaitForChallengeReady_StatefulSets(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	ns := "test-challenge"
+
+	t.Run("success with ready statefulsets", func(t *testing.T) {
+		clientset := fake.NewClientset(
+			&appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{Name: "sts1", Namespace: ns, Generation: 1},
+				Spec:       appsv1.StatefulSetSpec{Replicas: int32Ptr(1)},
+				Status: appsv1.StatefulSetStatus{
+					ObservedGeneration: 1,
+					ReadyReplicas:      1,
+					UpdatedReplicas:    1,
+					Replicas:           1,
+				},
+			},
+		)
+		err := WaitForChallengeReady(ctx, clientset, ns)
+		assert.NoError(t, err)
+	})
+
+	t.Run("list error fails for statefulsets", func(t *testing.T) {
+		clientset := fake.NewClientset()
+		clientset.PrependReactor("list", "statefulsets", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			return true, nil, fmt.Errorf("sts api error")
+		})
+		err := WaitForChallengeReady(ctx, clientset, ns)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "sts api error")
+	})
+}
+
+func int32Ptr(i int32) *int32 { return &i }

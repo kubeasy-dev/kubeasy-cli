@@ -257,7 +257,7 @@ func DeleteNamespace(ctx context.Context, clientset kubernetes.Interface, namesp
 }
 
 // WaitForDeploymentsReady waits for deployments to become ready in a namespace
-func WaitForDeploymentsReady(ctx context.Context, clientset *kubernetes.Clientset, namespace string, deploymentNames []string) error {
+func WaitForDeploymentsReady(ctx context.Context, clientset kubernetes.Interface, namespace string, deploymentNames []string) error {
 	logger.Info("Waiting for Deployments in namespace '%s' to be ready: %s", namespace, strings.Join(deploymentNames, ", "))
 	for _, deploymentName := range deploymentNames {
 		logger.Debug("Waiting for Deployment %s/%s to become ready...", namespace, deploymentName)
@@ -297,7 +297,7 @@ func WaitForDeploymentsReady(ctx context.Context, clientset *kubernetes.Clientse
 }
 
 // WaitForStatefulSetsReady waits for statefulsets to become ready in a namespace
-func WaitForStatefulSetsReady(ctx context.Context, clientset *kubernetes.Clientset, namespace string, stsNames []string) error {
+func WaitForStatefulSetsReady(ctx context.Context, clientset kubernetes.Interface, namespace string, stsNames []string) error {
 	logger.Info("Waiting for StatefulSets in namespace '%s' to be ready: %s", namespace, strings.Join(stsNames, ", "))
 	for _, stsName := range stsNames {
 		logger.Debug("Waiting for StatefulSet %s/%s to become ready...", namespace, stsName)

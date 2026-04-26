@@ -1,6 +1,7 @@
 package deployer
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -27,7 +28,7 @@ func TestHasImageDir(t *testing.T) {
 		assert.False(t, HasImageDir(tmpDir))
 	})
 
-	t.Run("returns false when image dir exists without Dockerfile", func(t *testing.T) {
+	t.Run("returns false when image directory exists but no Dockerfile", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		imageDir := filepath.Join(tmpDir, "image")
 		err := os.MkdirAll(imageDir, 0755)
@@ -39,4 +40,24 @@ func TestHasImageDir(t *testing.T) {
 	t.Run("returns false for nonexistent directory", func(t *testing.T) {
 		assert.False(t, HasImageDir("/nonexistent/path"))
 	})
+
+	t.Run("returns true when Dockerfile exists in image/ dir", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		imageDir := filepath.Join(tmpDir, "image")
+		err := os.MkdirAll(imageDir, 0755)
+		require.NoError(t, err)
+		err = os.WriteFile(filepath.Join(imageDir, "Dockerfile"), []byte("FROM alpine"), 0644)
+		require.NoError(t, err)
+
+		assert.True(t, HasImageDir(tmpDir))
+	})
+}
+
+func TestBuildAndLoadImage_DockerfileNotFound(t *testing.T) {
+	tmpDir := t.TempDir()
+	ctx := context.Background()
+
+	err := BuildAndLoadImage(ctx, tmpDir, "test-image", "test-cluster")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "dockerfile not found")
 }

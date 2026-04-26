@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/kubeasy-dev/kubeasy-cli/internal/constants"
 	"github.com/stretchr/testify/assert"
@@ -332,6 +333,77 @@ func TestTrackSetup_Success(t *testing.T) {
 	TrackSetup(context.Background())
 
 	assert.True(t, called, "expected tracking request to be sent")
+}
+
+func TestGetMeta_Success(t *testing.T) {
+	server := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "GET", r.Method)
+		assert.Equal(t, "/api/challenges/meta", r.URL.Path)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		response := map[string]interface{}{
+			"types": []map[string]string{
+				{"slug": "fix", "title": "Fix"},
+			},
+			"themes": []map[string]string{
+				{"slug": "networking", "title": "Networking"},
+			},
+			"difficulties": []string{"easy", "medium", "hard"},
+		}
+		_ = json.NewEncoder(w).Encode(response)
+	})
+	defer server.Close()
+	defer overrideServerURL(t, server.URL)()
+
+	t.Run("GetTypes", func(t *testing.T) {
+		types, err := GetTypes(context.Background())
+		require.NoError(t, err)
+		assert.Equal(t, []string{"fix"}, types)
+	})
+
+	t.Run("GetThemes", func(t *testing.T) {
+		themes, err := GetThemes(context.Background())
+		require.NoError(t, err)
+		assert.Equal(t, []string{"networking"}, themes)
+	})
+
+	t.Run("GetDifficulties", func(t *testing.T) {
+		diffs, err := GetDifficulties(context.Background())
+		require.NoError(t, err)
+		assert.Equal(t, []string{"easy", "medium", "hard"}, diffs)
+	})
+}
+
+func TestSubmitChallenge_WithAuditEvents(t *testing.T) {
+	setupKeyring(t, "test-token")
+	defer cleanupKeyring(t)
+
+	server := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(ChallengeSubmitResponse{Success: true})
+	})
+	defer server.Close()
+	defer overrideServerURL(t, server.URL)()
+
+	req := ChallengeSubmitRequest{
+		Results: []ObjectiveResult{{ObjectiveKey: "obj1", Passed: true}},
+		AuditEvents: []SubmitAuditEvent{
+			{
+				Timestamp:    time.Now(),
+				Verb:         "get",
+				Resource:     "pods",
+				Name:         "mypod",
+				Namespace:    "default",
+				ResponseCode: 200,
+				UserAgent:    "kubectl",
+			},
+		},
+	}
+	resp, err := SubmitChallenge(context.Background(), "pod-evicted", req)
+	require.NoError(t, err)
+	assert.True(t, resp.Success)
 }
 
 // Helper function for string pointers

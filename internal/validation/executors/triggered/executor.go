@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -137,19 +138,23 @@ func executeTriggerLoad(ctx context.Context, trigger vtypes.TriggerConfig, deps 
 }
 
 func executeTriggerLoadFromPod(ctx context.Context, trigger vtypes.TriggerConfig, deps shared.Deps, rps, durationSec int) error {
+	if deps.Clientset == nil {
+		return fmt.Errorf("load trigger: clientset is required")
+	}
+
 	ns := deps.Namespace
-	if trigger.SourcePod.Namespace != "" {
+	if trigger.SourcePod != nil && trigger.SourcePod.Namespace != "" {
 		ns = trigger.SourcePod.Namespace
 	}
 
 	var pod *corev1.Pod
-	if trigger.SourcePod.Name != "" {
+	if trigger.SourcePod != nil && trigger.SourcePod.Name != "" {
 		p, err := deps.Clientset.CoreV1().Pods(ns).Get(ctx, trigger.SourcePod.Name, metav1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("load trigger: failed to get source pod %s: %w", trigger.SourcePod.Name, err)
 		}
 		pod = p
-	} else {
+	} else if trigger.SourcePod != nil {
 		ls := labels.SelectorFromSet(trigger.SourcePod.LabelSelector).String()
 		list, err := deps.Clientset.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{LabelSelector: ls})
 		if err != nil {
@@ -157,13 +162,18 @@ func executeTriggerLoadFromPod(ctx context.Context, trigger vtypes.TriggerConfig
 		}
 		for i := range list.Items {
 			if list.Items[i].Status.Phase == corev1.PodRunning {
-				pod = &list.Items[i]
+				foundPod := list.Items[i]
+				pod = &foundPod
 				break
 			}
 		}
 		if pod == nil {
 			return fmt.Errorf("load trigger: no running source pod found")
 		}
+	}
+
+	if pod == nil {
+		return fmt.Errorf("load trigger: source pod not found")
 	}
 
 	if deps.RestConfig == nil || deps.RestConfig.Host == "" {
@@ -175,6 +185,15 @@ func executeTriggerLoadFromPod(ctx context.Context, trigger vtypes.TriggerConfig
 	cmd := []string{
 		"sh", "-c",
 		fmt.Sprintf("for i in $(seq 1 %d); do curl -s -o /dev/null -- %s; done", totalRequests, quotedURL),
+	}
+
+	rc := deps.Clientset.CoreV1().RESTClient()
+	if rc == nil || (reflect.ValueOf(rc).Kind() == reflect.Ptr && reflect.ValueOf(rc).IsNil()) {
+		return fmt.Errorf("load trigger: RESTClient not available for pod exec")
+	}
+
+	if pod == nil {
+		return fmt.Errorf("load trigger: pod is nil right before use")
 	}
 
 	req := deps.Clientset.CoreV1().RESTClient().Post().
@@ -288,7 +307,7 @@ func executeTriggerRollout(ctx context.Context, trigger vtypes.TriggerConfig, de
 	}
 
 	_, err = deps.DynamicClient.Resource(gvr).Namespace(deps.Namespace).Patch(
-		ctx, trigger.Target.Name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{},
+		ctx, trigger.Target.Name, types.MergePatchType, patchBytes, metav1.PatchOptions{},
 	)
 	if err != nil {
 		return fmt.Errorf("rollout trigger: patch failed: %w", err)

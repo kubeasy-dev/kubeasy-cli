@@ -80,7 +80,7 @@ func pullOCIArtifact(ctx context.Context, ref string, targetDir string) error {
 }
 
 // WaitForChallengeReady waits for all Deployments and StatefulSets in the namespace to be ready.
-func WaitForChallengeReady(ctx context.Context, clientset *kubernetes.Clientset, namespace string) error {
+func WaitForChallengeReady(ctx context.Context, clientset kubernetes.Interface, namespace string) error {
 	// List Deployments
 	deployments, err := clientset.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {

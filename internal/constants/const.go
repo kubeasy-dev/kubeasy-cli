@@ -24,7 +24,7 @@ var GithubRootURL = "https://github.com/kubeasy-dev"
 var KubeasyClusterContext = "kind-kubeasy"
 var KubeasyClusterName = "kubeasy"
 
-var DownloadBaseURL = "https://github.com/kubeasy-dev/kubeasy-cli/releases/download"
+var DownloadBaseURL = "https://download.kubeasy.dev"
 
 // Version is the current version of the CLI.
 // It is set at build time via LDFLAGS.

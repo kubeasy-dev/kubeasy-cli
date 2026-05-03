@@ -56,7 +56,7 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 }
 
-// fetchLatestVersion returns the latest version tag from the download CDN.
+// fetchLatestVersion returns the latest version from the R2 CDN.
 func fetchLatestVersion() (string, error) {
 	url := constants.DownloadBaseURL + "/latest"
 
